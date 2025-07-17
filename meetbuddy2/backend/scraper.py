@@ -27,6 +27,9 @@ def get_restaurants(query: str, num_results: int = 10):
         place_id = res.get("place_id", "")
         maps_link = f"https://www.google.com/maps/place/?q=place_id:{place_id}" if place_id else "N/A"
 
+        photos = res.get("photos", [])
+        photo_url = photos[0].get("photo_url") if photos else res.get("serpapi_thumbnail")
+
         restaurants.append({
             "Name": res.get("title"),
             "Address": res.get("address"),
@@ -37,7 +40,8 @@ def get_restaurants(query: str, num_results: int = 10):
             "Timings": res.get("hours", "N/A"),
             "Price": res.get("price", "N/A"),
             "Type": res.get("type", "N/A"),
-            "Google Maps Link": maps_link
+            "Google Maps Link": maps_link,
+            "Thumbnail": photo_url # res.get("serpapi_thumbnail", None)
         })
 
     restaurants.sort(key=lambda x: x["Reviews Count"], reverse=True)

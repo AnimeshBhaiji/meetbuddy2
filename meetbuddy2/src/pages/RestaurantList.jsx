@@ -4,6 +4,7 @@ import { Input } from "../components/ui/input"
 import { Card, CardContent } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
 import { MapPin, Star, Phone, Clock, Search } from "lucide-react"
+import Navbar from "@/components/Navbar"
 
 export default function RestaurantList() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -32,16 +33,10 @@ export default function RestaurantList() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-center h-16">
-            <h1 className="text-3xl font-bold text-blue-600">MeetBuddy</h1>
-          </div>
-        </div>
-      </header>
+      {/* Reusable Navbar */}
+      <Navbar />
 
-      {/* Main */}
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Search Panel */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
@@ -53,7 +48,7 @@ export default function RestaurantList() {
               <Input
                 id="search"
                 type="text"
-                placeholder="e.g., burgers in Koramangala"
+                placeholder="e.g., burgers in Whitefield"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -78,7 +73,7 @@ export default function RestaurantList() {
           </div>
         </div>
 
-        {/* Error */}
+        {/* Error Message */}
         {error && (
           <div className="text-red-500 text-center mb-4 font-semibold">{error}</div>
         )}
@@ -95,7 +90,14 @@ export default function RestaurantList() {
         {/* Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {!loading && restaurants.map((restaurant, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow duration-200">
+            <Card key={index} className="hover:shadow-lg transition-shadow duration-200 overflow-hidden">
+              {restaurant.Thumbnail && (
+                <img
+                  src={restaurant.Thumbnail}
+                  alt={restaurant.Name}
+                  className="w-full h-48 object-cover"
+                />
+              )}
               <CardContent className="p-6">
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{restaurant.Name}</h3>
 

@@ -1,11 +1,45 @@
-import React from "react";
+import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Login = () => {
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
+
+  const handleLogin = async () => {
+    setError(""); // reset error
+    try {
+      const response = await fetch("http://localhost:8000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.detail || "Login failed");
+        return;
+      }
+
+      // ✅ Save login state
+      localStorage.setItem("token", data.token || "dummy_token"); // if backend sends JWT
+      localStorage.setItem("user", JSON.stringify(data.user || { username: identifier }));
+
+      console.log("Logged in:", data);
+
+      navigate("/"); // redirect to home page
+    } catch (err) {
+      console.error(err);
+      setError("Something went wrong. Try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -17,20 +51,37 @@ const Login = () => {
           <CardContent className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Username or Email</label>
-              <Input type="text" placeholder="Enter your email" />
+              <Input
+                type="text"
+                placeholder="Enter your email or username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Password</label>
-              <Input type="password" placeholder="Enter your password" />
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
             </div>
-            <Button className="w-full mt-2">Login</Button>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            <Button className="w-full mt-2" onClick={handleLogin}>
+              Login
+            </Button>
 
             <div className="relative text-center my-4">
               <span className="text-sm text-muted-foreground">or</span>
             </div>
 
-            <Button variant="outline" className="w-full">Login with Google</Button>
-            <Button variant="outline" className="w-full">Login with Phone Number</Button>
+            <Button variant="outline" className="w-full">
+              Login with Google
+            </Button>
+            <Button variant="outline" className="w-full">
+              Login with Phone Number
+            </Button>
           </CardContent>
         </Card>
 

@@ -1,10 +1,24 @@
-import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { User } from "lucide-react"; // profile icon
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentPath = location.pathname;
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // check login status from localStorage
+  useEffect(() => {
+    const token = localStorage.getItem("token"); // or "user"
+    if (token) {
+      setIsLoggedIn(true);
+    } else {
+      setIsLoggedIn(false);
+    }
+  }, [location]); // re-check on route change
 
   const isActive = (path) => currentPath === path;
 
@@ -14,6 +28,10 @@ const Navbar = () => {
         ? "bg-blue-100 text-blue-700 font-semibold"
         : "text-gray-700 hover:bg-gray-100"
     }`;
+
+  const handleProfileClick = () => {
+    navigate("/profile");
+  };
 
   return (
     <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-md">
@@ -41,13 +59,22 @@ const Navbar = () => {
         </Link>
       </div>
 
-      {/* Right side login/signup */}
+      {/* Right side login/signup or profile */}
       <div>
-        <Link to="/login">
-          <Button variant="outline" className="rounded-xl px-4">
-            Login / Signup
-          </Button>
-        </Link>
+        {isLoggedIn ? (
+          <button
+            onClick={handleProfileClick}
+            className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100"
+          >
+            <User className="w-6 h-6 text-gray-700" />
+          </button>
+        ) : (
+          <Link to="/login">
+            <Button variant="outline" className="rounded-xl px-4">
+              Login / Signup
+            </Button>
+          </Link>
+        )}
       </div>
     </nav>
   );

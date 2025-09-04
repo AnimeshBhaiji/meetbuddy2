@@ -7,6 +7,9 @@ import AboutUs from "./pages/AboutUs";
 import Planner from "./pages/Planner";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import Profile from "./pages/Profile";
+import { AuthProvider } from "./context/AuthContext";
+
 
 function App() {
   return (
@@ -18,6 +21,7 @@ function App() {
         <Route path="/planner" element={<Planner />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </div>
   );

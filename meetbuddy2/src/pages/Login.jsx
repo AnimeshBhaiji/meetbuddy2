@@ -1,18 +1,21 @@
+// src/pages/Login.jsx
 import React, { useState } from "react";
 import Navbar from "../components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
+import { useQuestionnaire } from "../context/QuestionnaireContext"; // ✅ import context
 
 const Login = () => {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { resetAnswers } = useQuestionnaire(); // ✅ destructure resetAnswers
 
   const handleLogin = async () => {
-    setError(""); // reset error
+    setError("");
     try {
       const response = await fetch("http://localhost:8000/login", {
         method: "POST",
@@ -27,13 +30,16 @@ const Login = () => {
         return;
       }
 
-      // ✅ Save login state
-      localStorage.setItem("token", data.token || "dummy_token"); // if backend sends JWT
-      localStorage.setItem("user", JSON.stringify(data.user || { username: identifier }));
+      // ✅ Reset previous questionnaire answers on login
+      resetAnswers();
 
-      console.log("Logged in:", data);
+      // ✅ Save the complete backend response in localStorage
+      localStorage.setItem("user", JSON.stringify(data));
 
-      navigate("/"); // redirect to home page
+      console.log("✅ Logged in user data:", data);
+
+      // ✅ Redirect user to Stage 1 questionnaire
+      navigate("/questionnaire-stage1");
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Try again.");

@@ -9,6 +9,10 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Profile from "./pages/Profile";
 import { AuthProvider } from "./context/AuthContext";
+import QuestionnaireStage1 from "./pages/QuestionnaireStage1";
+import QuestionnaireStage2 from "./pages/QuestionnaireStage2";
+import QuestionnaireSummary from "./pages/QuestionnaireSummary";
+
 
 
 function App() {
@@ -22,6 +26,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/questionnaire-stage1" element={<QuestionnaireStage1 />} />
+        <Route path="/questionnaire-stage2" element={<QuestionnaireStage2 />} />
+        <Route path="/questionnaire-summary" element={<QuestionnaireSummary />} />
       </Routes>
     </div>
   );

@@ -13,6 +13,12 @@ const LandingPage = () => {
         <h1 className="text-5xl font-bold text-gray-800 mb-6">
           Welcome to <span className="text-blue-600">MeetBuddy</span>
         </h1>
+        <button
+        onClick={() => navigate("/questionnaire-stage1")}
+        className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+      >
+        Plan Your Meetup
+      </button>
         <p className="text-gray-600 text-lg max-w-xl">
           Your ultimate planner for seamless meetups, curated restaurant discovery,
           personalized planning, and smooth bookings — all in one place.

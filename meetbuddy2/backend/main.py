@@ -95,3 +95,19 @@ def scrape(query: str, limit: int = 10):
         return {"results": results}
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/user/{user_id}")
+def get_user_profile(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Return clean data for frontend
+    return {
+        "firstName": user.first_name,
+        "lastName": user.last_name,
+        "email": user.email,
+        "contact": user.phone,
+        "username": user.username,
+    }

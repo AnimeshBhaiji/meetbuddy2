@@ -1,26 +1,32 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
 from models import User
-from pydantic import BaseModel
-from scraper import get_restaurants
 from passlib.context import CryptContext
+from pydantic import BaseModel
+from typing import List, Optional, Union
+import json, os
+from pathlib import Path
+from planner import generate_plan
 
-# Create tables
+# -------- DATABASE SETUP --------
 Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
 
-# Allow frontend (Vite at localhost:5173) to access backend
+# -------- CORS --------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],  # ✅ allows React/Vite requests
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Password hashing utility
+PREF_FILE = Path("user_last_pref.json")
+
+# -------- PASSWORD HASHING --------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str) -> str:
@@ -28,6 +34,22 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+# -------- FILE PATHS --------
+ROOT_DIR = os.path.dirname(__file__)
+PREFERENCES_FILE = os.path.join(ROOT_DIR, "preferences.json")
+USER_PREFS_FILE = os.path.join(ROOT_DIR, "user_last_prefs.json")
+
+# -------- LOAD PREFERENCES --------
+try:
+    with open(PREFERENCES_FILE, "r", encoding="utf-8") as f:
+        PREFERENCES = json.load(f)
+        if not isinstance(PREFERENCES, dict):
+            print("⚠️ preferences.json invalid, resetting.")
+            PREFERENCES = {}
+except Exception as e:
+    print(f"⚠️ Error loading preferences.json: {e}")
+    PREFERENCES = {}
 
 # -------- SCHEMAS --------
 class UserCreate(BaseModel):
@@ -39,24 +61,26 @@ class UserCreate(BaseModel):
     password: str
 
 class UserLogin(BaseModel):
-    identifier: str   # username or email
+    identifier: str
     password: str
 
-# -------- ROUTES --------
+class UserPreferences(BaseModel):
+    user_id: int
+    mood: Optional[List[str]] = []
+    planningStyle: Optional[List[str]] = []
+    adventureLevel: Optional[List[str]] = []
+    addOnMagic: Optional[List[str]] = []
+    memorableFactor: Optional[List[str]] = []
+    class Config:
+        extra = "allow"
+
+# -------- USER AUTH --------
 @app.post("/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
-    # Check email exists
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
+    if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Check username exists
-    db_username = db.query(User).filter(User.username == user.username).first()
-    if db_username:
+    if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
-
-    # Create new user with hashed password
-    hashed_pw = hash_password(user.password)
 
     new_user = User(
         first_name=user.first_name,
@@ -64,50 +88,64 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         phone=user.phone,
         username=user.username,
-        password=hashed_pw,  # ✅ hashed password stored
+        password=hash_password(user.password),
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-
     return {"message": "User created successfully", "user_id": new_user.id}
 
 @app.post("/login")
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    # Try to find user by username or email
     user = db.query(User).filter(
         (User.username == credentials.identifier) | (User.email == credentials.identifier)
     ).first()
-
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
-
-    # ✅ verify hashed password
     if not verify_password(credentials.password, user.password):
         raise HTTPException(status_code=400, detail="Incorrect password")
-
     return {"message": "Login successful", "user_id": user.id, "username": user.username}
 
-@app.get("/scrape")
-def scrape(query: str, limit: int = 10):
+# -------- SAVE USER PREFS (in readable text) --------
+@app.post("/save_preferences")
+async def save_preferences(request: Request):
+    data = await request.json()
+    user_id = str(data.get("user_id"))
+
+    # Read existing prefs
+    if PREF_FILE.exists():
+        with open(PREF_FILE, "r") as f:
+            user_prefs = json.load(f)
+    else:
+        user_prefs = {}
+
+    # Save the readable preferences
+    user_prefs[user_id] = data
+
+    # Write back
+    with open(PREF_FILE, "w") as f:
+        json.dump(user_prefs, f, indent=2)
+
+    return {"message": "Preferences saved successfully", "data": data}
+
+# -------- PLANNER --------
+@app.post("/planner")
+def planner_endpoint(prefs: UserPreferences):
+    print(f"📥 Planner request: {prefs.dict()}")
     try:
-        results = get_restaurants(query, limit)
-        return {"results": results}
+        result = generate_plan(prefs.user_id, prefs.dict())
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
 
-@app.get("/user/{user_id}")
-def get_user_profile(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Return clean data for frontend
-    return {
-        "firstName": user.first_name,
-        "lastName": user.last_name,
-        "email": user.email,
-        "contact": user.phone,
-        "username": user.username,
-    }
+# -------- READ SAVED PREFS --------
+@app.get("/user_prefs/{user_id}")
+def read_user_prefs(user_id: int):
+    if not os.path.exists(USER_PREFS_FILE):
+        raise HTTPException(status_code=404, detail="No saved preferences")
+    with open(USER_PREFS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    prefs = data.get(str(user_id))
+    if not prefs:
+        raise HTTPException(status_code=404, detail="No prefs for this user")
+    return {"user_id": user_id, "prefs": prefs}

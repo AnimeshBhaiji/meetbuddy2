@@ -1,0 +1,115 @@
+{
+  "mood": {
+    "1": "Fun & Energetic",
+    "2": "Chill & Relaxed",
+    "3": "Business-y",
+    "4": "Romantic"
+  },
+  "planningStyle": {
+    "1": "Surprise me",
+    "2": "Semi-custom",
+    "3": "Full control"
+  },
+  "adventureLevel": {
+    "1": "Stick to the city",
+    "2": "Short drive to hidden gem",
+    "3": "Weekend escape"
+  },
+  "addOnMagic": {
+    "1": "Easy rides arranged",
+    "2": "Live music spots",
+    "3": "Surprise gift delivery / Insta-corners"
+  },
+  "memorableFactor": {
+    "1": "A unique place",
+    "2": "Amazing food",
+    "3": "Deep conversations / Capture moments"
+  },
+
+  "subQuestions": {
+    "Fun & Energetic": [
+      "Games / Events / Dance?",
+      "Indoor or outdoor vibe?",
+      "Want music included?"
+    ],
+    "Chill & Relaxed": [
+      "Prefer nature or cozy café setup?",
+      "Want a calm activity like art/reading?",
+      "Add light food & drinks?"
+    ],
+    "Business-y": [
+      "Formal or casual meet?",
+      "Meeting-friendly seating or private area?",
+      "Light snacks or full meal?"
+    ],
+    "Romantic": [
+      "Candlelight or scenic spot?",
+      "Want a surprise element (gift/music)?",
+      "Indoor privacy or open view?"
+    ],
+
+    "Surprise me": [
+      "Match previous favorites?",
+      "Activity types to avoid?",
+      "Share plan before the day?"
+    ],
+    "Semi-custom": [
+      "Pick location/activity?",
+      "MeetBuddy shortlist 3–5 options?",
+      "Confirm bookings yourself?"
+    ],
+    "Full control": [
+      "Access full venue list?",
+      "Build own itinerary?",
+      "Provide logistics help?"
+    ],
+
+    "Stick to the city": [
+      "Central or outskirts?",
+      "Walkable or drivable?",
+      "Want parking assistance?"
+    ],
+    "Short drive to hidden gem": [
+      "Nature, heritage, or food-based?",
+      "Duration limit?",
+      "Need transport arranged?"
+    ],
+    "Weekend escape": [
+      "Solo, couple, or group trip?",
+      "Want accommodation suggestions?",
+      "Plan itinerary?"
+    ],
+
+    "Easy rides arranged": [
+      "Pickup-drop or full-day cab?",
+      "Specific time schedule?",
+      "Include return trip?"
+    ],
+    "Live music spots": [
+      "Acoustic, DJ, or band?",
+      "Indoor or rooftop venue?",
+      "Reserve a table?"
+    ],
+    "Surprise gift delivery / Insta-corners": [
+      "Personalized or generic gifts?",
+      "Want photo props?",
+      "Add on-spot photographer?"
+    ],
+
+    "A unique place": [
+      "Theme-based or hidden gem?",
+      "Cozy or adventurous vibe?",
+      "Want MeetBuddy suggestions?"
+    ],
+    "Amazing food": [
+      "Cuisine preference?",
+      "Dietary restrictions?",
+      "Chef-special experiences?"
+    ],
+    "Deep conversations / Capture moments": [
+      "Quiet or scenic setup?",
+      "Memory add-on (photo/book)?",
+      "Include post-meet follow-up?"
+    ]
+  }
+}

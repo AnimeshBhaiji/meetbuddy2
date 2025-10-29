@@ -6,18 +6,38 @@ import Navbar from "../components/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import prefsData from "../../backend/preferences.json"; // object mapping: { mood: { "1": "Fun & Energetic", ... }, ... }
+import prefsData from "../../backend/preferences.json";
 
 const QuestionnaireSummary = () => {
   const { answers } = useQuestionnaire();
   const navigate = useNavigate();
 
-  // Normalize grouped answers: each key => { main: <value>, subs: [labels] }
-  const groupedAnswers = Object.entries(answers).reduce((acc, [key, value]) => {
+  // ---------------------------
+  // Helpers: normalization
+  // ---------------------------
+  const normalizeMainValue = (val) => {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string" || typeof val === "number") return String(val).trim();
+    if (Array.isArray(val)) {
+      const first = val.find((x) => x !== null && x !== undefined && String(x).trim() !== "");
+      return first !== undefined ? String(first).trim() : "";
+    }
+    if (typeof val === "object") {
+      if ("value" in val && (typeof val.value === "string" || typeof val.value === "number"))
+        return String(val.value).trim();
+      for (const [k, v] of Object.entries(val)) {
+        if (v === true || v === "true" || v === 1) return String(k).trim();
+      }
+    }
+    return "";
+  };
+
+  // Group answers
+  const groupedAnswers = Object.entries(answers || {}).reduce((acc, [key, value]) => {
     if (key.endsWith("_sub")) return acc;
     const subKey = `${key}_sub`;
     acc[key] = {
-      main: value ?? "",
+      main: normalizeMainValue(value),
       subs: answers[subKey]
         ? Object.entries(answers[subKey])
             .filter(([_, selected]) => selected)
@@ -27,53 +47,44 @@ const QuestionnaireSummary = () => {
     return acc;
   }, {});
 
-  // Convert an incoming main value (could be numeric id or already a label) -> readable label string
+  // ID → Label mapping
   const idMapToLabel = (category, idOrLabel) => {
-    if (!idOrLabel && idOrLabel !== 0) return ""; // handle undefined/null/empty
+    if (!idOrLabel) return "";
     const catMap = prefsData?.[category];
-    if (!catMap || typeof catMap !== "object") {
-      // fallback: if no mapping available, if it's string return it, else empty
-      return typeof idOrLabel === "string" ? idOrLabel : String(idOrLabel);
-    }
-
-    // If it's a number or numeric string — map id -> label
-    if (typeof idOrLabel === "number" || (typeof idOrLabel === "string" && /^\d+$/.test(idOrLabel.trim()))) {
-      const key = String(idOrLabel).trim();
-      if (key in catMap) return catMap[key];
-      return ""; // unknown id
-    }
-
-    // It's a string that might already be the label. Try exact match or case-insensitive match.
-    if (typeof idOrLabel === "string") {
-      const trimmed = idOrLabel.trim();
-      // direct exact value check (maybe userAnswers already saved label)
-      if (Object.values(catMap).includes(trimmed)) return trimmed;
-      // case-insensitive / loose match
-      const found = Object.values(catMap).find((lbl) => lbl.toLowerCase() === trimmed.toLowerCase());
-      if (found) return found;
-      // fallback: return the raw string (useful if user provided custom label)
-      return trimmed;
-    }
-
-    // fallback to string form
-    return String(idOrLabel);
+    if (!catMap) return String(idOrLabel);
+    const raw = String(idOrLabel).trim();
+    if (/^\d+$/.test(raw)) return catMap[raw] || raw;
+    const values = Object.values(catMap);
+    const found = values.find((lbl) => lbl.toLowerCase() === raw.toLowerCase());
+    return found || raw;
   };
 
-  // Build payload in readable (human) text — backend expects arrays for each key
+  const mapSubsToLabels = (category, subsArray) => {
+    if (!Array.isArray(subsArray)) return [];
+    const out = subsArray
+      .map((s) => idMapToLabel(category, s))
+      .filter(Boolean)
+      .filter((v, i, arr) => arr.indexOf(v) === i);
+    return out;
+  };
+
   const buildReadablePayload = () => {
     const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-    if (!storedUser || !storedUser.user_id) {
-      return null;
-    }
+    if (!storedUser || !storedUser.user_id) return null;
     const userId = storedUser.user_id;
-
+    const makeArr = (key) => {
+      const ga = groupedAnswers[key] || { main: "", subs: [] };
+      if (ga.main) return [idMapToLabel(key, ga.main)];
+      if (ga.subs?.length) return mapSubsToLabels(key, ga.subs);
+      return [];
+    };
     return {
       user_id: userId,
-      mood: groupedAnswers.mood ? [idMapToLabel("mood", groupedAnswers.mood.main)] : [],
-      planningStyle: groupedAnswers.planningStyle ? [idMapToLabel("planningStyle", groupedAnswers.planningStyle.main)] : [],
-      adventureLevel: groupedAnswers.adventureLevel ? [idMapToLabel("adventureLevel", groupedAnswers.adventureLevel.main)] : [],
-      addOnMagic: groupedAnswers.addOnMagic ? [idMapToLabel("addOnMagic", groupedAnswers.addOnMagic.main)] : [],
-      memorableFactor: groupedAnswers.memorableFactor ? [idMapToLabel("memorableFactor", groupedAnswers.memorableFactor.main)] : [],
+      mood: makeArr("mood"),
+      planningStyle: makeArr("planningStyle"),
+      adventureLevel: makeArr("adventureLevel"),
+      addOnMagic: makeArr("addOnMagic"),
+      memorableFactor: makeArr("memorableFactor"),
     };
   };
 
@@ -84,39 +95,33 @@ const QuestionnaireSummary = () => {
         alert("User not logged in — please log in first.");
         return;
       }
-
-      console.log("🧭 Saving readable preferences:", groupedAnswers);
-      console.log("📤 Final payload being sent to backend:", payload);
-
+      console.log("🧭 Built payload (from current UI):", payload);
       const res = await fetch("http://localhost:8000/save_preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       if (!res.ok) {
         const text = await res.text();
-        console.error("❌ Backend error response:", text);
-        alert("Failed to save preferences. Check console for details.");
+        console.error("❌ Backend error:", text);
+        alert("Failed to save preferences.");
         return;
       }
-
       const data = await res.json();
       console.log("✅ Preferences saved:", data);
-      // Save readable prefs locally for Planner to display (keeps format stable)
-      localStorage.setItem("userPreferences", JSON.stringify({
-        mood: (payload.mood?.[0]) || "",
-        planningStyle: (payload.planningStyle?.[0]) || "",
-        adventureLevel: (payload.adventureLevel?.[0]) || "",
-        addOnMagic: (payload.addOnMagic?.[0]) || "",
-        memorableFactor: (payload.memorableFactor?.[0]) || "",
-      }));
-      alert("Preferences saved successfully!");
+      alert("Preferences saved successfully (backend). Summary view unchanged.");
     } catch (err) {
       console.error("❌ Error saving preferences:", err);
       alert("Error saving preferences — check console.");
     }
   };
+
+  // ---------------------------
+  // Render (filtered to hide user_id)
+  // ---------------------------
+  const filteredEntries = Object.entries(groupedAnswers).filter(
+    ([key]) => key !== "user_id" && key !== "user" && key !== "id"
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50">
@@ -134,13 +139,13 @@ const QuestionnaireSummary = () => {
             </CardHeader>
 
             <CardContent className="space-y-6 mt-4">
-              {Object.keys(groupedAnswers).length === 0 ? (
+              {filteredEntries.length === 0 ? (
                 <p className="text-center text-gray-500">No preferences selected yet.</p>
               ) : (
                 <div className="space-y-6">
-                  {Object.entries(groupedAnswers).map(([key, data], index) => {
-                    // Display the readable main value (not the object)
-                    const readableMain = idMapToLabel(key, data.main) || "No main choice selected";
+                  {filteredEntries.map(([key, data], index) => {
+                    const readableMain = idMapToLabel(key, data.main);
+                    const subs = Array.isArray(data.subs) ? data.subs : [];
                     return (
                       <motion.div
                         key={key}
@@ -153,11 +158,13 @@ const QuestionnaireSummary = () => {
                           {key.replace(/([A-Z])/g, " $1")}
                         </h3>
 
-                        <p className="text-gray-700 font-medium mb-3">{readableMain}</p>
+                        {readableMain && (
+                          <p className="text-gray-700 font-medium mb-3">{readableMain}</p>
+                        )}
 
-                        {Array.isArray(data.subs) && data.subs.length > 0 && (
+                        {subs.length > 0 && (
                           <div className="flex flex-wrap gap-2">
-                            {data.subs.map((sub) => (
+                            {subs.map((sub) => (
                               <span
                                 key={sub}
                                 className="bg-white text-gray-700 px-3 py-1 rounded-full border border-gray-200 shadow-sm text-sm font-medium hover:bg-blue-50 transition-colors"

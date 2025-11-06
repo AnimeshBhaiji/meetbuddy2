@@ -2,19 +2,44 @@
   "6": {
     "user_id": 6,
     "mood": [
-      "Business-y"
+      "Romantic"
     ],
     "planningStyle": [
       "Full control"
     ],
     "adventureLevel": [
-      "Stick to the city"
+      "Weekend escape"
     ],
     "addOnMagic": [
       "Surprise gift delivery / Insta-corners"
     ],
     "memorableFactor": [
-      "Deep conversations / Capture moments"
+      "Amazing food"
+    ],
+    "mood_sub": [
+      "No — keep it simple",
+      "Candlelit / intimate",
+      "Scenic / view",
+      "Yes — gifts/music"
+    ],
+    "planningStyle_sub": [
+      "Yes — full control",
+      "Private seating",
+      "Live music",
+      "No — I want help",
+      "Dietary options"
+    ],
+    "adventureLevel_sub": [
+      "Couple",
+      "Yes",
+      "No"
+    ],
+    "addOnMagic_sub": [
+      "Personalized gift"
+    ],
+    "memorableFactor_sub": [
+      "Indian",
+      "None"
     ]
   }
 }

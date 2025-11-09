@@ -2,14 +2,11 @@
 import json
 import os
 import urllib.parse
-from fastapi import FastAPI, HTTPException
-from typing import Any, Dict, List
-from pathlib import Path
+import requests
+from fastapi import HTTPException
+from typing import Any, Dict, List, Optional, Tuple
 
-app = FastAPI()
-
-# local scraper (do NOT modify scraper.py as requested)
-from scraper import get_restaurants
+from scraper import get_restaurants  # updated scraper.py expected
 
 PREFERENCES_FILE = "preferences.json"
 USER_PREFS_FILE = "user_last_prefs.json"
@@ -24,33 +21,22 @@ if os.path.exists(PREFERENCES_FILE):
 else:
     PREFERENCES = {}
 
-# Priority order for selecting tokens for the search query
 CATEGORY_PRIORITY = ["mood", "planningStyle", "adventureLevel", "memorableFactor", "addOnMagic"]
 
-# LABEL -> search phrase mapping tuned to your preferences.json
 LABEL_TO_SEARCH_PHRASE = {
-    # mood
     "Fun & Energetic": "lively cafes and bars",
     "Chill & Relaxed": "cozy cafes and chill restaurants",
     "Business-y": "business-friendly restaurants with meeting seating",
     "Romantic": "romantic restaurants and date-night spots",
-
-    # planningStyle
     "Surprise me": "unique experience restaurants and activities",
     "Semi-custom": "flexible venues and curated options",
     "Full control": "restaurants with reservations and private dining",
-
-    # adventureLevel
     "Stick to the city": "city-center cafes and restaurants",
     "Short drive to hidden gem": "hidden gem restaurants a short drive away",
     "Weekend escape": "weekend getaway restaurants and cafes",
-
-    # addOnMagic
     "Easy rides arranged": "venues with transport/valet or rideshare-friendly access",
     "Live music spots": "cafes and restaurants with live music",
     "Surprise gift delivery / Insta-corners": "instagrammable cafes with gift/delivery options",
-
-    # memorableFactor
     "A unique place": "unique and themed restaurants",
     "Amazing food": "top-rated restaurants for amazing food",
     "Deep conversations / Capture moments": "quiet photogenic cafes and intimate restaurants",
@@ -64,9 +50,6 @@ def fallback_phrase(label: str, category_hint: str = "cafes and restaurants") ->
     return f"{s} {category_hint}"
 
 
-# -------------------------------
-# Normalization helper — very defensive
-# -------------------------------
 def normalize_to_labels(category: str, items) -> List[str]:
     if items is None:
         return []
@@ -116,7 +99,6 @@ def normalize_to_labels(category: str, items) -> List[str]:
             continue
         normalized.append(item_str)
 
-    # dedupe while preserving order
     seen = set()
     out = []
     for x in normalized:
@@ -126,12 +108,8 @@ def normalize_to_labels(category: str, items) -> List[str]:
     return out
 
 
-# -------------------------------
-# Select top tokens with more robust fallback
-# -------------------------------
 def select_top_tokens(labels_used: Dict[str, List[str]], k: int = 3) -> List[Dict[str, str]]:
     selected: List[Dict[str, str]] = []
-
     for cat in CATEGORY_PRIORITY:
         if len(selected) >= k:
             break
@@ -156,7 +134,6 @@ def select_top_tokens(labels_used: Dict[str, List[str]], k: int = 3) -> List[Dic
                     phrase = fallback_phrase(v_clean)
             selected.append({"category": cat, "label": v_clean, "phrase": phrase})
 
-    # fill from remaining categories if needed
     if len(selected) < k:
         for cat, vals in labels_used.items():
             if len(selected) >= k:
@@ -184,50 +161,84 @@ def select_top_tokens(labels_used: Dict[str, List[str]], k: int = 3) -> List[Dic
     return selected[:k]
 
 
-# -------------------------------
-# Build query
-# -------------------------------
-def build_search_query_from_selected(selected_tokens: List[Dict[str, str]], category_hint="cafes and restaurants"):
+def build_search_queries(selected_tokens: List[Dict[str, str]], location_hint: Optional[str] = None, category_hint: str = "cafes and restaurants") -> Tuple[str, str]:
+    """
+    Return (display_query, scraper_query)
+    - display_query: for UI and Google open (longer, human readable, includes 'near ...')
+    - scraper_query: short query to pass to SerpAPI when coords provided (no 'near')
+    """
     if not selected_tokens:
-        return f"{category_hint} near me"
-    phrases = [t["phrase"].strip() for t in selected_tokens if t.get("phrase")]
-    seen = set()
-    uniq = []
-    for p in phrases:
-        if p and p not in seen:
-            seen.add(p)
-            uniq.append(p)
-    query = ", ".join(uniq)
-    if not query.lower().endswith("near me"):
-        query = f"{query} near me"
-    return query
+        base = category_hint
+    else:
+        phrases = [t["phrase"].strip() for t in selected_tokens if t.get("phrase")]
+        seen = set()
+        uniq = []
+        for p in phrases:
+            if p and p not in seen:
+                seen.add(p)
+                uniq.append(p)
+        base = ", ".join(uniq)
+
+    if location_hint:
+        display_q = f"{base} near {location_hint}"
+    else:
+        display_q = f"{base} near me"
+
+    # scraper_query: drop 'near ...' (we will bias with ll)
+    scraper_q = base
+    return display_q, scraper_q
 
 
-# -------------------------------
-# Helper: map raw scraper item -> frontend-friendly item
-# -------------------------------
+def reverse_geocode(coords: Dict[str, float]) -> Optional[str]:
+    try:
+        if isinstance(coords, dict):
+            lat = float(coords.get("lat"))
+            lon = float(coords.get("lng") or coords.get("lon") or coords.get("longitude"))
+        elif isinstance(coords, (list, tuple)):
+            lat, lon = float(coords[0]), float(coords[1])
+        else:
+            return None
+    except Exception:
+        return None
+
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {"format": "jsonv2", "lat": lat, "lon": lon, "addressdetails": 1}
+        headers = {"User-Agent": "MeetBuddyPlanner/1.0 (meetbuddy@example.com)"}
+        resp = requests.get(url, params=params, headers=headers, timeout=8)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        addr = data.get("address", {}) or {}
+        parts = []
+        for k in ("suburb", "neighbourhood", "neighborhood", "quarter", "village", "hamlet", "locality"):
+            v = addr.get(k)
+            if v:
+                parts.append(v)
+                break
+        for k in ("city", "town", "village", "county", "state"):
+            v = addr.get(k)
+            if v and (not parts or v not in parts):
+                parts.append(v)
+                break
+        if parts:
+            return ", ".join(parts)
+        display = data.get("display_name")
+        if display:
+            return display.split(",")[0].strip()
+    except Exception:
+        return None
+    return None
+
+
 def map_scraper_item_to_frontend(item: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Map a single result from scraper.get_restaurants to the shape Planner.jsx expects:
-      { title, address, rating, link, thumbnail, raw }
-    Keep raw for debugging.
-    """
-    # common keys returned by your scraper
-    title = (
-        item.get("Name")
-        or item.get("title")
-        or item.get("Name")
-        or item.get("Name")  # defensive repetition
-        or None
-    )
+    title = item.get("Name") or item.get("title") or item.get("name") or None
     address = item.get("Address") or item.get("address") or item.get("vicinity") or ""
     rating = item.get("Rating") or item.get("rating") or 0
     link = item.get("Google Maps Link") or item.get("Google Maps") or item.get("Website") or item.get("Website Link") or item.get("website") or ""
     thumbnail = item.get("Thumbnail") or item.get("photo_url") or item.get("serpapi_thumbnail") or None
 
-    # Some fields might be nested or have different casing -- cast to proper types
     try:
-        # rating could be a str sometimes
         rating = float(rating) if rating not in (None, "") else 0
     except Exception:
         rating = 0
@@ -243,16 +254,10 @@ def map_scraper_item_to_frontend(item: Dict[str, Any]) -> Dict[str, Any]:
     return mapped
 
 
-# -------------------------------
-# planner endpoint (normalize -> select -> call scraper -> return)
-# -------------------------------
-@app.post("/planner")
 def generate_plan(payload: Dict[str, Any]):
-    # Defensive: ensure payload is a dict
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="payload must be a JSON object")
 
-    # Debug log incoming payload
     print("📥 planner.generate_plan received payload:", json.dumps(payload, ensure_ascii=False))
 
     user_id = payload.get("user_id")
@@ -260,12 +265,22 @@ def generate_plan(payload: Dict[str, Any]):
     max_terms = int(payload.get("max_terms", 3)) if payload.get("max_terms") is not None else 3
     num_results = int(payload.get("num_results", 10)) if payload.get("num_results") is not None else 10
 
+    coords = payload.get("coords") or payload.get("coordinate") or payload.get("latlng")
+    location_hint = payload.get("location") or payload.get("place") or None
+
     if not user_id:
         raise HTTPException(status_code=400, detail="Missing user_id.")
     if not isinstance(prefs_data, dict):
         raise HTTPException(status_code=400, detail="preferences must be an object")
 
-    # Normalize each category defensively
+    if coords and not location_hint:
+        try:
+            location_hint = reverse_geocode(coords)
+            if location_hint:
+                print("🔍 Reverse-geocoded coords to:", location_hint)
+        except Exception as e:
+            print("⚠️ Reverse geocode failed:", e)
+
     mood_labels = normalize_to_labels("mood", prefs_data.get("mood"))
     planning_labels = normalize_to_labels("planningStyle", prefs_data.get("planningStyle"))
     adventure_labels = normalize_to_labels("adventureLevel", prefs_data.get("adventureLevel"))
@@ -280,56 +295,77 @@ def generate_plan(payload: Dict[str, Any]):
         "memorableFactor": memorable_labels,
     }
 
-    # Debug log normalized labels
     print("📚 labels_used after normalization:", json.dumps(labels_used, ensure_ascii=False))
 
-    # Select tokens (with fallback)
     selected_tokens = select_top_tokens(labels_used, k=max_terms)
-
-    # Debug selected tokens
     print("🔎 selected_tokens:", json.dumps(selected_tokens, ensure_ascii=False))
 
-    # Build search query
-    query = build_search_query_from_selected(selected_tokens, category_hint="cafes and restaurants")
-    search_url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(query)
+    display_query, scraper_query = build_search_queries(selected_tokens, location_hint=location_hint)
+    search_url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(display_query)
 
-    print(f"🔍 Generated search query for user {user_id}: {query}")
+    print(f"🔍 Display search query for user {user_id}: {display_query}")
+    print(f"🔍 Scraper query (short): {scraper_query}")
 
-    # --- Use scraper to fetch places from SerpAPI (Google Maps) ---
     recommendations_raw = []
+    # If coords present prefer short query + ll; else use display query
     try:
-        recommendations_raw = get_restaurants(query, num_results=num_results)
-        print(f"✅ Scraper returned {len(recommendations_raw)} results")
-    except ValueError as ve:
-        print("⚠️ Scraper error (likely missing API key):", ve)
-        return {
-            "user_id": user_id,
-            "query": query,
-            "search_url": search_url,
-            "labels_used": labels_used,
-            "selected_for_query": selected_tokens,
-            "recommendations": [],
-            "note": f"Scraper error: {str(ve)} — please set SERPAPI_KEY in your environment to fetch live results.",
-        }
-    except Exception as e:
-        print("❌ Error calling scraper.get_restaurants:", e)
-        return {
-            "user_id": user_id,
-            "query": query,
-            "search_url": search_url,
-            "labels_used": labels_used,
-            "selected_for_query": selected_tokens,
-            "recommendations": [],
-            "note": f"Scraper failed: {str(e)}",
-        }
+        if coords:
+            try:
+                lat = float(coords.get("lat")) if isinstance(coords, dict) else float(coords[0])
+                lng = float(coords.get("lng")) if isinstance(coords, dict) else float(coords[1])
+            except Exception:
+                lat = None
+                lng = None
 
-    # Map raw scraper results into frontend-friendly shape
+            if lat is not None and lng is not None:
+                print(f"🔧 Calling scraper with coords ll: {lat} {lng}")
+                # Pass the short scraper_query and coords
+                recommendations_raw = get_restaurants(scraper_query, num_results=num_results, coords=(lat, lng))
+            else:
+                # fallback if coords invalid
+                print("⚠️ coords invalid; calling scraper without coords using display_query")
+                recommendations_raw = get_restaurants(display_query, num_results=num_results, coords=None)
+        else:
+            # no coords: provide textual location in the q
+            print("🔧 Calling scraper without coords (textual location if present).")
+            recommendations_raw = get_restaurants(display_query, num_results=num_results, coords=None)
+
+        print(f"✅ Scraper returned {len(recommendations_raw)} results")
+    except Exception as e:
+        # Defensive retry: if coords were used and we failed with coords, retry using textual display_query without coords
+        print("❌ Error calling scraper.get_restaurants:", e)
+        if coords:
+            try:
+                print("🔁 Retrying scraper without coords using textual location (fallback).")
+                recommendations_raw = get_restaurants(display_query, num_results=num_results, coords=None)
+                print(f"✅ Scraper retry returned {len(recommendations_raw)} results")
+            except Exception as e2:
+                print("❌ Scraper retry also failed:", e2)
+                return {
+                    "user_id": user_id,
+                    "query": display_query,
+                    "search_url": search_url,
+                    "labels_used": labels_used,
+                    "selected_for_query": selected_tokens,
+                    "recommendations": [],
+                    "note": f"Scraper failed: {str(e2)}",
+                }
+        else:
+            return {
+                "user_id": user_id,
+                "query": display_query,
+                "search_url": search_url,
+                "labels_used": labels_used,
+                "selected_for_query": selected_tokens,
+                "recommendations": [],
+                "note": f"Scraper failed: {str(e)}",
+            }
+
     recommendations_mapped = [map_scraper_item_to_frontend(r) for r in recommendations_raw]
 
-    # Return the combined response (query + scraped recommendations)
     return {
         "user_id": user_id,
-        "query": query,
+        "query": display_query,
         "search_url": search_url,
         "labels_used": labels_used,
         "selected_for_query": selected_tokens,

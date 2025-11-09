@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -155,18 +156,10 @@ def _to_list_of_strings(v):
 
 # -------------------------------
 # SAVE USER PREFS (support main & _sub keys)
+# (unchanged from your previous implementation)
 # -------------------------------
 @app.post("/save_preferences")
 async def save_preferences(request: Request):
-    """
-    Saves preferences for a user.
-
-    - Main keys (single-select): mood, planningStyle, adventureLevel, addOnMagic, memorableFactor
-      These are stored as single-element arrays (the latest provided main wins).
-    - Stage2/sub keys: detected from incoming keys that end with '_sub' (or 'Sub') and saved
-      under '<category>_sub' (unioned with existing sub arrays).
-    - Both main and sub are persisted in user_last_prefs.json.
-    """
     data = await request.json()
     user_id = data.get("user_id")
     if user_id is None:
@@ -175,7 +168,6 @@ async def save_preferences(request: Request):
     user_id_str = str(user_id)
     print("🔔 Received save_preferences payload:", data)
 
-    # Read existing prefs
     if os.path.exists(USER_PREFS_FILE):
         try:
             with open(USER_PREFS_FILE, "r", encoding="utf-8") as f:
@@ -188,34 +180,27 @@ async def save_preferences(request: Request):
 
     user_existing = existing_prefs.get(user_id_str, {})
 
-    # Define main categories (stage1 single-select). Keep as single-select (overwrite when provided).
     MAIN_KEYS = ["mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor"]
 
-    merged_for_user = dict(user_existing)  # start with what's already stored
+    merged_for_user = dict(user_existing)
 
-    # 1) Handle main keys: overwrite if incoming main provided (choose last element if array)
     for k in MAIN_KEYS:
         incoming = data.get(k, None)
         incoming_list = _to_list_of_strings(incoming)
         existing_list = [str(x).strip() for x in (user_existing.get(k) or []) if str(x).strip()]
 
         if incoming_list:
-            # treat the most recent selection as the active main choice -> single element
             merged_for_user[k] = [incoming_list[-1]]
         else:
-            # keep existing if present
             if existing_list:
                 merged_for_user[k] = [existing_list[-1]]
             else:
                 merged_for_user.pop(k, None)
 
-    # 2) Handle sub-keys (stage2). Detect keys ending with _sub or Sub in incoming payload.
-    #    Normalize and union them with any existing stored sub arrays.
     for raw_key, raw_val in data.items():
         if not isinstance(raw_key, str):
             continue
         if raw_key.endswith("_sub") or raw_key.endswith("Sub"):
-            # map "mood_sub" or "moodSub" -> base "mood"
             if raw_key.endswith("_sub"):
                 base = raw_key[:-4]
             else:
@@ -228,7 +213,6 @@ async def save_preferences(request: Request):
             stored_sub_key = f"{base}_sub"
             existing_sub_list = [str(x).strip() for x in (user_existing.get(stored_sub_key) or []) if str(x).strip()]
 
-            # union existing_sub_list + incoming_sub_list (preserve existing order, append new)
             union = list(existing_sub_list)
             for v in incoming_sub_list:
                 if v and v not in union:
@@ -239,13 +223,9 @@ async def save_preferences(request: Request):
             else:
                 merged_for_user.pop(stored_sub_key, None)
 
-    # 3) Also handle a case where frontend sends stage2 under preferences.<key> as arrays
-    #    For example payload: { "mood": ["Romantic"], "mood_sub": ["Candlelight"], ... }
-    #    Additionally check nested preferences object (compatibility)
     prefs_nested = data.get("preferences") if isinstance(data.get("preferences"), dict) else None
     if prefs_nested:
         for k in MAIN_KEYS:
-            # nested sub key like preferences.get(f"{k}_sub")
             for sub_key_variant in (f"{k}_sub", f"{k}Sub", k + "_sub", k + "Sub"):
                 if sub_key_variant in prefs_nested:
                     incoming_sub_list = _to_list_of_strings(prefs_nested.get(sub_key_variant))
@@ -260,16 +240,8 @@ async def save_preferences(request: Request):
                     else:
                         merged_for_user.pop(stored_sub_key, None)
 
-        # Also allow nested preferences.<k + '_sub'> alongside top-level
-        # (we already handled nested when building payload for planner previously)
-
-    # OPTIONAL: If frontend sends subs as separate top-level arrays under keys like "mood_sub",
-    # we already processed them above. Also preserve any existing sub arrays not mentioned.
-
-    # Ensure we keep user_id in stored object
     merged_for_user["user_id"] = int(user_id)
 
-    # Persist
     existing_prefs[user_id_str] = merged_for_user
     try:
         with open(USER_PREFS_FILE, "w", encoding="utf-8") as f:
@@ -292,24 +264,18 @@ async def planner_endpoint(request: Request):
 
     print("📥 Planner request (raw):", raw)
 
-    if isinstance(raw, dict) and "preferences" in raw and "user_id" in raw:
+    # If the payload is the standard shape, keep preferences and also forward coords/location if present
+    if isinstance(raw, dict):
         payload = {
             "user_id": raw.get("user_id"),
-            "preferences": raw.get("preferences", {}),
+            "preferences": raw.get("preferences", {}) if isinstance(raw.get("preferences", {}), dict) else {},
             "max_terms": raw.get("max_terms", raw.get("maxTerms", 3)),
+            # pass location / coords through if present
+            "location": raw.get("location") or raw.get("place") or None,
+            "coords": raw.get("coords") or raw.get("coordinate") or raw.get("latlng") or None,
         }
     else:
-        payload = {
-            "user_id": raw.get("user_id"),
-            "preferences": {
-                "mood": raw.get("mood", raw.get("preferences", {}).get("mood", [])),
-                "planningStyle": raw.get("planningStyle", raw.get("preferences", {}).get("planningStyle", [])),
-                "adventureLevel": raw.get("adventureLevel", raw.get("preferences", {}).get("adventureLevel", [])),
-                "addOnMagic": raw.get("addOnMagic", raw.get("preferences", {}).get("addOnMagic", [])),
-                "memorableFactor": raw.get("memorableFactor", raw.get("preferences", {}).get("memorableFactor", [])),
-            },
-            "max_terms": raw.get("max_terms", raw.get("maxTerms", 3)),
-        }
+        raise HTTPException(status_code=400, detail="Invalid payload format")
 
     if not isinstance(payload.get("preferences"), dict):
         payload["preferences"] = {}

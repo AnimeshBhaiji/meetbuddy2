@@ -9,7 +9,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json, os
 from pathlib import Path
-from planner import generate_plan  # planner.generate_plan expects a single dict payload
+from planner import generate_plan 
+from planner import generate_initial_suggestions, generate_followup_suggestions
+from planner_sessions import create_session, get_session, push_selection, set_last_options
+
 
 # -------- DATABASE SETUP --------
 Base.metadata.create_all(bind=engine)
@@ -303,3 +306,94 @@ def read_user_prefs(user_id: int):
     if not prefs:
         raise HTTPException(status_code=404, detail="No prefs for this user")
     return {"user_id": user_id, "prefs": prefs}
+
+
+# Start a planner session (create initial suggestions)
+@app.post("/planner/session")
+async def planner_session_start(request: Request):
+    try:
+        raw = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    user_id = raw.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Missing user_id")
+
+    # Build a payload object similar to planner.generate_plan
+    payload = {
+        "user_id": user_id,
+        "preferences": raw.get("preferences", {}),
+        "max_terms": raw.get("max_terms", raw.get("maxTerms", 3)),
+        "coords": raw.get("coords") or raw.get("coordinate") or raw.get("latlng") or None,
+        "location": raw.get("location") or raw.get("place") or None,
+    }
+
+    initial = generate_initial_suggestions(payload, num_results=15)
+    # include selected_tokens into session state for downstream
+    session_id = create_session(user_id, payload, initial_state={"selected_tokens": initial.get("selected_tokens", [])})
+    # save selected_tokens and last_options in session
+    s = get_session(session_id)
+    s["selected_tokens"] = initial.get("selected_tokens", [])
+    set_last_options(session_id, "initial", initial.get("options", []))
+
+    return {
+        "session_id": session_id,
+        "initial": {
+            "display_query": initial.get("display_query"),
+            "options": initial.get("options"),
+            "short_query": initial.get("short_query"),
+            "place_types": initial.get("place_types"),
+            "location_hint": initial.get("location_hint"),
+        }
+    }
+
+# Select an option in a session and get next-step options
+@app.post("/planner/session/{sid}/select")
+async def planner_session_select(sid: str, request: Request):
+    try:
+        raw = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    session = get_session(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+
+    step = raw.get("step") or "default"
+    selected_place = raw.get("place")
+    if not selected_place:
+        raise HTTPException(status_code=400, detail="Missing selected place")
+
+    # store selection
+    push_selection(sid, step, selected_place)
+
+    # decide next_step - client can specify next_step or we infer a simple flow
+    next_step = raw.get("next_step")
+    if not next_step:
+        # example inference: if step was 'restaurant' next is 'activity', if 'activity' next is 'stay'
+        infer = {"restaurant":"activity", "activity":"stay", "stay":"done"}
+        next_step = infer.get(step, "activity")
+
+    # update session selected_tokens if provided in client payload
+    if raw.get("selected_tokens"):
+        session["selected_tokens"] = raw.get("selected_tokens")
+
+    # Generate followup suggestions based on last selected place
+    follow = generate_followup_suggestions(session, next_step, num_results=15)
+    set_last_options(sid, next_step, follow.get("options", []))
+
+    return {
+        "session_id": sid,
+        "selected": selected_place,
+        "next_step": next_step,
+        "options": follow.get("options", []),
+        "anchor_text": follow.get("anchor_text"),
+    }
+
+# Read session state
+@app.get("/planner/session/{sid}")
+def read_planner_session(sid: str):
+    s = get_session(sid)
+    if not s:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    return s

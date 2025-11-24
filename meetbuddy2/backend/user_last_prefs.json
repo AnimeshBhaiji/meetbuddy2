@@ -1,6 +1,5 @@
 {
   "6": {
-    "user_id": 6,
     "mood": [
       "Romantic"
     ],
@@ -8,38 +7,34 @@
       "Full control"
     ],
     "adventureLevel": [
-      "Weekend escape"
+      "Stick to the city"
     ],
     "addOnMagic": [
       "Surprise gift delivery / Insta-corners"
     ],
     "memorableFactor": [
-      "Amazing food"
+      "Deep conversations / Capture moments"
     ],
     "mood_sub": [
-      "No — keep it simple",
-      "Candlelit / intimate",
       "Scenic / view",
-      "Yes — gifts/music"
+      "No — keep it simple"
     ],
     "planningStyle_sub": [
       "Yes — full control",
       "Private seating",
-      "Live music",
-      "No — I want help",
       "Dietary options"
     ],
     "adventureLevel_sub": [
-      "Couple",
-      "Yes",
+      "Central",
       "No"
     ],
     "addOnMagic_sub": [
-      "Personalized gift"
+      "On-spot photographer"
     ],
     "memorableFactor_sub": [
-      "Indian",
-      "None"
-    ]
+      "Quiet & intimate",
+      "Photo session"
+    ],
+    "user_id": 6
   }
 }

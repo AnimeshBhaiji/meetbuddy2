@@ -115,7 +115,7 @@ const renderSubValue = (category, subId, val) => {
 };
 
 const QuestionnaireSummary = () => {
-  const { answers } = useQuestionnaire() || {};
+  const { answers, resetAnswers } = useQuestionnaire() || {};
   const navigate = useNavigate();
 
   // Build groupedAnswers (main + subs)
@@ -147,29 +147,49 @@ const QuestionnaireSummary = () => {
     const keys = ["mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor"];
     const preferences = {};
 
+    // also build explicit _sub arrays so backend can merge stage2 responses
+    // (backend checks for keys like 'mood_sub' either at top-level or inside preferences)
+    const subsPayload = {};
+
     for (const key of keys) {
       const ga = grouped[key] || { main: "", subs: [] };
       const final = [];
 
-      // main choice -> map through prefsData if possible
+      // main choice -> map through prefsData if possible (stage1 only)
       if (ga.main) {
         final.push(idMapToLabel(key, ga.main) || ga.main);
       }
 
-      // collect normalized subvalues
+      // collect normalized subvalues into a dedicated sub-list only
+      const subList = [];
       for (const s of (ga.subs || [])) {
         const normalized = normalizeSubValue(key, s.value);
         if (Array.isArray(normalized) && normalized.length > 0) {
           normalized.forEach((n) => {
-            if (n && !final.includes(n)) final.push(n);
+            if (n && !subList.includes(n)) subList.push(n);
           });
         }
       }
 
+      if (subList.length) {
+        // e.g. mood_sub: ["Candlelit / intimate", ...]
+        subsPayload[`${key}_sub`] = subList;
+      }
+
+      // preferences[key] now contains only the main stage1 label
       preferences[key] = final;
     }
 
-    return { user_id: userId, preferences };
+    // Build final payload. Include nested preferences plus top-level main keys
+    // and also top-level *_sub arrays so backend will merge stage2 answers.
+    const topLevel = { user_id: userId, preferences, ...preferences, ...subsPayload };
+    // Also place the sub-arrays inside the nested `preferences` for compatibility
+    for (const k of Object.keys(subsPayload)) {
+      if (!topLevel.preferences) topLevel.preferences = {};
+      topLevel.preferences[k] = subsPayload[k];
+    }
+
+    return topLevel;
   };
 
   const handleSave = async () => {
@@ -204,58 +224,74 @@ const QuestionnaireSummary = () => {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50">
       <Navbar />
       <div className="max-w-4xl mx-auto mt-10 px-6 pb-16">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <Card className="shadow-xl rounded-3xl border-0 bg-white/70 backdrop-blur-md">
-            <CardHeader className="text-center">
-              <CardTitle className="text-3xl font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <Card className="shadow-2xl rounded-3xl border-0 bg-white/70 backdrop-blur-md">
+            <CardHeader className="text-center pb-6 pt-8">
+              <CardTitle className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 Your MeetBuddy Preferences ✨
               </CardTitle>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-600 mt-3 text-base md:text-lg">
                 Here’s a summary of your selected preferences. You can save, modify, or move on to plan your meetup!
               </p>
             </CardHeader>
 
-            <CardContent className="space-y-6 mt-4">
+            <CardContent className="mt-2 space-y-8">
               {visibleKeys.length === 0 ? (
                 <p className="text-center text-gray-500">No preferences selected yet.</p>
               ) : (
-                <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {visibleKeys.map((key, index) => {
                     const data = grouped[key];
                     const mainLabel = idMapToLabel(key, data.main) || "";
                     return (
                       <motion.div
                         key={key}
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.06 }}
-                        className="bg-gradient-to-r from-blue-100 to-purple-100 p-5 rounded-2xl shadow-md hover:shadow-lg transition-shadow"
+                        transition={{ delay: index * 0.05 }}
+                        className="bg-gradient-to-br from-blue-50 via-white to-purple-50 border border-white/60 rounded-2xl shadow-md hover:shadow-lg transition-shadow p-5"
                       >
-                        <h3 className="text-2xl md:text-2xl font-semibold text-gray-800 mb-2">{humanizeKey(key)}</h3>
-
+                        <h3 className="text-xl md:text-2xl font-semibold text-gray-800 mb-2">
+                          {humanizeKey(key)}
+                        </h3>
                         {mainLabel ? (
-                          <p className="text-lg md:text-lg text-gray-700 font-medium mb-3">{mainLabel}</p>
+                          <p className="text-base md:text-lg text-gray-800 font-medium mb-3">
+                            {mainLabel}
+                          </p>
                         ) : (
-                          <p className="text-gray-600 italic mb-3">No main selection — refined answers shown below</p>
+                          <p className="text-sm text-gray-500 italic mb-3">
+                            No main selection — refined answers shown below
+                          </p>
                         )}
 
                         {data.subs && data.subs.length > 0 ? (
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {data.subs.map((s) => {
                               const qText = getSubQuestionText(key, s.id);
                               const displayVal = renderSubValue(key, s.id, s.value);
                               return (
-                                <div key={s.id} className="flex items-start justify-between bg-white/80 p-3 rounded-lg border border-gray-100">
-                                  <div className="text-sm md:text-base text-gray-700">
-                                    <div className="font-medium">{qText}</div>
-                                    <div className="text-sm text-gray-500 mt-1">{displayVal}</div>
+                                <div
+                                  key={s.id}
+                                  className="bg-white/80 rounded-lg border border-gray-100 px-3 py-2"
+                                >
+                                  <div className="text-xs md:text-sm text-gray-700 font-medium">
+                                    {qText}
+                                  </div>
+                                  <div className="text-xs md:text-sm text-gray-500 mt-1">
+                                    {displayVal}
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
                         ) : (
-                          <p className="text-gray-500">No sub-questions answered for this category.</p>
+                          <p className="text-sm text-gray-400">
+                            No sub-questions answered for this category.
+                          </p>
                         )}
                       </motion.div>
                     );
@@ -263,28 +299,34 @@ const QuestionnaireSummary = () => {
                 </div>
               )}
 
-              <div className="flex flex-col sm:flex-row justify-center gap-4 mt-10 flex-wrap">
+              <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4 flex-wrap">
                 <Button
                   onClick={handleSave}
                   className="bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 px-6 py-3 rounded-xl shadow-lg transition-all"
                 >
-                  💾 Save Preferences
+                  Save Preferences
                 </Button>
-
                 <Button
                   variant="secondary"
-                  onClick={() => navigate("/questionnaire-stage1")}
+                  onClick={() => {
+                    try {
+                      if (typeof resetAnswers === "function") resetAnswers();
+                    } catch {}
+                    try {
+                      localStorage.removeItem("questionnaireAnswers");
+                    } catch {}
+                    navigate("/questionnaire-stage1");
+                  }}
                   className="bg-yellow-400 text-white hover:bg-yellow-500 px-6 py-3 rounded-xl shadow-lg transition-all"
                 >
-                  ✏️ Modify Preferences
+                  Modify Preferences
                 </Button>
-
                 <Button
                   variant="outline"
                   onClick={() => navigate("/planner")}
                   className="border-2 border-blue-400 text-blue-600 hover:bg-blue-50 px-6 py-3 rounded-xl transition-all"
                 >
-                  🚀 Plan My Meetup
+                  Plan My Meetup
                 </Button>
               </div>
             </CardContent>

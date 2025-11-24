@@ -351,7 +351,23 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     coords = payload.get("coords")
     location_hint = payload.get("location")
 
+    print(f"DEBUG: generate_initial_suggestions called with location_hint='{location_hint}', coords={coords}")
+
     coords_tuple = _prepare_coords_tuple(coords)
+    
+    # If we have a textual location but no coords, try to geocode it
+    if location_hint and not coords_tuple and not _is_coord_string(location_hint):
+        print(f"DEBUG: Attempting to geocode location '{location_hint}'")
+        from scraper import _geocode_address_nominatim
+        try:
+            geocoded_coords = _geocode_address_nominatim(location_hint)
+            if geocoded_coords:
+                coords_tuple = geocoded_coords
+                print(f"DEBUG: Successfully geocoded to {coords_tuple}")
+            else:
+                print(f"DEBUG: Geocoding failed for '{location_hint}'")
+        except Exception as e:
+            print(f"DEBUG: Geocoding error: {e}")
 
     # If coords exist but location_hint is a raw lat/lng string, avoid using it in textual queries.
     loc_text_for_display = location_hint
@@ -365,8 +381,12 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
                     loc_text_for_display = rc
         except Exception:
             pass
-        # do NOT include the raw Lat/Lng string in q when coords are present
-        loc_text_for_query = ""
+        # ALWAYS include the location_hint in query if it's explicitly provided (typed location)
+        # This ensures user-typed locations take precedence
+        if location_hint and not _is_coord_string(location_hint):
+            loc_text_for_query = location_hint
+        else:
+            loc_text_for_query = ""
     else:
         # no coords: use textual location hint (if not a raw 'Lat ... Lng ...' pattern)
         if location_hint and not _is_coord_string(location_hint):
@@ -374,11 +394,29 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         else:
             loc_text_for_query = ""
 
+    print(f"DEBUG: loc_text_for_query='{loc_text_for_query}', loc_text_for_display='{loc_text_for_display}', coords_tuple={coords_tuple}")
+
     mood_labels = normalize_to_labels("mood", prefs_data.get("mood"))
     planning_labels = normalize_to_labels("planningStyle", prefs_data.get("planningStyle"))
     adventure_labels = normalize_to_labels("adventureLevel", prefs_data.get("adventureLevel"))
     addon_labels = normalize_to_labels("addOnMagic", prefs_data.get("addOnMagic"))
     memorable_labels = normalize_to_labels("memorableFactor", prefs_data.get("memorableFactor"))
+
+    # Stage2: normalize any adventureLevel_sub values (e.g. "No", "No stay") so we can
+    # allow users to explicitly opt out of a stay step even if stage1 suggests a stay.
+    adv_sub_raw = prefs_data.get("adventureLevel_sub") or prefs_data.get("adventureLevelSub")
+    adv_sub_labels = normalize_to_labels("adventureLevel", adv_sub_raw)
+    explicit_no_stay = any(
+        isinstance(s, str) and "no" in s.lower()
+        for s in adv_sub_labels
+    )
+
+    # Weekend escape: detect so we can bias search radius and scoring toward
+    # places farther away from the starting point / city.
+    is_weekend_escape = any(
+        isinstance(s, str) and "weekend escape" in s.lower()
+        for s in (adventure_labels or []) + (adv_sub_labels or [])
+    )
 
     labels_used = {
         "mood": mood_labels,
@@ -412,32 +450,57 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
 
     options: List[Dict[str, Any]] = []
 
-    # Try queries: first attempt is short query + place type with coords (if present)
+    # Map place types to user-friendly names for search
+    place_type_names = {
+        "restaurant": "restaurants",
+        "cafe": "cafes",
+        "park": "parks",
+        "tourist_attraction": "attractions",
+        "hotel": "hotels",
+        "activity": "things to do",
+    }
+
+    # Try queries: multiple variations to get better results
     attempts = []
 
     # Build attempts list of (q, place_type, coords)
     for pt in primary_types[:3]:
-        # when coords present: do not include loc text in the q; else include loc text (short)
-        if coords_tuple:
-            q = f"{short_q}"
+        pt_name = place_type_names.get(pt, pt)
+        
+        # Variation 1: preferences + place type + location
+        if loc_text_for_query:
+            q = f"{short_q} {pt_name} near {loc_text_for_query}".strip()
         else:
-            q = f"{short_q} {loc_text_for_query}".strip() if loc_text_for_query else short_q
-        attempts.append((q.strip(), pt, coords_tuple))
+            q = f"{short_q} {pt_name}".strip()
+        attempts.append((q, pt, coords_tuple))
+        
+        # Variation 2: just place type + location (simpler query for better results)
+        if loc_text_for_query:
+            q2 = f"{pt_name} in {loc_text_for_query}".strip()
+            attempts.append((q2, pt, coords_tuple))
+        
+        # Variation 3: place type + location (another format)
+        if loc_text_for_query:
+            q3 = f"best {pt_name} {loc_text_for_query}".strip()
+            attempts.append((q3, pt, coords_tuple))
 
-    # Additional fallback attempts (broader) - reduced to save API calls
-    # 1) generic short_q + coords (no type) - only if we don't have enough results yet
-    # 2) short 'things to do' around coords for activity heavy prefs - removed to save calls
+    print(f"DEBUG: Built {len(attempts)} attempts: {attempts}")
 
     # Run attempts, stop early when we have enough results
     for idx, (q, pt, ctuple) in enumerate(attempts):
-        # Early exit if we already have enough results
-        if len(options) >= max(num_results * 2, 20):
+        # Early exit if we already have enough results (increased threshold for better selection)
+        if len(options) >= max(num_results * 3, 40):
             break
         
         try:
-            # Fetch more results (25-30) to have better selection, then filter by distance
-            fetch_count = max(num_results * 2, 25)
-            max_dist = 2500 if ctuple else None  # 2.5km max distance from anchor
+            # Fetch more results (40-50) to have better selection, then filter by distance.
+            # For weekend escapes, allow a moderately larger radius (not too far from the city).
+            fetch_count = max(num_results * 3, 40)
+            max_base_dist = 2500
+            if is_weekend_escape:
+                max_base_dist = 10000  # up to ~10km for weekend trips
+            max_dist = max_base_dist if ctuple else None
+            print(f"DEBUG: Attempting fetch with q='{q}', pt={pt}, coords={ctuple}, max_dist={max_dist}")
             fetched = get_places(q, num_results=fetch_count, coords=ctuple, place_type=pt, max_distance_meters=max_dist)
             if fetched:
                 print(f"🔎 initial fetch succeeded on attempt {idx+1} q='{q}' pt={pt} coords={'yes' if ctuple else 'no'} -> {len(fetched)} results")
@@ -449,18 +512,37 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
                 print(f"🔎 initial fetch returned 0 on attempt {idx+1} q='{q}' pt={pt} coords={'yes' if ctuple else 'no'}")
         except Exception as e:
             print(f"⚠️ initial get_places failed on attempt {idx+1} q='{q}' pt={pt} coords={'yes' if ctuple else 'no'}:", e)
+            import traceback
+            traceback.print_exc()
     
     # Only try generic fallback if we still don't have enough results
     if len(options) < num_results:
         try:
             fetch_count = max(num_results * 2, 25)
-            max_dist = 2500 if coords_tuple else None
+            max_base_dist = 2500
+            if is_weekend_escape:
+                max_base_dist = 10000
+            max_dist = max_base_dist if coords_tuple else None
+            print(f"DEBUG: Trying generic fallback with q='{short_q}'")
             fetched = get_places(short_q, num_results=fetch_count, coords=coords_tuple, place_type=None, max_distance_meters=max_dist)
             if fetched:
                 print(f"🔎 fallback generic query succeeded -> {len(fetched)} results")
                 options.extend(fetched)
         except Exception as e:
             print(f"⚠️ fallback query failed:", e)
+    
+    # Last resort: if still no results, try just location-based search (no preferences)
+    if len(options) < num_results and loc_text_for_query:
+        try:
+            fetch_count = max(num_results * 2, 25)
+            max_dist = 2500 if coords_tuple else None
+            print(f"DEBUG: Trying location-only fallback with q='{loc_text_for_query}'")
+            fetched = get_places(loc_text_for_query, num_results=fetch_count, coords=coords_tuple, place_type=None, max_distance_meters=max_dist)
+            if fetched:
+                print(f"🔎 location-only fallback succeeded -> {len(fetched)} results")
+                options.extend(fetched)
+        except Exception as e:
+            print(f"⚠️ location-only fallback failed:", e)
 
     # Deduplicate & score
     options = dedupe_places(options)
@@ -471,7 +553,7 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         p["tags"] = tag_place_minimal(p)
         base_score = score_place_minimal(p, labels_used)
         
-        # Boost score for closer places if we have coords
+        # Boost score based on distance if we have coords
         if coords_tuple and p.get("lat") and p.get("lng"):
             try:
                 from math import radians, sin, cos, sqrt, atan2
@@ -484,13 +566,24 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
                 c = 2 * atan2(sqrt(a), sqrt(1 - a))
                 distance_m = R * c
                 p["distance_meters"] = distance_m
-                # Boost: places within 500m get +2, within 1km get +1, within 2km get +0.5
-                if distance_m <= 500:
-                    base_score += 2.0
-                elif distance_m <= 1000:
-                    base_score += 1.0
-                elif distance_m <= 2000:
-                    base_score += 0.5
+
+                if is_weekend_escape:
+                    # Weekend escape: prefer moderately away places (2–8km),
+                    # avoid both ultra-close (<1km) and very far (>12km).
+                    if distance_m <= 1000:
+                        base_score -= 0.3
+                    elif 2000 <= distance_m <= 8000:
+                        base_score += 0.8
+                    elif distance_m > 12000:
+                        base_score -= 0.4
+                else:
+                    # Default behavior: boost closer places
+                    if distance_m <= 500:
+                        base_score += 2.0
+                    elif distance_m <= 1000:
+                        base_score += 1.0
+                    elif distance_m <= 2000:
+                        base_score += 0.5
             except Exception:
                 pass
         
@@ -501,6 +594,49 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         -x.get("score", 0),  # Higher score first
         x.get("distance_meters") if x.get("distance_meters") is not None else float('inf')  # Closer first
     ))
+
+    # For weekend escapes, diversify directions around the origin so options
+    # are not overly clustered in one area of the outskirts.
+    if is_weekend_escape and coords_tuple and options_sorted:
+        try:
+            from math import atan2
+
+            def _sector(place, center):
+                try:
+                    plat = float(place.get("lat"))
+                    plng = float(place.get("lng"))
+                    dlat = plat - center[0]
+                    dlng = plng - center[1]
+                    angle = atan2(dlat, dlng)  # -pi..pi
+                    # 8 sectors (45° each)
+                    idx = int(((angle + 3.14159265) / (2 * 3.14159265)) * 8) % 8
+                    return idx
+                except Exception:
+                    return 0
+
+            sector_buckets = {i: [] for i in range(8)}
+            for pl in options_sorted:
+                s_idx = _sector(pl, coords_tuple)
+                sector_buckets[s_idx].append(pl)
+
+            # Round-robin pick from sectors to build a balanced list
+            balanced = []
+            target_len = max(num_results, 20)
+            while len(balanced) < target_len:
+                added_any = False
+                for i in range(8):
+                    if sector_buckets[i]:
+                        balanced.append(sector_buckets[i].pop(0))
+                        added_any = True
+                        if len(balanced) >= target_len:
+                            break
+                if not added_any:
+                    break
+
+            if balanced:
+                options_sorted = balanced
+        except Exception:
+            pass
 
     display_q = ", ".join([t.get("label") for t in tokens]) or short_q
     # for display prefer reverse geocoded or textual hint; never show raw 'Lat .. Lng ..' if coords present
@@ -517,13 +653,18 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     # Determine flow based on preferences
     recommended_flow = determine_flow_from_preferences(labels_used)
 
+    # If stage2 explicitly says "No" / "no stay" for adventureLevel, strip the stay step
+    # even if stage1 would normally include it (e.g. "Weekend escape").
+    if explicit_no_stay and "stay" in recommended_flow:
+        recommended_flow = [step for step in recommended_flow if step != "stay"]
+
     return {
         "display_query": display_q,
         "short_query": short_q,
         "labels_used": labels_used,
         "selected_tokens": tokens,
         "place_types": place_types,
-        "options": options_sorted[:num_results],
+        "options": options_sorted[:max(num_results, 20)],  # Return up to 20 results for better selection
         "location_hint": loc_text_for_display or "",
         "recommended_flow": recommended_flow,  # Add recommended flow steps
     }

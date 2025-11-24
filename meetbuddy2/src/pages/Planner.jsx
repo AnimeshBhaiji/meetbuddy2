@@ -38,6 +38,96 @@ export default function Planner() {
   // Track highlighted place for map popup
   const [highlightedPlace, setHighlightedPlace] = useState(null);
 
+  // Inline search on the step page (for adding extra restaurants)
+  const [inlineSearchText, setInlineSearchText] = useState("");
+  const [inlineSearchLoading, setInlineSearchLoading] = useState(false);
+  const [inlineSearchError, setInlineSearchError] = useState("");
+
+  const hasNoStayFlag = (subVal) => {
+    const checkStr = (s) => {
+      if (s == null) return false;
+      const t = String(s).toLowerCase().trim();
+      return t === "no" || t.includes("no stay");
+    };
+
+    if (!subVal) return false;
+    if (Array.isArray(subVal)) return subVal.some(checkStr);
+    if (typeof subVal === "string" || typeof subVal === "number") return checkStr(subVal);
+    if (typeof subVal === "object") {
+      return Object.values(subVal).some((v) => {
+        if (!v) return false;
+        if (Array.isArray(v)) return v.some(checkStr);
+        if (typeof v === "string" || typeof v === "number") return checkStr(v);
+        return false;
+      });
+    }
+    return false;
+  };
+
+  const handleInlineRestaurantSearch = async () => {
+    const q = inlineSearchText && inlineSearchText.trim();
+    if (!q) return;
+
+    // Only meaningful on the restaurant step
+    if (currentStep !== "restaurant") {
+      return;
+    }
+
+    setInlineSearchLoading(true);
+    setInlineSearchError("");
+    try {
+      const body = {
+        query: q,
+        coords: coords || userPrefs?.coords || null,
+        max_results: 5,
+      };
+
+      const res = await axios.post("http://localhost:8000/search_place", body, {
+        headers: { "Content-Type": "application/json" },
+        timeout: 20000,
+      });
+
+      const found = res.data?.results || [];
+      if (!found.length) {
+        setInlineSearchError("No restaurants found for that search.");
+        return;
+      }
+
+      // Append new results to current options, avoiding duplicates by place_id or (title+address)
+      setStepOptions((prev) => {
+        const existing = prev || [];
+        const seen = new Set(
+          existing.map((p) => {
+            const raw = p.raw || p;
+            const pid = raw.place_id || raw.id || "";
+            const title = (raw.title || raw.name || "").toLowerCase();
+            const addr = (raw.address || "").toLowerCase();
+            return pid || `${title}::${addr}`;
+          })
+        );
+
+        const merged = [...existing];
+        for (const r of found) {
+          const pid = r.place_id || r.id || "";
+          const title = (r.title || r.name || "").toLowerCase();
+          const addr = (r.address || "").toLowerCase();
+          const key = pid || `${title}::${addr}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          merged.push(r);
+        }
+        return merged;
+      });
+
+      setInlineSearchError("");
+    } catch (e) {
+      console.error("❌ Inline restaurant search failed:", e);
+      setInlineSearchError("Unable to search right now. Please try again.");
+    } finally {
+      setInlineSearchLoading(false);
+    }
+  };
+
   useEffect(() => {
     try {
       const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -80,63 +170,80 @@ export default function Planner() {
       return [String(val)];
     };
     
-    // Determine flow from preferences locally (same logic as backend)
+    // Determine flow from preferences locally (mirror backend determine_flow_from_preferences)
     const determineFlowFromPrefs = (prefs) => {
       let needsStay = false;
       let needsActivity = false;
       let forceNoActivity = false;
 
-      // Normalize preferences to arrays of labels
+      // Normalize preferences to arrays
       const adventureLevel = normalizePref(prefs.adventureLevel);
       const mood = normalizePref(prefs.mood);
       const memorableFactor = normalizePref(prefs.memorableFactor);
 
       console.log("🔍 Analyzing preferences for flow:", { adventureLevel, mood, memorableFactor });
 
-      // Analyze adventure level
+      // Check stage2 adventureLevel_sub for explicit "no stay" / "No" preference
+      const adventureSubs = prefs.adventureLevel_sub;
+      const hasNoStay = hasNoStayFlag(adventureSubs);
+
+      // --- Adventure level (strongest indicator for stay + activity) ---
       for (const label of adventureLevel) {
-        const labelStr = String(label).trim();
+        const labelStr = String(label);
         if (labelStr === "Weekend escape" || labelStr.includes("Weekend escape")) {
-          needsStay = true;
-          needsActivity = true;
+          needsStay = true;      // weekend escapes usually include a stay
+          needsActivity = true;  // and activities
         } else if (labelStr === "Short drive to hidden gem" || labelStr.includes("Short drive")) {
+          // hidden gems: activities are important, stay optional
           needsActivity = true;
         } else if (labelStr === "Stick to the city" || labelStr.includes("Stick to the city")) {
+          // city trips: usually restaurant + activity, no stay
           needsActivity = true;
         }
       }
 
-      // Analyze mood
+      // --- Mood (can override or reinforce decisions) ---
+      const hasWeekendEscape = adventureLevel.some((l) => String(l).includes("Weekend escape"));
+      const hasShortDrive = adventureLevel.some((l) => String(l).includes("Short drive"));
+
       for (const label of mood) {
-        const labelStr = String(label).trim();
+        const labelStr = String(label);
         if (labelStr === "Romantic" || labelStr.includes("Romantic")) {
           needsStay = true;
           needsActivity = true;
-        } else if (labelStr === "Fun & Energetic" || labelStr.includes("Fun") || labelStr.includes("Energetic")) {
+        } else if (labelStr === "Fun & Energetic" || labelStr.includes("Fun & Energetic")) {
           needsActivity = true;
-        } else if (labelStr === "Chill & Relaxed" || labelStr.includes("Chill") || labelStr.includes("Relaxed")) {
+        } else if (labelStr === "Chill & Relaxed" || labelStr.includes("Chill & Relaxed")) {
           needsActivity = true;
         } else if (labelStr === "Business-y" || labelStr.includes("Business")) {
-          // Business-y overrides activities unless adventure level strongly suggests them
-          const hasWeekendEscape = adventureLevel.some(l => String(l).includes("Weekend escape"));
-          const hasShortDrive = adventureLevel.some(l => String(l).includes("Short drive"));
+          // Business meetings usually just need restaurant unless adventure strongly suggests otherwise
           if (!hasWeekendEscape && !hasShortDrive) {
             forceNoActivity = true;
           }
         }
       }
 
-      // Analyze memorable factor
+      // --- Memorable factor (can add activities) ---
       for (const label of memorableFactor) {
-        const labelStr = String(label).trim();
+        const labelStr = String(label);
         if (labelStr === "A unique place" || labelStr.includes("unique")) {
           needsActivity = true;
-        } else if (labelStr === "Deep conversations / Capture moments" || labelStr.includes("Deep") || labelStr.includes("Capture")) {
+        } else if (labelStr === "Deep conversations / Capture moments" || labelStr.includes("Deep conversations")) {
           needsActivity = true;
         }
       }
 
-      // Build flow
+      // Stage2 explicit no-stay overrides any inferred stay
+      if (hasNoStay) {
+        needsStay = false;
+      }
+
+      // Apply Business-y override for activities if no strong adventure signal
+      if (forceNoActivity && !hasWeekendEscape && !hasShortDrive) {
+        needsActivity = false;
+      }
+
+      // Build ordered flow: restaurant always first, then activity, then stay
       const flow = ["restaurant"];
       if (needsActivity && !forceNoActivity) {
         flow.push("activity");
@@ -145,7 +252,13 @@ export default function Planner() {
         flow.push("stay");
       }
 
-      console.log("📋 Determined flow from frontend prefs:", flow, { needsActivity, needsStay, forceNoActivity });
+      console.log("📋 Determined flow from frontend prefs:", flow, {
+        needsActivity,
+        needsStay,
+        forceNoActivity,
+        adventureSubs,
+        hasNoStay,
+      });
       return flow;
     };
 
@@ -187,9 +300,18 @@ export default function Planner() {
   };
 
   const handlePlaceTextBlur = () => {
-    if (placeText && placeText.trim()) {
-      persistPrefs({ location: placeText.trim() });
-      // clear coords because textual place may not have numeric coords
+    const trimmed = placeText && placeText.trim();
+    if (!trimmed) return;
+
+    // If the value looks like our GPS auto-filled label ("Lat .., Lng .."),
+    // keep the existing coords and just persist the location text.
+    const lower = trimmed.toLowerCase();
+    const looksLikeCoords = lower.includes("lat") && lower.includes("lng");
+
+    persistPrefs({ location: trimmed });
+
+    // Only clear coords when the user has typed a proper textual area/city.
+    if (!looksLikeCoords) {
       setCoords(null);
       persistPrefs({ coords: null });
     }
@@ -238,6 +360,12 @@ export default function Planner() {
           adventureLevel: normalizePrefForSend(userPrefs?.adventureLevel),
           addOnMagic: normalizePrefForSend(userPrefs?.addOnMagic),
           memorableFactor: normalizePrefForSend(userPrefs?.memorableFactor),
+          // pass stage2 subs to legacy /planner as well
+          mood_sub: normalizePrefForSend(userPrefs?.mood_sub),
+          planningStyle_sub: normalizePrefForSend(userPrefs?.planningStyle_sub),
+          adventureLevel_sub: normalizePrefForSend(userPrefs?.adventureLevel_sub),
+          addOnMagic_sub: normalizePrefForSend(userPrefs?.addOnMagic_sub),
+          memorableFactor_sub: normalizePrefForSend(userPrefs?.memorableFactor_sub),
         },
         max_terms: maxTerms,
       };
@@ -315,6 +443,17 @@ export default function Planner() {
       alert("Please log in and save preferences first.");
       return;
     }
+
+    // Check if location is set
+    const hasCoords = coords && typeof coords === "object" && coords.lat && coords.lng;
+    const hasPlace = placeText && placeText.trim();
+    const hasSavedLocation = userPrefs && userPrefs.location && userPrefs.location.trim();
+
+    if (!hasCoords && !hasPlace && !hasSavedLocation) {
+      alert("Please enter your current location or allow GPS access before starting your itinerary.");
+      return;
+    }
+
     setSessionLoading(true);
     try {
       const payload = {
@@ -325,9 +464,16 @@ export default function Planner() {
           adventureLevel: userPrefs.adventureLevel,
           addOnMagic: userPrefs.addOnMagic,
           memorableFactor: userPrefs.memorableFactor,
+          // include stage2 sub-preferences so backend can respect them (e.g. "No" stay)
+          mood_sub: userPrefs.mood_sub,
+          planningStyle_sub: userPrefs.planningStyle_sub,
+          adventureLevel_sub: userPrefs.adventureLevel_sub,
+          addOnMagic_sub: userPrefs.addOnMagic_sub,
+          memorableFactor_sub: userPrefs.memorableFactor_sub,
         },
-        coords: userPrefs.coords || (coords || null),
-        location: userPrefs.location || (placeText && placeText.trim() ? placeText.trim() : null),
+        // Prioritize current coords/location input over saved preferences
+        coords: coords || userPrefs.coords || null,
+        location: (placeText && placeText.trim() ? placeText.trim() : null) || userPrefs.location || null,
         max_terms: maxTerms,
       };
 
@@ -346,8 +492,16 @@ export default function Planner() {
         // Fallback to deriving from place types if backend didn't provide flow
         flow = deriveFlowFromPlaceTypes(place_types);
       }
-      
-      console.log("📋 Determined flow from preferences:", flow);
+
+      // Frontend safety guard: if stage2 explicitly says "No" / "no stay",
+      // ensure the stay step is removed even if backend included it.
+      const advSubs = userPrefs && userPrefs.adventureLevel_sub;
+      const hasNoStay = hasNoStayFlag(advSubs);
+      if (hasNoStay && Array.isArray(flow)) {
+        flow = flow.filter((step) => step !== "stay");
+      }
+
+      console.log("📋 Determined flow from preferences:", flow, { hasNoStay, advSubs });
       setInitialFlow(flow);
       setFlowText(flow.map((f) => humanStepName(f)).join(" → "));
       setCurrentStep(flow[0] || "restaurant");
@@ -546,105 +700,82 @@ export default function Planner() {
   const StepGrid = ({ options = [], onSelect, loading, onHighlight }) => {
     if (!options || options.length === 0) {
       return (
-        <div className="p-6 text-center text-gray-500">
-          <div className="mb-3">No options available for this step.</div>
-          <div className="flex justify-center gap-2">
+        <div className="bg-white/70 backdrop-blur-md rounded-3xl p-12 text-center shadow-xl border-0">
+          <div className="mb-6">
+            <p className="text-lg text-gray-600 mb-2">😅 No options available for this step.</p>
+            <p className="text-gray-500">Try adjusting your location or preferences.</p>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-center gap-3">
             <button
-              onClick={() => {
-                // allow quick retry by re-starting the session
-                startSession();
-              }}
-              className="px-3 py-2 bg-blue-600 text-white rounded"
+              onClick={() => startSession()}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-medium"
             >
-              Retry suggestions
+              🔄 Retry
             </button>
             <button
-              onClick={() => {
-                // try the legacy planner path as quick rescue
-                (async () => {
-                  setSessionLoading(true);
-                  try {
-                    const legacyPayload = {
-                      user_id: user.user_id,
-                      preferences: {
-                        mood: userPrefs.mood,
-                        planningStyle: userPrefs.planningStyle,
-                        adventureLevel: userPrefs.adventureLevel,
-                        addOnMagic: userPrefs.addOnMagic,
-                        memorableFactor: userPrefs.memorableFactor,
-                      },
-                      max_terms: maxTerms,
-                      coords: userPrefs.coords || coords || null,
-                      location: userPrefs.location || placeText || null,
-                    };
-                    const legacyRes = await axios.post("http://localhost:8000/planner", legacyPayload, { timeout: 60000 });
-                    const mapped = legacyRes.data.recommendations || [];
-                    setStepOptions(mapped.length ? mapped : []);
-                    if (!mapped.length) alert("Legacy planner returned no options either.");
-                  } catch (e) {
-                    console.error("Legacy rescue failed", e);
-                    alert("Rescue failed. Check server logs.");
-                  } finally {
-                    setSessionLoading(false);
-                  }
-                })();
-              }}
-              className="px-3 py-2 bg-gray-200 rounded"
+              onClick={() => { setPage("home"); setSessionId(null); }}
+              className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-800 rounded-xl hover:bg-gray-50 transition font-medium"
             >
-              Try Legacy Planner
+              ← Go Back
             </button>
           </div>
         </div>
       );
     }
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {options.map((o, idx) => (
           <div 
             key={idx} 
-            className="bg-white rounded-xl p-4 shadow hover:shadow-lg transition cursor-pointer border-2 border-transparent hover:border-blue-400"
+            className="bg-white/70 backdrop-blur-md rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition cursor-pointer border border-white/20 hover:border-blue-400 group"
             onMouseEnter={() => {
               if (onHighlight) onHighlight(o);
             }}
             onMouseLeave={() => {
               if (onHighlight) onHighlight(null);
             }}
-            onClick={() => {
-              if (onHighlight) onHighlight(o);
-            }}
           >
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="font-semibold text-lg">{o.title || o.name || "Unnamed Place"}</h4>
-                <div className="text-sm text-gray-600 mt-1">{o.address}</div>
-                {o.rating && <div className="mt-2 text-yellow-500">⭐ {o.rating}</div>}
+            {/* Thumbnail */}
+            {o.thumbnail && (
+              <div className="w-full h-40 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
+                <img src={o.thumbnail} alt={o.title} className="w-full h-full object-cover group-hover:scale-110 transition" />
               </div>
-              <div className="text-right">
-                <a href={o.link || "#"} target="_blank" rel="noreferrer" className="text-xs text-blue-600" onClick={(e) => e.stopPropagation()}>Open</a>
-              </div>
-            </div>
+            )}
 
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect(o);
-                }}
-                className="px-3 py-1 bg-green-600 text-white rounded"
-                disabled={loading}
-              >
-                Select
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // quick preview action (open maps) - keep simple
-                  if (o.link) window.open(o.link, "_blank", "noopener,noreferrer");
-                }}
-                className="px-3 py-1 bg-gray-200 rounded"
-              >
-                Preview
-              </button>
+            {/* Content */}
+            <div className="p-5">
+              <div className="flex justify-between items-start gap-2 mb-3">
+                <div className="flex-1">
+                  <h4 className="font-semibold text-lg text-gray-800 line-clamp-2">{o.title || o.name || "Unnamed Place"}</h4>
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-1">{o.address}</p>
+                </div>
+                {o.rating && <div className="text-lg font-semibold text-yellow-500 flex-shrink-0">⭐ {o.rating}</div>}
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2 pt-3 border-t border-gray-100">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(o);
+                  }}
+                  className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition font-medium text-sm disabled:opacity-50"
+                  disabled={loading}
+                >
+                  ✓ Select
+                </button>
+                {o.link && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(o.link, "_blank", "noopener,noreferrer");
+                    }}
+                    className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium text-sm"
+                  >
+                    🔗 Open
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -672,143 +803,239 @@ export default function Planner() {
     <>
       <Navbar />
 
-      <div className="p-6 flex flex-col items-center min-h-screen bg-gray-50">
-        <h1 className="text-2xl font-bold mb-4">Your Personalized Planner ✨</h1>
-
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50 pb-16">
         {/* HOME / preferences panel */}
         {page === "home" && (
-          <div className="bg-white shadow-md rounded-xl p-4 mb-6 max-w-xl w-full text-gray-700">
-            <h2 className="text-lg font-semibold mb-2">💡 Your Preferences</h2>
-            <ul className="space-y-1 text-sm mb-4">
-              <li><strong>Mood:</strong> {displayPref(userPrefs?.mood)}</li>
-              <li><strong>Planning Style:</strong> {displayPref(userPrefs?.planningStyle)}</li>
-              <li><strong>Adventure Level:</strong> {displayPref(userPrefs?.adventureLevel)}</li>
-              <li><strong>Add-On Magic:</strong> {displayPref(userPrefs?.addOnMagic)}</li>
-              <li><strong>Memorable Factor:</strong> {displayPref(userPrefs?.memorableFactor)}</li>
-            </ul>
+          <div className="max-w-4xl mx-auto px-6 py-10">
+            <div className="text-center mb-12">
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                Plan Your Perfect Meetup ✨
+              </h1>
+              <p className="text-gray-600 text-lg">Personalized recommendations based on your preferences</p>
+            </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium mb-1">Enter desired location (city / area) or use GPS</label>
-              <div className="flex gap-2">
-                <input
-                  value={placeText}
-                  onChange={(e) => setPlaceText(e.target.value)}
-                  onBlur={handlePlaceTextBlur}
-                  placeholder="e.g. Indiranagar, Bangalore"
-                  className="flex-1 border rounded px-3 py-2"
-                />
-                <button onClick={useMyLocation} className="px-3 py-2 bg-blue-600 text-white rounded" disabled={locLoading}>
-                  {locLoading ? "Detecting..." : "Use my location"}
+            <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl p-8 mb-8 border-0">
+              <div className="grid md:grid-cols-2 gap-8 mb-8">
+                {/* Preferences display */}
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Preferences</h2>
+                  <div className="space-y-3">
+                    <div className="bg-gradient-to-r from-blue-100 to-blue-50 p-3 rounded-xl">
+                      <p className="text-sm text-gray-600">Mood</p>
+                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.mood)}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-purple-100 to-purple-50 p-3 rounded-xl">
+                      <p className="text-sm text-gray-600">Planning Style</p>
+                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.planningStyle)}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-pink-100 to-pink-50 p-3 rounded-xl">
+                      <p className="text-sm text-gray-600">Adventure Level</p>
+                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.adventureLevel)}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-yellow-100 to-yellow-50 p-3 rounded-xl">
+                      <p className="text-sm text-gray-600">Add-On Magic</p>
+                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.addOnMagic)}</p>
+                    </div>
+                    <div className="bg-gradient-to-r from-green-100 to-green-50 p-3 rounded-xl">
+                      <p className="text-sm text-gray-600">Memorable Factor</p>
+                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.memorableFactor)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Location & flow */}
+                <div className="flex flex-col gap-6">
+                  <div>
+                    <label className="block text-lg font-semibold text-gray-800 mb-3">Select Location</label>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        value={placeText}
+                        onChange={(e) => setPlaceText(e.target.value)}
+                        onBlur={handlePlaceTextBlur}
+                        placeholder="Enter city or area..."
+                        className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                      />
+                      <button
+                        onClick={useMyLocation}
+                        className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
+                        disabled={locLoading}
+                      >
+                        📍 {locLoading ? "..." : "GPS"}
+                      </button>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {coords ? `📌 ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : placeText ? `📍 ${placeText}` : "No location set"}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-lg font-semibold text-gray-800 mb-3">Your Planned Flow</label>
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-xl font-medium text-center">
+                      {flowText || (initialFlow.length > 0 ? initialFlow.map((f) => humanStepName(f)).join(" → ") : "Restaurant")}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button
+                  onClick={startSession}
+                  disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sessionLoading ? "Starting..." : "🚀 Generate Itinerary"}
                 </button>
               </div>
-              <div className="text-xs text-gray-500 mt-2">
-                {coords ? `Using coords: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : placeText ? `Using place: ${placeText}` : "No location set"}
-              </div>
-            </div>
-
-            <div className="flex gap-3 items-center">
-              <button
-                onClick={startSession}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-                disabled={sessionLoading}
-              >
-                {sessionLoading ? "Starting..." : "Generate Itinerary (Step-by-step)"}
-              </button>
-
-              <button
-                onClick={() => { setPage("home"); getRecommendations(); }}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
-              >
-                Get My Recommendations (Legacy)
-              </button>
-
-              <div className="ml-4">
-                <label className="text-sm mr-2">Query tokens:</label>
-                <select value={maxTerms} onChange={(e) => setMaxTerms(Number(e.target.value))} className="border px-2 py-1 rounded">
-                  <option value={1}>1</option>
-                  <option value={2}>2</option>
-                  <option value={3}>3</option>
-                  <option value={4}>4</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-4 text-sm text-gray-600">
-              <div><strong>Planned flow (derived from your prefs):</strong></div>
-              <div className="mt-1">{flowText || (initialFlow.length > 0 ? initialFlow.map((f) => humanStepName(f)).join(" → ") : "Restaurant")}</div>
             </div>
           </div>
         )}
 
         {/* STEP PAGE: show all options for current step */}
         {page === "step" && (
-          <div className="w-full max-w-5xl">
-            <div className="mb-4 flex items-center justify-between">
+          <div className="max-w-6xl mx-auto px-6 py-10">
+            <div className="flex items-center justify-between mb-8">
               <div>
-                <div className="text-sm text-gray-600">Session: <strong>{sessionId}</strong></div>
-                <div className="text-lg font-semibold">{currentStep ? humanStepName(currentStep) : "Done"}</div>
-                <div className="text-sm text-gray-500">Anchor: {anchorText}</div>
+                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  {currentStep ? humanStepName(currentStep) : "Done"}
+                </h1>
+                <p className="text-gray-600 mt-2">{anchorText}</p>
               </div>
-              <div className="flex gap-2 items-center">
-                <button onClick={goBackOneStep} className="px-3 py-2 bg-gray-200 rounded">Back</button>
-                <button onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }} className="px-3 py-2 bg-red-100 rounded">Cancel</button>
+              <div className="flex gap-3">
+                <button
+                  onClick={goBackOneStep}
+                  className="px-5 py-3 bg-white/70 backdrop-blur-md text-gray-800 rounded-xl hover:bg-white/90 transition shadow-lg font-medium"
+                >
+                  ← Back
+                </button>
+                <button
+                  onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
+                  className="px-5 py-3 bg-red-500/10 text-red-600 rounded-xl hover:bg-red-500/20 transition font-medium"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
 
-            {/* Map display */}
-            <div className="mb-6">
-              <MapPlanner 
-                options={stepOptions} 
-                selectedChain={selectedChain}
-                onSelect={selectOption}
-                onPreview={(place) => {
-                  if (place.link) window.open(place.link, "_blank", "noopener,noreferrer");
-                }}
-                highlightedPlace={highlightedPlace}
-              />
+            {/* Map display with optional restaurant search bar */}
+            <div className="mb-8 bg-white/70 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl border-0">
+              {currentStep === "restaurant" && (
+                <div className="px-6 pt-6 pb-2 border-b border-gray-100 flex flex-col md:flex-row gap-3 items-stretch md:items-center bg-white/80">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Add a restaurant you already have in mind
+                    </label>
+                    <input
+                      type="text"
+                      value={inlineSearchText}
+                      onChange={(e) => setInlineSearchText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleInlineRestaurantSearch();
+                        }
+                      }}
+                      placeholder="Search by name or area (e.g., Truffles Koramangala)"
+                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleInlineRestaurantSearch}
+                    disabled={inlineSearchLoading || !inlineSearchText.trim()}
+                    className="md:self-end px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:from-blue-600 hover:to-purple-600 transition"
+                  >
+                    {inlineSearchLoading ? "Searching..." : "Search & Add"}
+                  </button>
+                </div>
+              )}
+
+              {inlineSearchError && currentStep === "restaurant" && (
+                <div className="px-6 pt-2 text-sm text-red-600">{inlineSearchError}</div>
+              )}
+
+              <div className="pt-4">
+                <MapPlanner 
+                  options={stepOptions} 
+                  selectedChain={selectedChain}
+                  onSelect={selectOption}
+                  onPreview={(place) => {
+                    if (place.link) window.open(place.link, "_blank", "noopener,noreferrer");
+                  }}
+                  highlightedPlace={highlightedPlace}
+                  userCoords={coords || userPrefs?.coords || null}
+                  locationText={(placeText && placeText.trim()) || userPrefs?.location || ""}
+                />
+              </div>
             </div>
 
-            <div className="mb-3">
-              <StepGrid 
-                options={stepOptions} 
-                onSelect={selectOption} 
-                loading={sessionLoading}
-                onHighlight={setHighlightedPlace}
-              />
-            </div>
+            <StepGrid 
+              options={stepOptions} 
+              onSelect={selectOption} 
+              loading={sessionLoading}
+              onHighlight={setHighlightedPlace}
+            />
           </div>
         )}
 
         {/* SUMMARY PAGE */}
         {page === "summary" && (
-          <div className="w-full max-w-5xl">
-            <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-              <h3 className="text-lg font-semibold mb-3">Your Itinerary</h3>
-              <ol className="list-decimal list-inside space-y-2">
-                {selectedChain.map((s, i) => (
-                  <li key={i}>
-                    <strong>{humanStepName(s.step)}:</strong> {s.place.title || s.place.name || s.place.address}
-                  </li>
-                ))}
-              </ol>
-              <div className="mt-4 flex gap-2">
-                <button onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }} className="px-3 py-2 bg-blue-600 text-white rounded">Start Over</button>
-                <button onClick={() => window.print()} className="px-3 py-2 bg-gray-200 rounded">Print / Save</button>
-              </div>
+          <div className="max-w-6xl mx-auto px-6 py-10">
+            <div className="text-center mb-12">
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
+                Your Perfect Itinerary 🎉
+              </h1>
+              <p className="text-gray-600 text-lg">Ready to explore!</p>
             </div>
-            
-            {/* Map display for summary */}
-            <div className="bg-white p-6 rounded-xl shadow-md">
-              <h3 className="text-lg font-semibold mb-3">Your Itinerary Map</h3>
-              <MapPlanner 
-                options={[]} 
-                selectedChain={selectedChain}
-                onSelect={() => {}}
-                onPreview={(place) => {
-                  if (place.link) window.open(place.link, "_blank", "noopener,noreferrer");
-                }}
-                highlightedPlace={highlightedPlace}
-              />
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Itinerary list */}
+              <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl p-8 border-0">
+                <h2 className="text-2xl font-semibold text-gray-800 mb-6">Your Plan</h2>
+                <ol className="space-y-4">
+                  {selectedChain.map((s, i) => (
+                    <li key={i} className="flex gap-4">
+                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold">
+                        {i + 1}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-800">{humanStepName(s.step)}</p>
+                        <p className="text-gray-600">{s.place.title || s.place.name || s.place.address}</p>
+                        {s.place.address && <p className="text-sm text-gray-500 mt-1">📍 {s.place.address}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                <div className="flex flex-col gap-3 mt-8">
+                  <button
+                    onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
+                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-semibold"
+                  >
+                    🚀 Plan Another Meetup
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 text-gray-800 rounded-xl hover:bg-gray-50 transition font-semibold"
+                  >
+                    🖨️ Print / Save
+                  </button>
+                </div>
+              </div>
+
+              {/* Map display */}
+              <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl overflow-hidden border-0">
+                <MapPlanner 
+                  options={[]} 
+                  selectedChain={selectedChain}
+                  onSelect={() => {}}
+                  onPreview={(place) => {
+                    if (place.link) window.open(place.link, "_blank", "noopener,noreferrer");
+                  }}
+                  highlightedPlace={highlightedPlace}
+                  userCoords={coords || userPrefs?.coords || null}
+                  locationText={(placeText && placeText.trim()) || userPrefs?.location || ""}
+                />
+              </div>
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 // src/components/MapPlanner.jsx
 import React, { useEffect, useMemo, useRef, forwardRef } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -50,6 +50,39 @@ const defaultIcon = L.divIcon({
   iconSize: [14, 14],
   iconAnchor: [7, 14],
   popupAnchor: [0, -14],
+});
+
+const userLocationIcon = L.divIcon({
+  html: `
+    <div style="
+      position: relative;
+      width:28px;
+      height:28px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    ">
+      <div style="
+        width:24px;
+        height:24px;
+        border-radius:50%;
+        background:#ec4899;
+        border:3px solid white;
+        box-shadow:0 0 0 3px rgba(236,72,153,0.45);
+      "></div>
+      <div style="
+        position:absolute;
+        width:8px;
+        height:8px;
+        border-radius:50%;
+        background:white;
+      "></div>
+    </div>
+  `,
+  className: "",
+  iconSize: [28, 28],
+  iconAnchor: [14, 28],
+  popupAnchor: [0, -28],
 });
 
 function FitBounds({ points = [] }) {
@@ -124,8 +157,10 @@ MarkerWithRef.displayName = "MarkerWithRef";
  * - onSelect(place)
  * - onPreview(place)
  * - highlightedPlace: place object to highlight on map (opens popup)
+ * - userCoords: {lat, lng} for user's current location (GPS)
+ * - locationText: string typed area/location (for highlighting when no coords)
  */
-export default function MapPlanner({ options = [], selectedChain = [], onSelect = () => {}, onPreview = () => {}, highlightedPlace = null }) {
+export default function MapPlanner({ options = [], selectedChain = [], onSelect = () => {}, onPreview = () => {}, highlightedPlace = null, userCoords = null, locationText = "" }) {
   const mapRef = useRef(null);
   const markerRefs = useRef({});
 
@@ -191,9 +226,11 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
     });
   }, [selectedChain]);
 
-  // Determine center — prefer first valid option, else selected place, else Bangalore fallback
+  // Determine center — prefer explicit userCoords, else first valid option, else selected place, else Bangalore fallback
   const firstValid = normalizedOptions.find((o) => o.lat != null && o.lng != null) || selectedPlaces.find((o) => o.lat != null && o.lng != null);
-  const center = firstValid ? [firstValid.lat, firstValid.lng] : [12.9715987, 77.5945627];
+  const center = userCoords && userCoords.lat != null && userCoords.lng != null
+    ? [Number(userCoords.lat), Number(userCoords.lng)]
+    : (firstValid ? [firstValid.lat, firstValid.lng] : [12.9715987, 77.5945627]);
 
   // Build a stable key so MapContainer remounts when dataset changes (safer fitBounds)
   const mapKey = useMemo(() => {
@@ -321,7 +358,40 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <FitBounds points={[...normalizedOptions.filter(o => o.lat && o.lng), ...selectedPlaces.filter(s => s.lat && s.lng)]} />
+        <FitBounds points={[
+          ...(userCoords && userCoords.lat != null && userCoords.lng != null ? [userCoords] : []),
+          ...normalizedOptions.filter(o => o.lat && o.lng),
+          ...selectedPlaces.filter(s => s.lat && s.lng),
+        ]} />
+
+        {/* User's current location (GPS) */}
+        {userCoords && userCoords.lat != null && userCoords.lng != null && (
+          <Marker
+            position={[Number(userCoords.lat), Number(userCoords.lng)]}
+            icon={userLocationIcon}
+          >
+            <Popup>
+              <div style={{ fontWeight: 600 }}>You are here</div>
+              {locationText && (
+                <div style={{ fontSize: 12, marginTop: 4 }}>{locationText}</div>
+              )}
+            </Popup>
+          </Marker>
+        )}
+
+        {/* Highlight approximate typed area if we have no explicit coords */}
+        {!userCoords && locationText && firstValid && (
+          <Circle
+            center={center}
+            radius={1500}
+            pathOptions={{ color: "#3b82f6", weight: 1, fillColor: "#60a5fa", fillOpacity: 0.15 }}
+          >
+            <Popup>
+              <div style={{ fontWeight: 600 }}>{locationText}</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Approximate area</div>
+            </Popup>
+          </Circle>
+        )}
 
         {/* unselected options */}
         {normalizedOptions.map((o, idx) => {

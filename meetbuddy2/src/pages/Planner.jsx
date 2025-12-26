@@ -1,9 +1,18 @@
 // src/pages/Planner.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { format } from 'date-fns';
+import { Calendar as CalendarIcon, Plus, X, Mail, Phone, Clock } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Navbar from "@/components/Navbar";
 import MapPlanner from "@/components/MapPlanner";
 import Aurora from "@/components/Aurora";
+import { cn } from "@/lib/utils";
 
 export default function Planner() {
   // Legacy single-shot planner state (unchanged)
@@ -38,6 +47,18 @@ export default function Planner() {
   
   // Track highlighted place for map popup
   const [highlightedPlace, setHighlightedPlace] = useState(null);
+
+  // Date and time state
+  const [date, setDate] = useState({
+    startDate: new Date(),
+    endDate: new Date(new Date().setHours(new Date().getHours() + 1)),
+  });
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Participants state
+  const [participants, setParticipants] = useState([{ email: '', phone: '' }]);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
 
   // Inline search on the step page (for adding extra restaurants)
   const [inlineSearchText, setInlineSearchText] = useState("");

@@ -12,6 +12,7 @@ import { AuthProvider } from "./context/AuthContext";
 import QuestionnaireStage1 from "./pages/QuestionnaireStage1";
 import QuestionnaireStage2 from "./pages/QuestionnaireStage2";
 import QuestionnaireSummary from "./pages/QuestionnaireSummary";
+import CalendarPage from "./pages/CalendarPage";
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
         <Route path="/questionnaire-stage1" element={<QuestionnaireStage1 />} />
         <Route path="/questionnaire-stage2" element={<QuestionnaireStage2 />} />
         <Route path="/questionnaire-summary" element={<QuestionnaireSummary />} />
+        <Route path="/calendar" element={<CalendarPage />} />
       </Routes>
     </div>
   );

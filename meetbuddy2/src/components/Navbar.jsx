@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { User } from "lucide-react"; // profile icon
+import { User, Calendar as CalendarIcon } from "lucide-react"; // profile icon
 
 const Navbar = () => {
   const location = useLocation();
@@ -50,6 +50,12 @@ const Navbar = () => {
         <Link to="/planner">
           <Button variant="ghost" className={navItemStyle("/planner")}>
             Planner
+          </Button>
+        </Link>
+        <Link to="/calendar">
+          <Button variant="ghost" className={navItemStyle("/calendar")}>
+            <CalendarIcon className="w-4 h-4 mr-2" />
+            Calendar
           </Button>
         </Link>
         <Link to="/about">

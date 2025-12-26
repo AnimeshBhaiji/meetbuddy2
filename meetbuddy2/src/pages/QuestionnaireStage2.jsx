@@ -2,10 +2,10 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useQuestionnaire } from "../context/QuestionnaireContext";
-import subQuestionMap from "../data/subQuestionMap";
+import { useQuestionnaire } from "@/context/QuestionnaireContext";
+import subQuestionMap from "@/data/subQuestionMap";
 import Navbar from "@/components/Navbar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Aurora from "@/components/Aurora";
 import { Button } from "@/components/ui/button";
 
 const slugify = (s) =>
@@ -36,9 +36,11 @@ function RadioGroup({ name, options, value, onChange }) {
             aria-checked={selected}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange(opt)}
-            className={`px-4 py-2 rounded-full text-sm md:text-base font-medium transition-shadow focus:outline-none transform-gpu
-              ${selected ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md" : "bg-white text-gray-800 hover:bg-blue-50"}
-              border border-gray-200`}
+            className={`px-4 py-2.5 rounded-xl text-sm md:text-base font-medium transition-all focus:outline-none
+              ${selected 
+                ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border-2 border-blue-400/30" 
+                : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10"}
+              `}
           >
             {opt}
           </button>
@@ -69,9 +71,11 @@ function CheckboxGroup({ name, options, value = [], onChange }) {
             aria-pressed={checked}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => toggle(opt)}
-            className={`px-4 py-2 rounded-full text-sm md:text-base font-medium transition transform focus:outline-none
-              ${checked ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md" : "bg-white text-gray-800 hover:bg-blue-50"}
-              border border-gray-200`}
+            className={`px-4 py-2.5 rounded-xl text-sm md:text-base font-medium transition-all focus:outline-none
+              ${checked 
+                ? "bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border-2 border-blue-400/30" 
+                : "bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10"}
+              `}
           >
             {opt}
           </button>
@@ -240,43 +244,55 @@ export default function QuestionnaireStage2() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-100 text-gray-900">
-      <Navbar />
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <Navbar />
 
-      <div
-        className="max-w-5xl mx-auto px-4 pt-28 pb-20"
-        style={{ position: "relative", zIndex: 200, pointerEvents: "auto" }}
-      >
-        <div className="mb-6">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-gray-800">Stage 2 — Fine tune your choices</h1>
-          <p className="text-base md:text-lg text-gray-600 mt-2">Optional details that make recommendations more accurate.</p>
+        <div className="w-full flex flex-col items-center px-4 pt-12">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-5xl mx-auto"
+          >
+            <h1 className="text-3xl md:text-4xl font-bold text-white text-center mb-2">
+              Fine Tune Your Choices
+            </h1>
+            <p className="text-gray-400 text-center mb-8">
+              Optional details that make recommendations more accurate
+            </p>
 
-          <div className="mt-4">
-            <div className="w-full bg-white/70 rounded-full h-3 md:h-3.5 overflow-hidden">
-              <div
-                className="h-3 md:h-3.5 rounded-full transition-all duration-300"
-                style={{ width: `${pct}%`, background: "linear-gradient(90deg,#3b82f6,#8b5cf6)" }}
-                aria-valuenow={pct}
-              />
+            {/* Progress */}
+            <div className="mb-8">
+              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mb-2">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.8, type: 'spring' }}
+                  aria-valuenow={pct}
+                />
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-400">
+                <div>{answeredSubs} of {totalSubs} answered</div>
+                <div>{pct}% complete</div>
+              </div>
             </div>
-            <div className="flex items-center justify-between mt-2 text-sm text-gray-600">
-              <div>{answeredSubs} of {totalSubs} answered</div>
-              <div>{pct}% complete</div>
-            </div>
-          </div>
-        </div>
 
         {subBlocks.length === 0 && (
-          <Card className="rounded-2xl shadow-md border-0 bg-white/80 backdrop-blur-sm p-6 text-center">
-            <p className="text-gray-700 mb-4">No stage 1 selections found. Please complete Stage 1 first.</p>
-            <Button onClick={handleBack} className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8 text-center max-w-2xl mx-auto">
+            <p className="text-gray-300 mb-6">No stage 1 selections found. Please complete Stage 1 first.</p>
+            <Button 
+              onClick={handleBack} 
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl"
+            >
               Go to Stage 1
             </Button>
-          </Card>
+          </div>
         )}
 
         <motion.div
-          className="grid gap-6 mt-8"
+          className="grid gap-6 w-full max-w-5xl mx-auto"
           variants={containerVariants}
           initial="hidden"
           animate="show"
@@ -284,31 +300,31 @@ export default function QuestionnaireStage2() {
           {subBlocks.map((block, idx) => {
             const blockTitle = humanizeKey(block.category);
             return (
-              <motion.div key={block.category} variants={itemVariants}>
-                <Card className="rounded-2xl shadow-lg border-0 bg-white/70 backdrop-blur-md">
-                  <CardHeader className="px-6 pt-6 pb-0 text-center">
-                    <CardTitle className="text-3xl md:text-3xl font-bold text-gray-900">{blockTitle}</CardTitle>
-                    <div className="text-lg md:text-lg text-gray-700 mt-2">
-                      Main choice:{" "}
-                      <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
-                        {block.mainLabel}
-                      </span>
+              <motion.div key={block.category} variants={itemVariants} className="w-full">
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+                  <div className="p-8">
+                    <div className="text-center mb-6">
+                      <h2 className="text-2xl md:text-3xl font-bold text-white">{blockTitle}</h2>
+                      <p className="text-gray-400 mt-2">
+                        Main choice:{" "}
+                        <span className="font-semibold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                          {block.mainLabel}
+                        </span>
+                      </p>
                     </div>
-                  </CardHeader>
 
-                  <CardContent className="p-6">
-                    <div className="grid gap-4">
+                    <div className="space-y-6">
                       {block.questions.map((q) => {
                         const subKey = `${block.category}_sub`;
                         const stored = answers?.[subKey] && answers[subKey][q.id];
                         return (
-                          <div key={q.id} className="bg-white p-4 rounded-lg border border-gray-100">
-                            <div className="flex items-start justify-between">
+                          <div key={q.id} className="bg-white/5 border border-white/10 rounded-xl p-6">
+                            <div className="flex flex-col md:flex-row md:items-start justify-between">
                               <div className="flex-1">
-                                <label className="block text-base md:text-lg font-semibold mb-2 text-gray-800">
+                                <label className="block text-lg font-semibold mb-2 text-white">
                                   {q.question}
                                 </label>
-                                <div className="text-sm text-gray-500 mb-3">
+                                <div className="text-sm text-gray-400 mb-4">
                                   {q.type === "single" && "Choose one"}
                                   {q.type === "multi" && "Choose any that apply"}
                                   {q.type === "text" && "Optional — short answer"}
@@ -335,7 +351,7 @@ export default function QuestionnaireStage2() {
                                 {q.type === "text" && (
                                   <input
                                     type="text"
-                                    className="mt-2 w-full rounded-lg px-3 py-2 bg-white border border-gray-200 text-gray-800 placeholder:text-gray-400 focus:outline-none"
+                                    className="mt-2 w-full rounded-lg px-4 py-3 bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
                                     placeholder="Type your preference (e.g. 'Sushi, Italian')"
                                     value={stored || ""}
                                     onChange={(e) => handleChange(block.category, q.id, "text", e.target.value)}
@@ -343,37 +359,39 @@ export default function QuestionnaireStage2() {
                                 )}
                               </div>
 
-                              <div className="ml-4 text-xs md:text-sm text-gray-500 whitespace-nowrap">
+                              <div className="mt-4 md:mt-0 md:ml-4 text-sm text-gray-400 whitespace-nowrap">
                                 {q.type === "multi"
                                   ? (Array.isArray(stored) && stored.length > 0 ? `${stored.length} selected` : "Not set")
-                                  : (stored ? "Set" : "Not set")}
+                                  : (stored ? "✓ Set" : "Not set")}
                               </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               </motion.div>
             );
           })}
         </motion.div>
 
-        <div className="flex gap-3 justify-end mt-10">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-12 pt-6 border-t border-white/10 w-full max-w-5xl mx-auto">
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={handleBack}
-            className="px-5 py-2 rounded-full text-blue-700 hover:bg-blue-50"
+            className="w-full sm:w-auto flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3"
           >
             ← Back
           </Button>
           <Button
             onClick={handleNext}
-            className="px-6 py-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md hover:from-blue-600 hover:to-purple-600"
+            className="w-full sm:w-auto py-3 px-8 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg"
           >
             Continue →
           </Button>
+        </div>
+          </motion.div>
         </div>
       </div>
     </div>

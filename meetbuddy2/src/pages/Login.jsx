@@ -1,12 +1,13 @@
 // src/pages/Login.jsx
 import React, { useState } from 'react';
-import Navbar from '../components/Navbar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Mail, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Link, useNavigate } from 'react-router-dom';
-import { useQuestionnaire } from '../context/QuestionnaireContext';
-import { Mail, Lock } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import Aurora from '@/components/Aurora';
+import { useQuestionnaire } from '@/context/QuestionnaireContext';
 
 const Login = () => {
   const [identifier, setIdentifier] = useState('');
@@ -57,90 +58,100 @@ const Login = () => {
   };
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex flex-col'>
-      <Navbar />
-      <div className='flex-1 flex flex-col justify-center items-center px-4 py-8'>
-        <div className='w-full max-w-md'>
-          {/* Header Section */}
-          <div className='text-center mb-10'>
-            <h1 className='text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3'>
-              Welcome Back
-            </h1>
-            <p className='text-gray-600 text-lg'>Plan your perfect meetup with MeetBuddy</p>
-          </div>
-
-          {/* Login Card */}
-          <Card className='shadow-2xl border-0 bg-white overflow-hidden rounded-3xl'>
-            <CardHeader className='bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-gray-200 px-8 py-6'>
-              <CardTitle className='text-center text-2xl font-bold text-gray-800'>Login</CardTitle>
-            </CardHeader>
-            <CardContent className='px-8 py-8 space-y-6'>
-              {/* Email/Username Input */}
-              <div>
-                <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                  Email or Username
-                </label>
-                <div className='relative'>
-                  <Mail className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                  <Input
-                    type='text'
-                    placeholder='you@example.com'
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    className='pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                  />
-                </div>
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className="relative z-10 min-h-screen flex flex-col pt-6 md:pt-8">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="w-full max-w-md bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+          >
+            <div className="p-8">
+              <div className="text-center mb-8">
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
+                  Welcome back
+                </h2>
+                <p className="text-gray-400">
+                  Enter your credentials to access your account
+                </p>
+                <p className='text-gray-600 text-lg'>Plan your perfect meetup with MeetBuddy</p>
               </div>
 
-              {/* Password Input */}
-              <div>
-                <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                  Password
-                </label>
-                <div className='relative'>
-                  <Lock className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                  <Input
-                    type='password'
-                    placeholder='••••••••'
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    className='pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                  />
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label
+                    className="text-sm font-medium text-gray-300"
+                    htmlFor="email"
+                  >
+                    Email or Username
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="email"
+                      placeholder="name@example.com"
+                      type="email"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      className="pl-10 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label
+                      className="text-sm font-medium text-gray-300"
+                      htmlFor="password"
+                    >
+                      Password
+                    </label>
+                    <Link
+                      to="/forgot-password"
+                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="password"
+                      placeholder="••••••••"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      className="pl-10 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30"
+                    />
+                  </div>
+                </div>
+                {error && (
+                  <div className="text-red-400 text-sm text-center p-3 bg-red-500/10 rounded-lg">
+                    {error}
+                  </div>
+                )}
+                <Button
+                  className="w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg"
+                  onClick={handleLogin}
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Signing in...' : 'Sign In'}
+                </Button>
+
+                <div className="mt-6 pt-6 border-t border-white/10 text-center text-sm">
+                  <p className="text-gray-400">
+                    Don't have an account?{' '}
+                    <Link to="/signup" className="text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                      Create one now
+                    </Link>
+                  </p>
                 </div>
               </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className='bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm font-medium'>
-                  {error}
-                </div>
-              )}
-
-              {/* Login Button */}
-              <Button
-                onClick={handleLogin}
-                disabled={isLoading}
-                className='w-full h-12 mt-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50'
-              >
-                {isLoading ? 'Logging in...' : 'Login'}
-              </Button>
-
-              {/* Signup Link */}
-              <p className='text-center text-sm text-gray-600 pt-2'>
-                Don't have an account?{' '}
-                <Link to='/signup' className='text-blue-600 hover:text-blue-700 font-bold transition-colors'>
-                  Sign up here
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Footer */}
-          <p className='text-center text-xs text-gray-500 mt-8'>
-            By logging in, you agree to our Terms & Conditions
-          </p>
+            </div>
+          </motion.div>
         </div>
       </div>
     </div>

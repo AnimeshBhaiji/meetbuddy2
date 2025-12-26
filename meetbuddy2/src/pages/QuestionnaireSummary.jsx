@@ -3,11 +3,11 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuestionnaire } from "../context/QuestionnaireContext";
 import Navbar from "../components/Navbar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import prefsData from "../../backend/preferences.json";
-import subQuestionMap from "../data/subQuestionMap"; // <-- ensure this exists and matches Stage2
+import subQuestionMap from "@/data/subQuestionMap";
+import Aurora from "@/components/Aurora";
 
 const humanizeKey = (k) =>
   ({
@@ -221,117 +221,124 @@ const QuestionnaireSummary = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50">
-      <Navbar />
-      <div className="max-w-4xl mx-auto mt-10 px-6 pb-16">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-        >
-          <Card className="shadow-2xl rounded-3xl border-0 bg-white/70 backdrop-blur-md">
-            <CardHeader className="text-center pb-6 pt-8">
-              <CardTitle className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Your MeetBuddy Preferences ✨
-              </CardTitle>
-              <p className="text-gray-600 mt-3 text-base md:text-lg">
-                Here’s a summary of your selected preferences. You can save, modify, or move on to plan your meetup!
-              </p>
-            </CardHeader>
-
-            <CardContent className="mt-2 space-y-8">
-              {visibleKeys.length === 0 ? (
-                <p className="text-center text-gray-500">No preferences selected yet.</p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {visibleKeys.map((key, index) => {
-                    const data = grouped[key];
-                    const mainLabel = idMapToLabel(key, data.main) || "";
-                    return (
-                      <motion.div
-                        key={key}
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="bg-gradient-to-br from-blue-50 via-white to-purple-50 border border-white/60 rounded-2xl shadow-md hover:shadow-lg transition-shadow p-5"
-                      >
-                        <h3 className="text-xl md:text-2xl font-semibold text-gray-800 mb-2">
-                          {humanizeKey(key)}
-                        </h3>
-                        {mainLabel ? (
-                          <p className="text-base md:text-lg text-gray-800 font-medium mb-3">
-                            {mainLabel}
-                          </p>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic mb-3">
-                            No main selection — refined answers shown below
-                          </p>
-                        )}
-
-                        {data.subs && data.subs.length > 0 ? (
-                          <div className="space-y-2">
-                            {data.subs.map((s) => {
-                              const qText = getSubQuestionText(key, s.id);
-                              const displayVal = renderSubValue(key, s.id, s.value);
-                              return (
-                                <div
-                                  key={s.id}
-                                  className="bg-white/80 rounded-lg border border-gray-100 px-3 py-2"
-                                >
-                                  <div className="text-xs md:text-sm text-gray-700 font-medium">
-                                    {qText}
-                                  </div>
-                                  <div className="text-xs md:text-sm text-gray-500 mt-1">
-                                    {displayVal}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-400">
-                            No sub-questions answered for this category.
-                          </p>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4 flex-wrap">
-                <Button
-                  onClick={handleSave}
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 px-6 py-3 rounded-xl shadow-lg transition-all"
-                >
-                  Save Preferences
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    try {
-                      if (typeof resetAnswers === "function") resetAnswers();
-                    } catch {}
-                    try {
-                      localStorage.removeItem("questionnaireAnswers");
-                    } catch {}
-                    navigate("/questionnaire-stage1");
-                  }}
-                  className="bg-yellow-400 text-white hover:bg-yellow-500 px-6 py-3 rounded-xl shadow-lg transition-all"
-                >
-                  Modify Preferences
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => navigate("/planner")}
-                  className="border-2 border-blue-400 text-blue-600 hover:bg-blue-50 px-6 py-3 rounded-xl transition-all"
-                >
-                  Plan My Meetup
-                </Button>
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <Navbar />
+        
+        <div className="flex-1 flex flex-col items-center py-12 px-4">
+          <motion.div 
+            className="w-full max-w-4xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+              <div className="p-8 text-center">
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                  Your MeetBuddy Preferences ✨
+                </h1>
+                <p className="text-gray-400 mt-3 text-base md:text-lg">
+                  Here's a summary of your selected preferences. You can save, modify, or move on to plan your meetup!
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+
+              <div className="px-6 pb-8 space-y-8">
+                <AnimatePresence mode="wait">
+                  {visibleKeys.length === 0 ? (
+                    <p className="text-center text-gray-400 py-8">No preferences selected yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {visibleKeys.map((key, index) => {
+                        const data = grouped[key];
+                        const mainLabel = idMapToLabel(key, data.main) || "";
+                        return (
+                          <motion.div
+                            key={key}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.3, delay: index * 0.05 }}
+                            className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-colors"
+                          >
+                            <h3 className="text-xl font-semibold text-white mb-3">
+                              {humanizeKey(key)}
+                            </h3>
+                            {mainLabel ? (
+                              <p className="text-base text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-purple-300 font-medium mb-4">
+                                {mainLabel}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic mb-4">
+                                No main selection — refined answers shown below
+                              </p>
+                            )}
+
+                            {data.subs && data.subs.length > 0 ? (
+                              <div className="space-y-3">
+                                {data.subs.map((s) => {
+                                  const qText = getSubQuestionText(key, s.id);
+                                  const displayVal = renderSubValue(key, s.id, s.value);
+                                  return (
+                                    <div
+                                      key={s.id}
+                                      className="bg-black/30 rounded-lg border border-white/5 p-3"
+                                    >
+                                      <div className="text-sm text-gray-300 font-medium">
+                                        {qText}
+                                      </div>
+                                      <div className="text-sm text-gray-400 mt-1">
+                                        {displayVal}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">
+                                No sub-questions answered for this category.
+                              </p>
+                            )}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </AnimatePresence>
+
+                <div className="flex flex-col sm:flex-row justify-center gap-4 pt-8 border-t border-white/10 mt-8">
+                  <Button
+                    onClick={handleSave}
+                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
+                  >
+                    Save Preferences
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      try {
+                        if (typeof resetAnswers === "function") resetAnswers();
+                      } catch {}
+                      try {
+                        localStorage.removeItem("questionnaireAnswers");
+                      } catch {}
+                      navigate("/questionnaire-stage1");
+                    }}
+                    className="border border-blue-400/30 text-blue-400 hover:bg-blue-500/10 px-6 py-3 rounded-xl transition-all"
+                  >
+                    Modify Preferences
+                  </Button>
+                  <Button
+                    onClick={() => navigate("/planner")}
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
+                  >
+                    Plan My Meetup
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </div>
   );

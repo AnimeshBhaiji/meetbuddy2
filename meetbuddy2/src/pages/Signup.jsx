@@ -1,12 +1,13 @@
 // src/pages/Signup.jsx
 import React, { useState } from 'react';
-import Navbar from '../components/Navbar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { motion } from 'framer-motion';
+import { User, Mail, Lock, Phone, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Link, useNavigate } from 'react-router-dom';
-import { useQuestionnaire } from '../context/QuestionnaireContext';
-import { User, Mail, Lock, Phone, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import Aurora from '@/components/Aurora';
+import { useQuestionnaire } from '@/context/QuestionnaireContext';
 
 const Signup = () => {
   const [stage, setStage] = useState(1);
@@ -109,198 +110,235 @@ const Signup = () => {
   const currentStageConfig = stageConfig[stage - 1];
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex flex-col'>
-      <Navbar />
-      <div className='flex-1 flex flex-col justify-center items-center px-4 py-8'>
-        <div className='w-full max-w-md'>
-          {/* Header */}
-          <div className='text-center mb-10'>
-            <h1 className='text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-3'>
-              Join MeetBuddy
-            </h1>
-            <p className='text-gray-600 text-lg'>Create an account to get started</p>
-          </div>
-
-          {/* Card */}
-          <Card className='shadow-2xl border-0 bg-white overflow-hidden rounded-3xl'>
-            <CardHeader className='bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-gray-200 px-8 py-6'>
-              <div className='flex items-center justify-center gap-3 mb-4'>
-                {currentStageConfig && React.createElement(currentStageConfig.icon, { className: 'w-7 h-7 text-blue-600' })}
-              </div>
-              <div className='text-center'>
-                <CardTitle className='text-2xl font-bold text-gray-800'>{currentStageConfig?.title}</CardTitle>
-                <p className='text-sm text-gray-600 mt-2'>{currentStageConfig?.description}</p>
-              </div>
-            </CardHeader>
-            <CardContent className='px-8 py-8'>
-              {/* Stage 1: User Info */}
-              {stage === 1 && (
-                <div className='space-y-6'>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      First Name
-                    </label>
-                    <Input
-                      type='text'
-                      name='first_name'
-                      placeholder='John'
-                      value={formData.first_name}
-                      onChange={handleChange}
-                      className='w-full h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                    />
+    <div className='relative min-h-screen bg-black overflow-hidden'>
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className='relative z-10 min-h-screen flex flex-col'>
+        <Navbar />
+        <div className='flex-1 flex items-center justify-center py-12 px-4'>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className='w-full max-w-md bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden my-8'
+          >
+            <div className='p-8'>
+              <div className='text-center mb-8'>
+                <h2 className='text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4'>
+                  Create an account
+                </h2>
+                {error && (
+                  <div className='text-red-400 text-sm text-center p-3 bg-red-500/10 rounded-lg mt-4'>
+                    {error}
                   </div>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      Last Name
-                    </label>
-                    <Input
-                      type='text'
-                      name='last_name'
-                      placeholder='Doe'
-                      value={formData.last_name}
-                      onChange={handleChange}
-                      className='w-full h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                    />
-                  </div>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      Username
-                    </label>
-                    <div className='relative'>
-                      <User className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                      <Input
-                        type='text'
-                        name='username'
-                        placeholder='johndoe'
-                        value={formData.username}
-                        onChange={handleChange}
-                        className='w-full pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      Email
-                    </label>
-                    <div className='relative'>
-                      <Mail className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                      <Input
-                        type='email'
-                        name='email'
-                        placeholder='you@example.com'
-                        value={formData.email}
-                        onChange={handleChange}
-                        className='w-full pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      Phone Number
-                    </label>
-                    <div className='relative'>
-                      <Phone className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                      <Input
-                        type='tel'
-                        name='phone'
-                        placeholder='(555) 000-0000'
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className='w-full pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Stage 2: Password */}
-              {stage === 2 && (
-                <div className='space-y-6'>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      Password
-                    </label>
-                    <div className='relative'>
-                      <Lock className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                      <Input
-                        type='password'
-                        name='password'
-                        placeholder='••••••••'
-                        value={formData.password}
-                        onChange={handleChange}
-                        className='w-full pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className='block text-sm font-semibold text-gray-700 mb-3'>
-                      Confirm Password
-                    </label>
-                    <div className='relative'>
-                      <Lock className='absolute left-4 top-3.5 w-5 h-5 text-blue-400' />
-                      <Input
-                        type='password'
-                        name='repeatPassword'
-                        placeholder='••••••••'
-                        value={formData.repeatPassword}
-                        onChange={handleChange}
-                        className='w-full pl-12 h-12 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all'
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {error && (
-                <div className='bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm font-medium mt-6'>
-                  {error}
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div className='flex gap-3 mt-8'>
-                {stage > 1 && (
-                  <Button
-                    type='button'
-                    onClick={prevStage}
-                    variant='outline'
-                    className='flex-1 h-12 rounded-xl flex items-center justify-center gap-2 border-2 border-gray-300 hover:border-gray-400 font-semibold transition-all'
-                  >
-                    <ArrowLeft className='w-5 h-5' />
-                    Back
-                  </Button>
                 )}
-                {stage < 2 ? (
-                  <Button
-                    type='button'
-                    onClick={nextStage}
-                    className={`${stage === 1 ? 'flex-1' : 'flex-1'} h-12 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2`}
-                  >
-                    Next
-                    <ArrowRight className='w-5 h-5' />
-                  </Button>
-                ) : (
-                  <Button
-                    type='submit'
-                    onClick={handleSubmit}
-                    disabled={isLoading}
-                    className='flex-1 h-12 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50'
-                  >
-                    {isLoading ? 'Creating account...' : 'Sign Up'}
-                  </Button>
-                )}
+                <p className='text-gray-400'>
+                  Join MeetBuddy to plan your perfect meetup
+                </p>
               </div>
 
-              {/* Login Link */}
-              <p className='text-center text-sm text-gray-600 mt-6'>
-                Already have an account?{' '}
-                <Link to='/login' className='text-blue-600 hover:text-blue-700 font-bold transition-colors'>
-                  Login here
-                </Link>
-              </p>
-            </CardContent>
-          </Card>
+              <div className='space-y-1 mb-6 text-center'>
+                <div className='flex justify-center mb-2'>
+                  {currentStageConfig && React.createElement(currentStageConfig.icon, {
+                    className: 'w-6 h-6 text-blue-400'
+                  })}
+                </div>
+                <h3 className='text-xl font-semibold text-white'>{currentStageConfig?.title}</h3>
+                <p className='text-sm text-gray-400'>{currentStageConfig?.description}</p>
+              </div>
+
+              <div className='space-y-6'>
+                {/* Stage 1: User Info */}
+                {stage === 1 && (
+                  <div className='space-y-6'>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          First Name
+                        </label>
+                        <div className='relative'>
+                          <User className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='text'
+                            name='first_name'
+                            placeholder='John'
+                            value={formData.first_name}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          Last Name
+                        </label>
+                        <div className='relative'>
+                          <User className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='text'
+                            name='last_name'
+                            placeholder='Doe'
+                            value={formData.last_name}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          Username
+                        </label>
+                        <div className='relative'>
+                          <User className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='text'
+                            name='username'
+                            placeholder='johndoe'
+                            value={formData.username}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          Email
+                        </label>
+                        <div className='relative'>
+                          <Mail className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='email'
+                            name='email'
+                            placeholder='you@example.com'
+                            value={formData.email}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          Phone Number
+                        </label>
+                        <div className='relative'>
+                          <Phone className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='tel'
+                            name='phone'
+                            placeholder='+1 (123) 456-7890'
+                            value={formData.phone}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stage 2: Password */}
+                {stage === 2 && (
+                  <div className='space-y-6'>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          Password
+                        </label>
+                        <div className='relative'>
+                          <Lock className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='password'
+                            name='password'
+                            placeholder='••••••••'
+                            value={formData.password}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className='space-y-2'>
+                        <label className='block text-sm font-medium text-gray-300'>
+                          Repeat Password
+                        </label>
+                        <div className='relative'>
+                          <Lock className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                          <Input
+                            type='password'
+                            name='repeatPassword'
+                            placeholder='••••••••'
+                            value={formData.repeatPassword}
+                            onChange={handleChange}
+                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                  <div className='bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm font-medium mt-6'>
+                    {error}
+                  </div>
+                )}
+
+                {/* Buttons */}
+                <div className='mt-8 flex flex-col sm:flex-row justify-center sm:justify-between gap-4'>
+                  {stage > 1 && (
+                    <Button
+                      type='button'
+                      onClick={prevStage}
+                      variant='outline'
+                      className='w-full sm:w-auto flex items-center justify-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3 rounded-xl transition-all'
+                    >
+                      <ArrowLeft className='w-4 h-4' />
+                      Back
+                    </Button>
+                  )}
+                  {stage < 2 ? (
+                    <Button
+                      type='button'
+                      onClick={nextStage}
+                      className='w-full sm:mx-auto py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
+                    >
+                      Next
+                      <ArrowRight className='w-4 h-4' />
+                    </Button>
+                  ) : (
+                    <Button
+                      type='button'
+                      onClick={handleSubmit}
+                      disabled={isLoading}
+                      className='w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
+                    >
+                      {isLoading ? 'Creating Account...' : 'Create Account'}
+                      {!isLoading && <CheckCircle className='w-4 h-4' />}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Login Link */}
+                <div className='mt-6 pt-6 border-t border-white/10 text-center text-sm'>
+                  <p className='text-gray-400'>
+                    Already have an account?{' '}
+                    <Link to='/login' className='text-blue-400 hover:text-blue-300 font-medium transition-colors'>
+                      Sign in
+                    </Link>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="flex justify-between items-center px-6 py-4 bg-white/60 backdrop-blur-md border border-white/40 shadow-sm shadow-black/5 transition-all duration-300 mx-4 md:mx-8 lg:mx-16 rounded-2xl">
+    <nav className="flex justify-between items-center px-6 py-4 bg-white/60 backdrop-blur-md border border-white/40 shadow-sm shadow-black/5 transition-all duration-300 mx-4 md:mx-8 lg:mx-16 rounded-2xl mt-4">
       {/* Left side menu */}
       <div className="flex gap-4">
         <Link to="/">
@@ -83,4 +83,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar;
+export default React.memo(Navbar);

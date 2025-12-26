@@ -1,8 +1,9 @@
 // src/pages/Planner.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import Navbar from "../components/Navbar";
-import MapPlanner from "../components/MapPlanner";
+import Navbar from "@/components/Navbar";
+import MapPlanner from "@/components/MapPlanner";
+import Aurora from "@/components/Aurora";
 
 export default function Planner() {
   // Legacy single-shot planner state (unchanged)
@@ -800,45 +801,47 @@ export default function Planner() {
   };
 
   return (
-    <>
-      <Navbar />
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <Navbar />
 
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50 pb-16">
+        <div className="flex-1">
         {/* HOME / preferences panel */}
         {page === "home" && (
-          <div className="max-w-4xl mx-auto px-6 py-10">
+          <div className="max-w-5xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-3">
                 Plan Your Perfect Meetup ✨
               </h1>
-              <p className="text-gray-600 text-lg">Personalized recommendations based on your preferences</p>
+              <p className="text-gray-400 text-lg">Personalized recommendations based on your preferences</p>
             </div>
 
-            <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl p-8 mb-8 border-0">
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-8 mb-8">
               <div className="grid md:grid-cols-2 gap-8 mb-8">
                 {/* Preferences display */}
                 <div>
-                  <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Preferences</h2>
+                  <h2 className="text-2xl font-semibold text-white mb-4">Your Preferences</h2>
                   <div className="space-y-3">
-                    <div className="bg-gradient-to-r from-blue-100 to-blue-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Mood</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.mood)}</p>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
+                      <p className="text-sm text-gray-400">Mood</p>
+                      <p className="font-medium text-white">{displayPref(userPrefs?.mood) || 'Not specified'}</p>
                     </div>
-                    <div className="bg-gradient-to-r from-purple-100 to-purple-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Planning Style</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.planningStyle)}</p>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
+                      <p className="text-sm text-gray-400">Planning Style</p>
+                      <p className="font-medium text-white">{displayPref(userPrefs?.planningStyle) || 'Not specified'}</p>
                     </div>
-                    <div className="bg-gradient-to-r from-pink-100 to-pink-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Adventure Level</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.adventureLevel)}</p>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
+                      <p className="text-sm text-gray-400">Adventure Level</p>
+                      <p className="font-medium text-white">{displayPref(userPrefs?.adventureLevel) || 'Not specified'}</p>
                     </div>
-                    <div className="bg-gradient-to-r from-yellow-100 to-yellow-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Add-On Magic</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.addOnMagic)}</p>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
+                      <p className="text-sm text-gray-400">Add-On Magic</p>
+                      <p className="font-medium text-white">{displayPref(userPrefs?.addOnMagic) || 'Not specified'}</p>
                     </div>
-                    <div className="bg-gradient-to-r from-green-100 to-green-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Memorable Factor</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.memorableFactor)}</p>
+                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
+                      <p className="text-sm text-gray-400">Memorable Factor</p>
+                      <p className="font-medium text-white">{displayPref(userPrefs?.memorableFactor) || 'Not specified'}</p>
                     </div>
                   </div>
                 </div>
@@ -846,31 +849,31 @@ export default function Planner() {
                 {/* Location & flow */}
                 <div className="flex flex-col gap-6">
                   <div>
-                    <label className="block text-lg font-semibold text-gray-800 mb-3">Select Location</label>
+                    <label className="block text-lg font-semibold text-white mb-3">Select Location</label>
                     <div className="flex gap-2 mb-3">
                       <input
                         value={placeText}
                         onChange={(e) => setPlaceText(e.target.value)}
                         onBlur={handlePlaceTextBlur}
                         placeholder="Enter city or area..."
-                        className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                        className="flex-1 bg-white/5 border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition placeholder:text-gray-500"
                       />
                       <button
                         onClick={useMyLocation}
-                        className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
+                        className="px-5 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={locLoading}
                       >
                         📍 {locLoading ? "..." : "GPS"}
                       </button>
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-400">
                       {coords ? `📌 ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : placeText ? `📍 ${placeText}` : "No location set"}
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-lg font-semibold text-gray-800 mb-3">Your Planned Flow</label>
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-xl font-medium text-center">
+                    <label className="block text-lg font-semibold text-white mb-3">Your Planned Flow</label>
+                    <div className="bg-gradient-to-r from-blue-500/80 to-purple-600/80 text-white p-4 rounded-xl font-medium text-center border border-white/10 backdrop-blur-sm">
                       {flowText || (initialFlow.length > 0 ? initialFlow.map((f) => humanStepName(f)).join(" → ") : "Restaurant")}
                     </div>
                   </div>
@@ -878,11 +881,11 @@ export default function Planner() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 mt-6">
                 <button
                   onClick={startSession}
                   disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
-                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                 >
                   {sessionLoading ? "Starting..." : "🚀 Generate Itinerary"}
                 </button>
@@ -893,24 +896,27 @@ export default function Planner() {
 
         {/* STEP PAGE: show all options for current step */}
         {page === "step" && (
-          <div className="max-w-6xl mx-auto px-6 py-10">
-            <div className="flex items-center justify-between mb-8">
+          <div className="max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
               <div>
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                   {currentStep ? humanStepName(currentStep) : "Done"}
                 </h1>
-                <p className="text-gray-600 mt-2">{anchorText}</p>
+                <p className="text-gray-400 mt-2">{anchorText}</p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 w-full sm:w-auto mt-4 sm:mt-0">
                 <button
                   onClick={goBackOneStep}
-                  className="px-5 py-3 bg-white/70 backdrop-blur-md text-gray-800 rounded-xl hover:bg-white/90 transition shadow-lg font-medium"
+                  className="flex-1 sm:flex-none px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-all shadow-lg font-medium flex items-center justify-center gap-2"
                 >
-                  ← Back
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+                  </svg>
+                  Back
                 </button>
                 <button
                   onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                  className="px-5 py-3 bg-red-500/10 text-red-600 rounded-xl hover:bg-red-500/20 transition font-medium"
+                  className="flex-1 sm:flex-none px-5 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all font-medium"
                 >
                   Cancel
                 </button>
@@ -918,9 +924,9 @@ export default function Planner() {
             </div>
 
             {/* Map display with optional restaurant search bar */}
-            <div className="mb-8 bg-white/70 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl border-0">
+            <div className="mb-8 bg-white/5 backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl border border-white/10">
               {currentStep === "restaurant" && (
-                <div className="px-6 pt-6 pb-2 border-b border-gray-100 flex flex-col md:flex-row gap-3 items-stretch md:items-center bg-white/80">
+                <div className="px-6 pt-6 pb-2 border-b border-white/10 flex flex-col md:flex-row gap-3 items-stretch md:items-center bg-black/30">
                   <div className="flex-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Add a restaurant you already have in mind
@@ -936,14 +942,14 @@ export default function Planner() {
                         }
                       }}
                       placeholder="Search by name or area (e.g., Truffles Koramangala)"
-                      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      className="w-full rounded-xl bg-white/5 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent placeholder:text-gray-500"
                     />
                   </div>
                   <button
                     type="button"
                     onClick={handleInlineRestaurantSearch}
                     disabled={inlineSearchLoading || !inlineSearchText.trim()}
-                    className="md:self-end px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-semibold shadow-md disabled:opacity-60 disabled:cursor-not-allowed hover:from-blue-600 hover:to-purple-600 transition"
+                    className="md:self-end px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 disabled:hover:translate-y-0"
                   >
                     {inlineSearchLoading ? "Searching..." : "Search & Add"}
                   </button>
@@ -980,28 +986,28 @@ export default function Planner() {
 
         {/* SUMMARY PAGE */}
         {page === "summary" && (
-          <div className="max-w-6xl mx-auto px-6 py-10">
+          <div className="max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
+              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent mb-3">
                 Your Perfect Itinerary 🎉
               </h1>
-              <p className="text-gray-600 text-lg">Ready to explore!</p>
+              <p className="text-gray-400 text-lg">Ready to explore!</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">
               {/* Itinerary list */}
-              <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl p-8 border-0">
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6">Your Plan</h2>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-8">
+                <h2 className="text-2xl font-semibold text-white mb-6">Your Plan</h2>
                 <ol className="space-y-4">
                   {selectedChain.map((s, i) => (
-                    <li key={i} className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold">
+                    <li key={i} className="flex gap-4 group">
+                      <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
                         {i + 1}
                       </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{humanStepName(s.step)}</p>
-                        <p className="text-gray-600">{s.place.title || s.place.name || s.place.address}</p>
-                        {s.place.address && <p className="text-sm text-gray-500 mt-1">📍 {s.place.address}</p>}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-white truncate">{humanStepName(s.step)}</p>
+                        <p className="text-gray-300 truncate">{s.place.title || s.place.name || s.place.address}</p>
+                        {s.place.address && <p className="text-sm text-gray-500 mt-1 truncate">📍 {s.place.address}</p>}
                       </div>
                     </li>
                   ))}
@@ -1009,13 +1015,13 @@ export default function Planner() {
                 <div className="flex flex-col gap-3 mt-8">
                   <button
                     onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-semibold"
+                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg font-semibold"
                   >
                     🚀 Plan Another Meetup
                   </button>
                   <button
                     onClick={() => window.print()}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 text-gray-800 rounded-xl hover:bg-gray-50 transition font-semibold"
+                    className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl transition-all font-semibold"
                   >
                     🖨️ Print / Save
                   </button>
@@ -1023,7 +1029,7 @@ export default function Planner() {
               </div>
 
               {/* Map display */}
-              <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl overflow-hidden border-0">
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl overflow-hidden">
                 <MapPlanner 
                   options={[]} 
                   selectedChain={selectedChain}
@@ -1040,21 +1046,43 @@ export default function Planner() {
           </div>
         )}
 
-        {/* Legacy recommendations grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-5xl mt-6">
-          {recommendations.length > 0 ? recommendations.map((item, idx) => (
-            <div key={idx} className="bg-white shadow-md rounded-2xl p-4 border border-gray-100">
-              <h2 className="font-semibold text-lg text-gray-800">{item.title || item.Name || "Unnamed Place"}</h2>
-              {item.address && <p className="text-gray-600 text-sm mt-1">{item.address}</p>}
-              {item.rating && <p className="text-yellow-500 mt-1">⭐ {item.rating}</p>}
-              {item.link && <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline mt-2 inline-block">View on Google</a>}
+        {/* Legacy recommendations grid - only show on home page */}
+        {page === "home" && (
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recommendations.length > 0 ? (
+                recommendations.map((item, idx) => (
+                  <div key={idx} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors">
+                    <h2 className="font-semibold text-lg text-white truncate">{item.title || item.Name || "Unnamed Place"}</h2>
+                    {item.address && <p className="text-gray-300 text-sm mt-1">{item.address}</p>}
+                    {item.rating && <p className="text-yellow-400 mt-1">⭐ {item.rating}</p>}
+                    {item.link && (
+                      <a 
+                        href={item.link} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-400 hover:text-blue-300 hover:underline mt-2 inline-block"
+                      >
+                        View on Google
+                      </a>
+                    )}
+                  </div>
+                ))
+              ) : (
+                !loading && !error && (
+                  <div className="col-span-full text-center py-8">
+                    <p className="text-gray-400">No legacy recommendations yet. Generate an itinerary to see suggestions.</p>
+                  </div>
+                )
+              )}
             </div>
-          )) : (page === "home" && !loading && !error && <p className="text-gray-500 mt-4">No legacy recommendations yet. Click “Get My Recommendations” or start an itinerary.</p>)}
+          </div>
+        )}
         </div>
       </div>
 
       {/* Full-page overlay shown while switching steps */}
       <FullOverlay show={showOverlay} text="Preparing next options..." />
-    </>
+    </div>
   );
 }

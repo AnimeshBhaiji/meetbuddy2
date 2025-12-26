@@ -1,9 +1,9 @@
 import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { motion, useAnimation } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { Calendar, MapPin, Users, Utensils, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
 import Aurora from "@/components/Aurora";
 
@@ -65,10 +65,9 @@ const LandingPage = () => {
 
   return (
     <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora />
-      <div className="relative z-10 pt-6 md:pt-8">
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className="relative z-10 min-h-screen flex flex-col">
         <Navbar />
-        
         {/* Hero Section */}
         <div className="min-h-screen flex flex-col items-center justify-center text-center px-4 py-20">
           <motion.div

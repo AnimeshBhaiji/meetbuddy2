@@ -2,9 +2,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuestionnaire } from "../context/QuestionnaireContext";
-import Navbar from "../components/Navbar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuestionnaire } from "@/context/QuestionnaireContext";
+import Navbar from "@/components/Navbar";
+import Aurora from "@/components/Aurora";
 import { Button } from "@/components/ui/button";
 
 const questionnaireData = [
@@ -70,90 +70,98 @@ const QuestionnaireStage1 = () => {
   const canContinue = Boolean(selectedOption);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-purple-100">
-      <Navbar />
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <Navbar />
 
-      {/* Question Number Label + Progress bar */}
-      <div className="w-full flex flex-col items-center mt-6">
-        <motion.div
-          key={currentIndex}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="text-lg font-medium text-gray-700 mb-2 text-center"
-        >
-          Question {currentIndex + 1} of {questionnaireData.length}
-        </motion.div>
-
-        <div className="w-11/12 md:w-2/3 h-2 bg-gray-200 rounded-full overflow-hidden">
+        {/* Question Number Label + Progress bar */}
+        <div className="w-full flex flex-col items-center px-4 pt-12">
           <motion.div
-            className="h-2 bg-gradient-to-r from-blue-500 to-purple-500"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.5 }}
-          />
-        </div>
-      </div>
-
-      {/* Question Card */}
-      <div className="flex justify-center items-center mt-12 px-4">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentQuestion.key}
-            initial={{ opacity: 0, y: 30 }}
+            key={currentIndex}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            transition={{ duration: 0.4 }}
-            className="w-full max-w-2xl"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="text-sm font-medium text-gray-400 mb-4 text-center mt-4"
           >
-            <Card className="rounded-2xl shadow-xl border-0 bg-white/70 backdrop-blur-md">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-center text-gray-800">
-                  {currentQuestion.question}
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="space-y-6">
-                {currentQuestion.options.map((opt) => (
-                  <Button
-                    key={opt}
-                    variant={answers[currentQuestion.key] === opt ? "default" : "outline"}
-                    className="w-full text-lg py-6 font-medium transition-all duration-200 hover:scale-[1.02]"
-                    onClick={() => handleMainSelect(currentQuestion.key, opt)}
-                  >
-                    {opt}
-                  </Button>
-                ))}
-              </CardContent>
-
-              <div className="flex justify-between items-center p-6 pt-0">
-                <Button
-                  variant="ghost"
-                  disabled={currentIndex === 0}
-                  onClick={handleBack}
-                  className="text-gray-600 hover:text-gray-800"
-                >
-                  ← Back
-                </Button>
-
-                <Button
-                  onClick={handleNext}
-                  disabled={!canContinue}
-                  className={`px-6 text-white ${
-                    canContinue
-                      ? "bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                      : "bg-gray-300 cursor-not-allowed opacity-60"
-                  }`}
-                >
-                  {currentIndex === questionnaireData.length - 1
-                    ? "Proceed to Next Stage →"
-                    : "Continue →"}
-                </Button>
-              </div>
-            </Card>
+            Question {currentIndex + 1} of {questionnaireData.length}
           </motion.div>
-        </AnimatePresence>
+
+          <div className="w-full max-w-2xl h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 0.5, type: 'spring' }}
+            />
+          </div>
+        </div>
+
+        {/* Question Card */}
+        <div className="flex-1 flex items-center justify-center py-8 px-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentQuestion.key}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="w-full max-w-2xl"
+            >
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden my-4">
+                <div className="p-8">
+                  <h2 className="text-2xl md:text-3xl font-bold text-center text-white mb-8">
+                    {currentQuestion.question}
+                  </h2>
+
+                  <div className="space-y-4">
+                    {currentQuestion.options.map((opt) => (
+                      <motion.button
+                        key={opt}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`w-full text-left p-5 rounded-xl text-lg font-medium transition-all duration-200 ${
+                          answers[currentQuestion.key] === opt
+                            ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-2 border-blue-400/30 text-white'
+                            : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
+                        }`}
+                        onClick={() => handleMainSelect(currentQuestion.key, opt)}
+                      >
+                        {opt}
+                      </motion.button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-10 pt-6 border-t border-white/10">
+                    <Button
+                      variant="outline"
+                      disabled={currentIndex === 0}
+                      onClick={handleBack}
+                      className="w-full sm:w-auto flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3"
+                    >
+                      ← Back
+                    </Button>
+
+                    <Button
+                      onClick={handleNext}
+                      disabled={!canContinue}
+                      className={`w-full sm:w-auto py-6 text-base ${
+                        canContinue
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
+                          : 'bg-gray-700 cursor-not-allowed opacity-70'
+                      } text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg`}
+                    >
+                      {currentIndex === questionnaireData.length - 1
+                        ? 'Proceed to Next Stage →'
+                        : 'Continue →'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );

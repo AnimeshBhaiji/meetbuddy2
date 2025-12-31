@@ -2,23 +2,35 @@ import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import CustomToolbar from '@/components/calendar/CustomToolbar';
-import { format, parse, startOfWeek, getDay, addHours } from 'date-fns';
+import { format, parse, startOfWeek, getDay, addHours, isValid } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Plus, Calendar as CalendarIcon, Clock, MapPin, Users, X, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
 import Aurora from '@/components/Aurora';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 1 }), // Start week on Monday
+  format: (date, formatStr, options) => {
+    if (!isValid(new Date(date))) return '';
+    return format(new Date(date), formatStr, options);
+  },
+  parse: (str, formatStr, options) => {
+    const parsed = parse(str, formatStr, new Date(), options);
+    return isValid(parsed) ? parsed : new Date();
+  },
+  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 1 }),
   getDay,
   locales: {},
 });
+
+// Helper function to safely parse dates
+const safeParseDate = (date) => {
+  const parsed = new Date(date);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+};
 
 // Sample events data - will be replaced with API calls
 const sampleEvents = [
@@ -35,16 +47,53 @@ const sampleEvents = [
 ];
 
 const CalendarPage = () => {
-  const [events, setEvents] = useState(sampleEvents);
+  const [events, setEvents] = useState(() => {
+    try {
+      const savedEvents = localStorage.getItem('meetupEvents');
+      if (!savedEvents) return sampleEvents;
+      
+      const parsedEvents = JSON.parse(savedEvents);
+      // Convert string dates back to Date objects
+      return parsedEvents.map(event => ({
+        ...event,
+        start: new Date(event.start),
+        end: new Date(event.end)
+      }));
+    } catch (error) {
+      console.error('Error loading events:', error);
+      return sampleEvents;
+    }
+  });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showNewEventModal, setShowNewEventModal] = useState(false);
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(() => new Date());
   const [view, setView] = useState(Views.MONTH);
   const navigate = useNavigate();
 
+  // Save events to localStorage whenever they change
+  const saveEvents = (updatedEvents) => {
+    try {
+      // Convert Date objects to ISO strings for storage
+      const eventsToSave = updatedEvents.map(event => ({
+        ...event,
+        start: event.start.toISOString(),
+        end: event.end.toISOString()
+      }));
+      localStorage.setItem('meetupEvents', JSON.stringify(eventsToSave));
+    } catch (error) {
+      console.error('Error saving events:', error);
+    }
+  };
+
   const handleSelectEvent = useCallback((event) => {
-    setSelectedEvent(event);
+    // Convert string dates back to Date objects
+    const eventWithDates = {
+      ...event,
+      start: new Date(event.start),
+      end: new Date(event.end)
+    };
+    setSelectedEvent(eventWithDates);
     setShowEventModal(true);
   }, []);
 
@@ -52,6 +101,10 @@ const CalendarPage = () => {
     setSelectedEvent({
       start,
       end: addHours(start, 1),
+      title: 'New Meetup',
+      location: '',
+      attendees: [],
+      description: ''
     });
     setShowNewEventModal(true);
   }, []);
@@ -134,14 +187,14 @@ const CalendarPage = () => {
                     }}
                     view={view}
                     onView={setView}
-                    date={date}
-                    onNavigate={setDate}
+                    date={safeParseDate(date)}
+                    onNavigate={(newDate) => setDate(safeParseDate(newDate))}
                     components={{
                       toolbar: (props) => (
                         <CustomToolbar 
                           {...props} 
                           date={date}
-                          onNavigate={setDate}
+                          onNavigate={(newDate) => setDate(safeParseDate(newDate))}
                           onView={setView}
                           view={view}
                         />
@@ -158,11 +211,18 @@ const CalendarPage = () => {
 
       {/* Event Details Modal */}
       <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent 
+          className="bg-gray-900 border-gray-800 max-w-md"
+          aria-labelledby="event-details-title"
+          aria-describedby="event-details-description"
+        >
           <DialogHeader>
-            <DialogTitle className="text-2xl text-white/90">
-              {selectedEvent?.title}
+            <DialogTitle id="event-details-title" className="text-2xl text-white/90">
+              {selectedEvent?.title || 'Event Details'}
             </DialogTitle>
+            <DialogDescription id="event-details-description" className="sr-only">
+              {selectedEvent?.description || 'Details for this event'}
+            </DialogDescription>
           </DialogHeader>
           
           {selectedEvent && (
@@ -177,12 +237,23 @@ const CalendarPage = () => {
                 </div>
               </div>
               
-              {selectedEvent.location && (
+              {(selectedEvent.itinerary?.steps?.length > 0 || selectedEvent.location) && (
                 <div className="flex items-start">
                   <MapPin className="w-5 h-5 text-purple-400 mt-0.5 mr-3 flex-shrink-0" />
-                  <div>
-                    <p className="text-gray-400 text-sm">Location</p>
-                    <p className="text-white/90">{selectedEvent.location}</p>
+                  <div className="flex-1">
+                    <p className="text-gray-400 text-sm mb-1">Planned Locations</p>
+                    <div className="space-y-2">
+                      {selectedEvent.itinerary?.steps?.map((step, index) => (
+                        <div key={index} className="bg-white/5 p-2 rounded">
+                          <p className="text-white/90 font-medium">{step.name}</p>
+                          {step.address && (
+                            <p className="text-xs text-gray-400">{step.address}</p>
+                          )}
+                        </div>
+                      )) || (
+                        <p className="text-white/90">{selectedEvent.location}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

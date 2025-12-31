@@ -1,12 +1,12 @@
 // src/pages/Planner.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { format } from 'date-fns';
+import { format, addHours } from 'date-fns';
 import { Calendar as CalendarIcon, Plus, X, Mail, Phone, Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Navbar from "@/components/Navbar";
@@ -49,16 +49,11 @@ export default function Planner() {
   const [highlightedPlace, setHighlightedPlace] = useState(null);
 
   // Date and time state
-  const [date, setDate] = useState({
-    startDate: new Date(),
-    endDate: new Date(new Date().setHours(new Date().getHours() + 1)),
-  });
+  const [scheduleDate, setScheduleDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
-
-  // Participants state
   const [participants, setParticipants] = useState([{ email: '', phone: '' }]);
   const [showParticipants, setShowParticipants] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
 
   // Inline search on the step page (for adding extra restaurants)
   const [inlineSearchText, setInlineSearchText] = useState("");
@@ -1046,6 +1041,12 @@ export default function Planner() {
                   >
                     🖨️ Print / Save
                   </button>
+                  <button
+                    onClick={() => setIsScheduling(true)}
+                    className="w-full px-4 py-3 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 rounded-xl transition-all font-semibold"
+                  >
+                    📅 Schedule This Meetup
+                  </button>
                 </div>
               </div>
 
@@ -1104,6 +1105,162 @@ export default function Planner() {
 
       {/* Full-page overlay shown while switching steps */}
       <FullOverlay show={showOverlay} text="Preparing next options..." />
+
+      {/* Schedule Meetup Modal */}
+      <Dialog open={isScheduling} onOpenChange={setIsScheduling}>
+        <DialogContent 
+          className="bg-gray-800 border-gray-700 max-w-md"
+          aria-labelledby="schedule-meetup-title"
+          aria-describedby="schedule-meetup-description"
+        >
+          <DialogHeader>
+            <DialogTitle id="schedule-meetup-title" className="text-xl text-white">
+              Schedule Your Meetup
+            </DialogTitle>
+            <DialogDescription id="schedule-meetup-description" className="sr-only">
+              Schedule a new meetup with participants
+            </DialogDescription>
+          </DialogHeader>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-1">Date & Time</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal bg-gray-700 border-gray-600 text-white"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(scheduleDate, "PPPp")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-gray-800 border-gray-700">
+                  <Calendar
+                    mode="single"
+                    selected={scheduleDate}
+                    onSelect={(date) => setScheduleDate(date || new Date())}
+                    initialFocus
+                    className="bg-gray-800 text-white"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-medium text-gray-300">Participants</label>
+                <button
+                  type="button"
+                  onClick={() => setShowParticipants(!showParticipants)}
+                  className="text-xs text-blue-400 hover:underline"
+                >
+                  {showParticipants ? 'Hide' : 'Show'} participants
+                </button>
+              </div>
+              
+              {showParticipants && (
+                <div className="space-y-3 mb-4">
+                  {participants.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="flex-1 space-y-2">
+                        <Input
+                          type="email"
+                          placeholder="Email"
+                          value={p.email}
+                          onChange={(e) => {
+                            const newParticipants = [...participants];
+                            newParticipants[i].email = e.target.value;
+                            setParticipants(newParticipants);
+                          }}
+                          className="bg-gray-700 border-gray-600 text-white"
+                        />
+                        <Input
+                          type="tel"
+                          placeholder="Phone (optional)"
+                          value={p.phone}
+                          onChange={(e) => {
+                            const newParticipants = [...participants];
+                            newParticipants[i].phone = e.target.value;
+                            setParticipants(newParticipants);
+                          }}
+                          className="bg-gray-700 border-gray-600 text-white"
+                        />
+                      </div>
+                      {participants.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-400 hover:bg-red-500/10 h-8 w-8"
+                          onClick={() => {
+                            const newParticipants = [...participants];
+                            newParticipants.splice(i, 1);
+                            setParticipants(newParticipants);
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
+                    onClick={() => setParticipants([...participants, { email: '', phone: '' }])}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Participant
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setIsScheduling(false)}
+                className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  const newEvent = {
+                    id: Date.now(),
+                    title: 'Meetup',
+                    start: scheduleDate,
+                    end: addHours(scheduleDate, 1),
+                    location: selectedChain?.name || 'Location not specified',
+                    attendees: participants.map(p => p.email).filter(Boolean),
+                    description: `Meetup scheduled with ${participants.length} participant(s)`,
+                    color: '#3b82f6',
+                    itinerary: selectedChain
+                  };
+                  
+                  // Save to localStorage
+                  try {
+                    const existingEvents = JSON.parse(localStorage.getItem('meetupEvents') || '[]');
+                    const updatedEvents = [...existingEvents, newEvent];
+                    localStorage.setItem('meetupEvents', JSON.stringify(updatedEvents));
+                    
+                    console.log('Meetup scheduled:', newEvent);
+                    setIsScheduling(false);
+                    alert('Meetup scheduled successfully!');
+                  } catch (error) {
+                    console.error('Error saving meetup:', error);
+                    alert('Error scheduling meetup. Please try again.');
+                  }
+                }}
+                className="bg-green-500 hover:bg-green-600"
+                disabled={!participants.some(p => p.email)}
+              >
+                Schedule Meetup
+              </Button>
+            </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

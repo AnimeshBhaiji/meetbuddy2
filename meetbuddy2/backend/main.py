@@ -120,14 +120,35 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {
-        "user_id": user.id,
-        "firstName": user.first_name,
-        "lastName": user.last_name,
-        "email": user.email,
-        "contact": user.phone,
-        "username": user.username,
-    }
+    user_dict = {k: v for k, v in user.__dict__.items() if k != 'password'}
+    return user_dict
+
+@app.delete("/user/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    try:
+        db.delete(user)
+        db.commit()
+        
+        if PREF_FILE.exists():
+            try:
+                with open(USER_PREFS_FILE, 'r+', encoding='utf-8') as f:
+                    prefs = json.load(f)
+                    if str(user_id) in prefs:
+                        del prefs[str(user_id)]
+                        f.seek(0)
+                        json.dump(prefs, f, indent=2)
+                        f.truncate()
+            except Exception as e:
+                print(f"Warning: Could not remove user preferences: {e}")
+        
+        return {"message": "User account deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
 
 # -------------------------------
 # Helper: normalize incoming value -> list of strings

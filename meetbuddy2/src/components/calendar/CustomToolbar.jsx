@@ -5,7 +5,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export const CustomToolbar = ({ date, onNavigate, onView, view }) => {
   const navigate = (action) => {
-    onNavigate(action);
+    const newDate = new Date(date);
+    switch (action) {
+      case 'PREV':
+        newDate.setMonth(newDate.getMonth() - 1);
+        break;
+      case 'NEXT':
+        newDate.setMonth(newDate.getMonth() + 1);
+        break;
+      case 'TODAY':
+        onNavigate(new Date());
+        return;
+      default:
+        return;
+    }
+    onNavigate(newDate);
   };
 
   const viewNames = {
@@ -43,7 +57,7 @@ export const CustomToolbar = ({ date, onNavigate, onView, view }) => {
           <ChevronRight className="h-4 w-4" />
         </Button>
         <h2 className="ml-2 text-lg font-semibold text-white/90">
-          {new Date(date).toLocaleDateString('en-US', {
+          {date.toLocaleDateString('en-US', {
             year: 'numeric',
             month: 'long',
           })}

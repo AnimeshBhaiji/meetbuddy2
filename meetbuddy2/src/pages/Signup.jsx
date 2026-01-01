@@ -294,37 +294,37 @@ const Signup = () => {
                 )}
 
                 {/* Buttons */}
-                <div className='mt-8 flex flex-col sm:flex-row justify-center sm:justify-between gap-4'>
-                  {stage > 1 && (
-                    <Button
-                      type='button'
-                      onClick={prevStage}
-                      variant='outline'
-                      className='w-full sm:w-auto flex items-center justify-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3 rounded-xl transition-all'
-                    >
-                      <ArrowLeft className='w-4 h-4' />
-                      Back
-                    </Button>
-                  )}
+                <div className='mt-8 flex flex-col gap-4'>
                   {stage < 2 ? (
                     <Button
                       type='button'
                       onClick={nextStage}
-                      className='w-full sm:mx-auto py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
+                      className='w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
                     >
                       Next
                       <ArrowRight className='w-4 h-4' />
                     </Button>
                   ) : (
-                    <Button
-                      type='button'
-                      onClick={handleSubmit}
-                      disabled={isLoading}
-                      className='w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
-                    >
-                      {isLoading ? 'Creating Account...' : 'Create Account'}
-                      {!isLoading && <CheckCircle className='w-4 h-4' />}
-                    </Button>
+                    <>
+                      <Button
+                        type='button'
+                        onClick={handleSubmit}
+                        disabled={isLoading}
+                        className='w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
+                      >
+                        {isLoading ? 'Creating Account...' : 'Create Account'}
+                        {!isLoading && <CheckCircle className='w-4 h-4' />}
+                      </Button>
+                      <Button
+                        type='button'
+                        onClick={prevStage}
+                        variant='outline'
+                        className='w-full flex items-center justify-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3 rounded-xl transition-all mt-2'
+                      >
+                        <ArrowLeft className='w-4 h-4' />
+                        Back
+                      </Button>
+                    </>
                   )}
                 </div>
 

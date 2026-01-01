@@ -6,6 +6,7 @@ import { Mail, Phone, User, LogOut, Settings, Calendar, MapPin, Users, Clock, Al
 import Navbar from '@/components/Navbar';
 import Aurora from '@/components/Aurora';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
+import { API_BASE_URL } from '@/config';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
@@ -33,7 +34,7 @@ const Profile = () => {
         if (userId) {
           console.log('Fetching complete user data for user ID:', userId);
           
-          fetch(`http://localhost:8000/user/${userId}`)
+          fetch(`${API_BASE_URL}/user/${userId}`)
             .then((res) => {
               if (!res.ok) {
                 throw new Error(`HTTP error! status: ${res.status}`);

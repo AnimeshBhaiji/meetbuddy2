@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
 import Aurora from '@/components/Aurora';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
+import { API_BASE_URL } from '@/config';
 
 const Signup = () => {
   const [stage, setStage] = useState(1);
@@ -71,7 +72,7 @@ const Signup = () => {
 
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/signup', {
+      const res = await fetch(`${API_BASE_URL}/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

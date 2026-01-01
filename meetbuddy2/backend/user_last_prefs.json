@@ -1,40 +1,38 @@
 {
-  "6": {
+  "13": {
     "mood": [
-      "Romantic"
+      "Business-y"
     ],
     "planningStyle": [
       "Full control"
     ],
     "adventureLevel": [
-      "Stick to the city"
+      "Weekend escape"
     ],
     "addOnMagic": [
-      "Surprise gift delivery / Insta-corners"
+      "Live music spots"
     ],
     "memorableFactor": [
-      "Deep conversations / Capture moments"
+      "Amazing food"
     ],
     "mood_sub": [
-      "Scenic / view",
-      "No — keep it simple"
+      "Casual",
+      "No preference"
     ],
     "planningStyle_sub": [
       "Yes — full control",
+      "Live music",
       "Private seating",
       "Dietary options"
     ],
     "adventureLevel_sub": [
-      "Central",
-      "No"
+      "Group",
+      "Yes"
     ],
     "addOnMagic_sub": [
-      "On-spot photographer"
+      "No preference",
+      "Walk-in"
     ],
-    "memorableFactor_sub": [
-      "Quiet & intimate",
-      "Photo session"
-    ],
-    "user_id": 6
+    "user_id": 13
   }
 }

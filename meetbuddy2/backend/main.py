@@ -20,12 +20,23 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # -------- CORS --------
+# Add your ngrok URL here (replace with your actual ngrok URL)
+# main.py - Update CORS settings
+NGROK_URL = "https://a202eba53520.ngrok-free.app"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Local development
+        "http://127.0.0.1:5173",  # Alternative localhost
+        "https://a202eba53520.ngrok-free.app",  # Your ngrok URL
+        "http://a202eba53520.ngrok-free.app"   # HTTP version for ngrok
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    allow_origin_regex=r"https?://[a-zA-Z0-9-]+\.ngrok-free\.app"  # Allow all ngrok subdomains
 )
 
 # -------- FILE PATHS (UNIFIED) --------
@@ -83,37 +94,104 @@ class SearchPlaceRequest(BaseModel):
     coords: Optional[dict] = None
     max_results: Optional[int] = 5
 
+# -------- ROOT ENDPOINT --------
+@app.get("/")
+async def root():
+    return {"message": "MeetBuddy API is running"}
+
 # -------- USER AUTH --------
 @app.post("/signup")
-def signup(user: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == user.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    if db.query(User).filter(User.username == user.username).first():
-        raise HTTPException(status_code=400, detail="Username already exists")
+async def signup(user: UserCreate, db: Session = Depends(get_db)):
+    try:
+        print(f"Signup attempt for user: {user.username}")  # Debug log
+        
+        # Check if email already exists
+        if db.query(User).filter(User.email == user.email).first():
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
+            
+        # Check if username already exists
+        if db.query(User).filter(User.username == user.username).first():
+            raise HTTPException(
+                status_code=400,
+                detail="Username already exists"
+            )
 
-    new_user = User(
-        first_name=user.first_name,
-        last_name=user.last_name,
-        email=user.email,
-        phone=user.phone,
-        username=user.username,
-        password=hash_password(user.password),
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return {"message": "User created successfully", "user_id": new_user.id}
+        # Create new user
+        hashed_password = hash_password(user.password)
+        new_user = User(
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            phone=user.phone,
+            username=user.username,
+            password=hashed_password,
+        )
+        
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        print(f"User created successfully: {new_user.id}")  # Debug log
+        return {
+            "message": "User created successfully",
+            "user_id": new_user.id,
+            "username": new_user.username
+        }
+        
+    except HTTPException as he:
+        # Re-raise HTTP exceptions
+        raise he
+    except Exception as e:
+        db.rollback()
+        print(f"Error during signup: {str(e)}")  # Debug log
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred during signup: {str(e)}"
+        )
 
 @app.post("/login")
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(
-        (User.username == credentials.identifier) | (User.email == credentials.identifier)
-    ).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="User not found")
-    if not verify_password(credentials.password, user.password):
-        raise HTTPException(status_code=400, detail="Incorrect password")
-    return {"message": "Login successful", "user_id": user.id, "username": user.username}
+async def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    try:
+        print(f"Login attempt for: {credentials.identifier}")  # Debug log
+        
+        user = db.query(User).filter(
+            (User.username == credentials.identifier) | 
+            (User.email == credentials.identifier)
+        ).first()
+        
+        if not user:
+            print("User not found")  # Debug log
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid username or password"
+            )
+            
+        if not verify_password(credentials.password, user.password):
+            print("Invalid password")  # Debug log
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid username or password"
+            )
+            
+        print(f"Login successful for user: {user.id}")  # Debug log
+        return {
+            "message": "Login successful",
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name
+        }
+        
+    except Exception as e:
+        print(f"Login error: {str(e)}")  # Debug log
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 @app.get("/user/{user_id}")
 def get_user(user_id: int, db: Session = Depends(get_db)):

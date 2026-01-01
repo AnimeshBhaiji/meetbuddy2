@@ -8,52 +8,63 @@ import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
 import Aurora from '@/components/Aurora';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
+import { API_BASE_URL } from '@/config';
 
 const Login = () => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { resetAnswers } = useQuestionnaire();
 
-  const handleLogin = async () => {
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     setError('');
-    if (!identifier || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
-    
-    setIsLoading(true);
+
     try {
-      const response = await fetch('http://localhost:8000/login', {
+      console.log('Attempting login with:', { identifier, password });
+      const response = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          identifier: identifier,
+          password: password
+        })
       });
 
-      const data = await response.json();
-
+      console.log('Login response status:', response.status);
+      
       if (!response.ok) {
-        setError(data.detail || 'Login failed');
-        setIsLoading(false);
-        return;
+        const errorText = await response.text();
+        console.error('Login error response:', errorText);
+        throw new Error(errorText || 'Login failed. Please check your credentials and try again.');
       }
 
-      resetAnswers();
+      const data = await response.json();
+      console.log('Login successful, user data:', data);
+      
+      // Handle successful login
       localStorage.setItem('user', JSON.stringify(data));
-      console.log(' Logged in user data:', data);
+      resetAnswers();
       navigate('/questionnaire-stage1');
-    } catch (err) {
-      console.error(err);
-      setError('Something went wrong. Try again.');
-      setIsLoading(false);
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error.message || 'An error occurred during login. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      handleLogin();
+      handleLogin(e);
     }
   };
 

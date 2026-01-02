@@ -142,82 +142,7 @@ const QuestionnaireSummary = () => {
   const buildReadablePayload = () => {
     const storedUser = JSON.parse(localStorage.getItem("user") || "null");
     if (!storedUser || !storedUser.user_id) return null;
-    const userId = storedUser.user_id;
-
-    const keys = ["mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor"];
-    const preferences = {};
-
-    // also build explicit _sub arrays so backend can merge stage2 responses
-    // (backend checks for keys like 'mood_sub' either at top-level or inside preferences)
-    const subsPayload = {};
-
-    for (const key of keys) {
-      const ga = grouped[key] || { main: "", subs: [] };
-      const final = [];
-
-      // main choice -> map through prefsData if possible (stage1 only)
-      if (ga.main) {
-        final.push(idMapToLabel(key, ga.main) || ga.main);
-      }
-
-      // collect normalized subvalues into a dedicated sub-list only
-      const subList = [];
-      for (const s of (ga.subs || [])) {
-        const normalized = normalizeSubValue(key, s.value);
-        if (Array.isArray(normalized) && normalized.length > 0) {
-          normalized.forEach((n) => {
-            if (n && !subList.includes(n)) subList.push(n);
-          });
-        }
-      }
-
-      if (subList.length) {
-        // e.g. mood_sub: ["Candlelit / intimate", ...]
-        subsPayload[`${key}_sub`] = subList;
-      }
-
-      // preferences[key] now contains only the main stage1 label
-      preferences[key] = final;
-    }
-
-    // Build final payload. Include nested preferences plus top-level main keys
-    // and also top-level *_sub arrays so backend will merge stage2 answers.
-    const topLevel = { user_id: userId, preferences, ...preferences, ...subsPayload };
-    // Also place the sub-arrays inside the nested `preferences` for compatibility
-    for (const k of Object.keys(subsPayload)) {
-      if (!topLevel.preferences) topLevel.preferences = {};
-      topLevel.preferences[k] = subsPayload[k];
-    }
-
-    return topLevel;
-  };
-
-  const handleSave = async () => {
-    try {
-      const payload = buildReadablePayload();
-      if (!payload) {
-        alert("User not logged in — please log in first.");
-        return;
-      }
-      console.log("🧭 Built payload (from current UI):", payload);
-      const res = await fetch("http://localhost:8000/save_preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        console.error("❌ Backend error:", text);
-        alert("Failed to save preferences.");
-        return;
-      }
-      const data = await res.json();
-      console.log("✅ Preferences saved:", data);
-      alert("Preferences saved successfully (backend). Summary view unchanged.");
-    } catch (err) {
-      console.error("❌ Error saving preferences:", err);
-      alert("Error saving preferences — check console.");
-    }
+    return { user_id: storedUser.user_id };
   };
 
   return (
@@ -308,12 +233,6 @@ const QuestionnaireSummary = () => {
 
                 <div className="flex flex-col sm:flex-row justify-center gap-4 pt-8 border-t border-white/10 mt-8">
                   <Button
-                    onClick={handleSave}
-                    className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
-                  >
-                    Save Preferences
-                  </Button>
-                  <Button
                     variant="outline"
                     onClick={() => {
                       try {
@@ -324,13 +243,13 @@ const QuestionnaireSummary = () => {
                       } catch {}
                       navigate("/questionnaire-stage1");
                     }}
-                    className="border border-blue-400/30 text-blue-400 hover:bg-blue-500/10 px-6 py-3 rounded-xl transition-all"
+                    className="flex-1 sm:flex-none border border-blue-400/30 text-blue-400 hover:bg-blue-500/10 px-6 py-3 rounded-xl transition-all"
                   >
                     Modify Preferences
                   </Button>
                   <Button
                     onClick={() => navigate("/planner")}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
+                    className="flex-1 sm:flex-none bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
                   >
                     Plan My Meetup
                   </Button>

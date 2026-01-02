@@ -285,12 +285,36 @@ export default function Planner() {
     setFlowText(flow.map((f) => humanStepName(f)).join(" → "));
   }, [userPrefs, page]);
 
-  const persistPrefs = (newPrefs) => {
+  const persistPrefs = async (newPrefs) => {
     const merged = { ...(userPrefs || {}), ...(newPrefs || {}) };
     setUserPrefs(merged);
+    
     try {
+      // Save to localStorage first for immediate UI updates
       localStorage.setItem("userPreferences", JSON.stringify(merged));
-    } catch (e) {}
+      
+      // Then save to backend if user is logged in
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (user && user.id) {
+        try {
+          await axios.post(
+            getApiUrl('/update-preferences'),
+            { 
+              user_id: user.id,
+              preferences: merged 
+            },
+            { 
+              headers: DEFAULT_HEADERS
+            }
+          );
+        } catch (error) {
+          console.error("Error saving preferences to backend:", error);
+          // Continue without throwing to not break the UI
+        }
+      }
+    } catch (e) {
+      console.error("Error saving preferences:", e);
+    }
   };
 
   // GPS helper
@@ -608,7 +632,14 @@ export default function Planner() {
         payload.next_step = "done";
       }
 
-      const res = await axios.post(`http://localhost:8000/planner/session/${sessionId}/select`, payload, { timeout: 60000 });
+      const res = await axios.post(
+        getApiUrl(`/planner/session/${sessionId}/select`), 
+        payload, 
+        { 
+          headers: DEFAULT_HEADERS,
+          timeout: 60000 
+        }
+      );
 
       // push selection locally
       setSelectedChain((s) => [...s, { step: payload.step, place: opt }]);

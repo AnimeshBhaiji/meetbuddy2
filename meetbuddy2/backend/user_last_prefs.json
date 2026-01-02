@@ -21,19 +21,18 @@
     ],
     "planningStyle_sub": [
       "Yes — full control",
-      "Dietary options",
-      "Live music"
+      "Dietary options"
     ],
     "adventureLevel_sub": [
       "Couple",
-      "Yes"
+      "No"
     ],
     "addOnMagic_sub": [
       "Photo props"
     ],
     "memorableFactor_sub": [
-      "Scenic & photogenic",
-      "Photo session"
+      "Photo session",
+      "Balanced"
     ],
     "user_id": 6
   }

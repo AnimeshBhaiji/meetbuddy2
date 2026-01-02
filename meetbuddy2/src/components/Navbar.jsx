@@ -42,12 +42,7 @@ const Navbar = () => {
             Home
           </Button>
         </Link>
-        <Link to="/restaurant">
-          <Button variant="ghost" className={navItemStyle("/restaurant")}>
-            Restaurant
-          </Button>
-        </Link>
-        <Link to="/planner">
+<Link to="/planner">
           <Button variant="ghost" className={navItemStyle("/planner")}>
             Planner
           </Button>

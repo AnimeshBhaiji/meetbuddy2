@@ -836,28 +836,82 @@ export default function Planner() {
             <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-8 mb-8">
               <div className="grid md:grid-cols-2 gap-8 mb-8">
                 {/* Preferences display */}
-                <div>
+                <div className="space-y-4">
                   <h2 className="text-2xl font-semibold text-white mb-4">Your Preferences</h2>
-                  <div className="space-y-3">
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
-                      <p className="text-sm text-gray-400">Mood</p>
-                      <p className="font-medium text-white">{displayPref(userPrefs?.mood) || 'Not specified'}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Mood */}
+                    <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-blue-500/20 rounded-lg">
+                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-400">Mood</p>
+                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.mood) || 'Not specified'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
-                      <p className="text-sm text-gray-400">Planning Style</p>
-                      <p className="font-medium text-white">{displayPref(userPrefs?.planningStyle) || 'Not specified'}</p>
+
+                    {/* Planning Style */}
+                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-purple-500/20 rounded-lg">
+                          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-400">Planning Style</p>
+                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.planningStyle) || 'Not specified'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
-                      <p className="text-sm text-gray-400">Adventure Level</p>
-                      <p className="font-medium text-white">{displayPref(userPrefs?.adventureLevel) || 'Not specified'}</p>
+
+                    {/* Adventure Level */}
+                    <div className="bg-gradient-to-br from-pink-500/10 to-rose-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-pink-500/20 rounded-lg">
+                          <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-400">Adventure Level</p>
+                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.adventureLevel) || 'Not specified'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
-                      <p className="text-sm text-gray-400">Add-On Magic</p>
-                      <p className="font-medium text-white">{displayPref(userPrefs?.addOnMagic) || 'Not specified'}</p>
+
+                    {/* Add-On Magic */}
+                    <div className="bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-rose-500/20 rounded-lg">
+                          <svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-400">Add-On Magic</p>
+                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.addOnMagic) || 'Not specified'}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-white/5 border border-white/10 p-4 rounded-xl backdrop-blur-sm">
-                      <p className="text-sm text-gray-400">Memorable Factor</p>
-                      <p className="font-medium text-white">{displayPref(userPrefs?.memorableFactor) || 'Not specified'}</p>
+
+                    {/* Memorable Factor */}
+                    <div className="bg-gradient-to-br from-amber-500/10 to-blue-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] md:col-span-2">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-amber-500/20 rounded-lg">
+                          <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-400">Memorable Factor</p>
+                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.memorableFactor) || 'Not specified'}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,7 @@
 // src/context/QuestionnaireContext.jsx
 import React, { createContext, useState, useContext, useEffect } from "react";
+import axios from "axios";
+import { getApiUrl, DEFAULT_HEADERS } from "@/config";
 
 // Create the context
 const QuestionnaireContext = createContext();
@@ -28,8 +30,32 @@ export const QuestionnaireProvider = ({ children }) => {
   }, [answers]);
 
   // Update answers when user selects new options
-  const updateAnswers = (newAnswers) => {
-    setAnswers((prev) => ({ ...prev, ...newAnswers }));
+  const updateAnswers = async (newAnswers) => {
+    const updatedAnswers = { ...answers, ...newAnswers };
+    setAnswers(updatedAnswers);
+    
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      if (user && user.id) {
+        await axios.post(
+          getApiUrl('/update-preferences'),
+          { 
+            user_id: user.id,
+            preferences: updatedAnswers 
+          },
+          { 
+            headers: {
+              ...DEFAULT_HEADERS,
+              'Content-Type': 'application/json'
+            } 
+          }
+        );
+        console.log("Preferences saved to backend successfully");
+      }
+    } catch (error) {
+      console.error("Failed to save preferences to backend:", error);
+      // Still keep the local changes even if backend save fails
+    }
   };
 
   // Reset answers (and clear localStorage)

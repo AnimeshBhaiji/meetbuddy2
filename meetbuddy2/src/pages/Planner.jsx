@@ -1,6 +1,7 @@
 // src/pages/Planner.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { getApiUrl, DEFAULT_HEADERS } from "@/config";
 import { format, addHours } from 'date-fns';
 import { Calendar as CalendarIcon, Plus, X, Mail, Phone, Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -99,8 +100,8 @@ export default function Planner() {
         max_results: 5,
       };
 
-      const res = await axios.post("http://localhost:8000/search_place", body, {
-        headers: { "Content-Type": "application/json" },
+      const res = await axios.post(getApiUrl('/search_place'), body, {
+        headers: DEFAULT_HEADERS,
         timeout: 20000,
       });
 
@@ -397,8 +398,8 @@ export default function Planner() {
 
       console.log("📤 Planner payload (normalized arrays):", payload);
 
-      const res = await axios.post("http://localhost:8000/planner", payload, {
-        headers: { "Content-Type": "application/json" },
+      const res = await axios.post(getApiUrl('/planner'), payload, {
+        headers: DEFAULT_HEADERS,
         timeout: 60000,
       });
 
@@ -495,7 +496,10 @@ export default function Planner() {
       };
 
       // primary request to the session endpoint
-      const res = await axios.post("http://localhost:8000/planner/session", payload, { timeout: 60000 });
+      const res = await axios.post(getApiUrl('/planner/session'), payload, { 
+        headers: DEFAULT_HEADERS,
+        timeout: 60000 
+      });
 
       const sid = res.data.session_id;
       setSessionId(sid);
@@ -542,7 +546,10 @@ export default function Planner() {
             coords: payload.coords,
             location: payload.location,
           };
-          const legacyRes = await axios.post("http://localhost:8000/planner", legacyPayload, { timeout: 60000 });
+          const legacyRes = await axios.post(getApiUrl('/planner'), legacyPayload, { 
+            headers: DEFAULT_HEADERS,
+            timeout: 60000 
+          });
           console.log("Fallback /planner response:", legacyRes.data);
           const mapped = mapLegacyToOptions(legacyRes.data.recommendations || []);
           if (mapped && mapped.length > 0) {
@@ -690,7 +697,10 @@ export default function Planner() {
           coords: userPrefs.coords || coords || null,
           location: userPrefs.location || placeText || null,
         };
-        const initRes = await axios.post("http://localhost:8000/planner/session", payload, { timeout: 30000 });
+        const initRes = await axios.post(getApiUrl('/planner/session'), payload, { 
+          headers: DEFAULT_HEADERS,
+          timeout: 30000 
+        });
         setStepOptions(initRes.data.initial.options || []);
       }
     } catch (e) {

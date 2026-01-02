@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
@@ -98,6 +98,39 @@ class SearchPlaceRequest(BaseModel):
 @app.get("/")
 async def root():
     return {"message": "MeetBuddy API is running"}
+
+
+@app.post("/update-preferences")
+async def update_preferences(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    try:
+        data = await request.json()
+        user_id = data.get("user_id")
+        preferences = data.get("preferences", {})
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="User ID is required")
+            
+        # Get the user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        # Update preferences
+        user.preferences = json.dumps(preferences)
+        db.commit()
+        
+        # Also save to file for backward compatibility
+        with open(USER_PREFS_FILE, "w") as f:
+            json.dump({str(user_id): preferences}, f)
+            
+        return {"status": "success", "message": "Preferences updated successfully"}
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # -------- USER AUTH --------
 @app.post("/signup")

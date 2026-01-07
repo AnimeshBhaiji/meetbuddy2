@@ -250,7 +250,7 @@ export default function Planner() {
           needsActivity = true;
         }
       }
-
+ 
       // Stage2 explicit no-stay overrides any inferred stay
       if (hasNoStay) {
         needsStay = false;

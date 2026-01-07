@@ -5,7 +5,7 @@ import { useInView } from "react-intersection-observer";
 import { Calendar, MapPin, Users, Utensils, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
-import Aurora from "@/components/Aurora";
+import DarkVeil from "@/components/DarkVeil/DarkVeil";
 
 // Animation variants
 const fadeInUp = {
@@ -64,8 +64,21 @@ const LandingPage = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+    <div className="relative min-h-screen">
+      {/* DarkVeil as a fixed background */}
+      <div className="fixed inset-0 z-0">
+        <DarkVeil 
+          hueShift={0}
+          noiseIntensity={0.02}
+          scanlineIntensity={0.4}  // Increased for better visibility
+          speed={2.0}
+          scanlineFrequency={1.5}  // Adjusted for better line spacing
+          warpAmount={0.1}
+          debug={false}
+        />
+      </div>
+      
+      {/* Main content with semi-transparent background */}
       <div className="relative z-10 min-h-screen flex flex-col">
         <Navbar />
         {/* Hero Section */}

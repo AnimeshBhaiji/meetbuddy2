@@ -51,7 +51,7 @@ const CalendarPage = () => {
     try {
       const savedEvents = localStorage.getItem('meetupEvents');
       if (!savedEvents) return sampleEvents;
-      
+
       const parsedEvents = JSON.parse(savedEvents);
       // Convert string dates back to Date objects
       return parsedEvents.map(event => ({
@@ -111,11 +111,11 @@ const CalendarPage = () => {
 
   const handleNavigateToPlanner = () => {
     if (selectedEvent) {
-      navigate('/planner', { 
-        state: { 
+      navigate('/planner', {
+        state: {
           startDate: selectedEvent.start,
-          endDate: selectedEvent.end 
-        } 
+          endDate: selectedEvent.end
+        }
       });
     } else {
       navigate('/planner');
@@ -138,9 +138,9 @@ const CalendarPage = () => {
   return (
     <div className="relative min-h-screen bg-black overflow-hidden">
       <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col pt-24">
         <Navbar />
-        
+
         <main className="flex-1 p-4 md:p-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -152,7 +152,7 @@ const CalendarPage = () => {
               <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                 My Calendar
               </h1>
-              <Button 
+              <Button
                 onClick={handleNavigateToPlanner}
                 className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
               >
@@ -191,8 +191,8 @@ const CalendarPage = () => {
                     onNavigate={(newDate) => setDate(safeParseDate(newDate))}
                     components={{
                       toolbar: (props) => (
-                        <CustomToolbar 
-                          {...props} 
+                        <CustomToolbar
+                          {...props}
                           date={date}
                           onNavigate={(newDate) => setDate(safeParseDate(newDate))}
                           onView={setView}
@@ -211,7 +211,7 @@ const CalendarPage = () => {
 
       {/* Event Details Modal */}
       <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
-        <DialogContent 
+        <DialogContent
           className="bg-gray-900 border-gray-800 max-w-md"
           aria-labelledby="event-details-title"
           aria-describedby="event-details-description"
@@ -224,7 +224,7 @@ const CalendarPage = () => {
               {selectedEvent?.description || 'Details for this event'}
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedEvent && (
             <div className="space-y-4 mt-4">
               <div className="flex items-start">
@@ -236,7 +236,7 @@ const CalendarPage = () => {
                   </p>
                 </div>
               </div>
-              
+
               {(selectedEvent.itinerary?.steps?.length > 0 || selectedEvent.location) && (
                 <div className="flex items-start">
                   <MapPin className="w-5 h-5 text-purple-400 mt-0.5 mr-3 flex-shrink-0" />
@@ -251,13 +251,13 @@ const CalendarPage = () => {
                           )}
                         </div>
                       )) || (
-                        <p className="text-white/90">{selectedEvent.location}</p>
-                      )}
+                          <p className="text-white/90">{selectedEvent.location}</p>
+                        )}
                     </div>
                   </div>
                 </div>
               )}
-              
+
               {selectedEvent.attendees?.length > 0 && (
                 <div className="flex items-start">
                   <Users className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
@@ -273,32 +273,32 @@ const CalendarPage = () => {
                   </div>
                 </div>
               )}
-              
+
               {selectedEvent.description && (
                 <div className="pt-2">
                   <p className="text-gray-400 text-sm mb-1">Description</p>
                   <p className="text-white/90">{selectedEvent.description}</p>
                 </div>
               )}
-              
+
               <div className="flex justify-end gap-2 pt-4">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="bg-white/5 border-white/10 hover:bg-white/10 text-white"
                   onClick={() => {
                     setShowEventModal(false);
-                    navigate('/planner', { 
-                      state: { 
+                    navigate('/planner', {
+                      state: {
                         eventData: selectedEvent,
                         isEditing: true
-                      } 
+                      }
                     });
                   }}
                 >
                   <Edit2 className="w-4 h-4 mr-2" />
                   Edit
                 </Button>
-                <Button 
+                <Button
                   onClick={handleNavigateToPlanner}
                   className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                 >

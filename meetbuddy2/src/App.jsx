@@ -23,14 +23,28 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/restaurant" element={<RestaurantList />} />
         <Route path="/about" element={<AboutUs />} />
-        <Route path="/planner" element={<Planner />} />
+        <Route
+          path="/planner"
+          element={
+            <ProtectedRoute>
+              <Planner />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/questionnaire-stage1" element={<QuestionnaireStage1 />} />
         <Route path="/questionnaire-stage2" element={<QuestionnaireStage2 />} />
         <Route path="/questionnaire-summary" element={<QuestionnaireSummary />} />
-        <Route path="/calendar" element={<CalendarPage />} />
+        <Route
+          path="/calendar"
+          element={
+            <ProtectedRoute>
+              <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/home"
           element={

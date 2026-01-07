@@ -875,7 +875,7 @@ export default function Planner() {
         />
       </div>
 
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col pt-28">
         <Navbar />
 
         <div className="flex-1">

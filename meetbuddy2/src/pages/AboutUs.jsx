@@ -32,14 +32,14 @@ const AboutUs = () => {
   return (
     <div className="relative min-h-screen bg-black overflow-hidden">
       <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col pt-24">
         <Navbar />
-        
+
         <main className="flex-1">
           {/* Hero Section */}
           <section className="relative pt-24 pb-16 md:pt-32 md:pb-24">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
@@ -52,10 +52,10 @@ const AboutUs = () => {
                   Your ultimate meeting planner — simplifying the way you discover venues,
                   customize meetups, and coordinate with friends, teams, or clients effortlessly.
                 </p>
-                
+
                 <div className="flex flex-wrap justify-center gap-4 mt-8">
-                  <a 
-                    href="/planner" 
+                  <a
+                    href="/planner"
                     className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg font-medium flex items-center gap-2"
                   >
                     Start Planning <ArrowRight className="w-4 h-4" />
@@ -91,7 +91,7 @@ const AboutUs = () => {
           {/* Team Section */}
           <section className="py-16 md:py-24">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -137,7 +137,7 @@ const AboutUs = () => {
           {/* CTA Section */}
           <section className="py-16 md:py-24">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -150,8 +150,8 @@ const AboutUs = () => {
                 <p className="text-lg text-gray-300 mb-8 max-w-2xl mx-auto">
                   Join thousands of users who are already making their meetups happen with ease.
                 </p>
-                <a 
-                  href="/signup" 
+                <a
+                  href="/signup"
                   className="inline-block px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg font-medium"
                 >
                   Get Started for Free

@@ -80,7 +80,7 @@ const LandingPage = () => {
       </div>
 
       {/* Main content with semi-transparent background */}
-      <div className="relative z-10 min-h-screen flex flex-col">
+      <div className="relative z-10 min-h-screen flex flex-col pt-24">
         <Navbar />
         {/* Hero Section */}
         <div className="min-h-screen flex flex-col items-center justify-center text-center px-4 py-20">

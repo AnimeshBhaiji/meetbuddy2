@@ -1,12 +1,11 @@
-// src/pages/Signup.jsx
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { User, Mail, Lock, Phone, ArrowLeft, ArrowRight, CheckCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { User, Mail, Lock, Phone, ArrowLeft, ArrowRight, CheckCircle, Sparkles } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import Navbar from '@/components/Navbar';
-import Aurora from '@/components/Aurora';
+import DarkVeil from '@/components/DarkVeil/DarkVeil';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
 import { API_BASE_URL } from '@/config';
 
@@ -90,10 +89,8 @@ const Signup = () => {
         setError(data.detail || 'Signup failed');
         setIsLoading(false);
       } else {
-        // Automatically log in the user with signup credentials
         resetAnswers();
         localStorage.setItem('user', JSON.stringify(data));
-        console.log('Signed up user data:', data);
         navigate('/questionnaire-stage1');
       }
     } catch (err) {
@@ -103,236 +100,247 @@ const Signup = () => {
     }
   };
 
-  const stageConfig = [
-    { title: 'Account Information', icon: User, description: 'Tell us about yourself' },
-    { title: 'Set Your Password', icon: Lock, description: 'Secure your account' },
-  ];
+  const containerVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.6, staggerChildren: 0.1 }
+    }
+  };
 
-  const currentStageConfig = stageConfig[stage - 1];
+  const itemVariants = {
+    hidden: { opacity: 0, x: -10 },
+    visible: { opacity: 1, x: 0 }
+  };
 
   return (
-    <div className='relative min-h-screen bg-black overflow-hidden'>
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className='relative z-10 min-h-screen flex flex-col'>
+    <div className='relative min-h-screen flex flex-col bg-black overflow-hidden'>
+      {/* Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <DarkVeil
+          hueShift={0}
+          noiseIntensity={0.02}
+          scanlineIntensity={0.4}
+          speed={2.0}
+          scanlineFrequency={1.5}
+          warpAmount={0.1}
+          debug={false}
+        />
+      </div>
+
+      <div className='relative z-10 min-h-screen flex flex-col pt-24'>
         <Navbar />
-        <div className='flex-1 flex items-center justify-center py-12 px-4'>
+
+        <div className='flex-1 flex items-center justify-center p-6 md:p-12'>
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className='w-full max-w-md bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden my-8'
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className='w-full max-w-lg'
           >
-            <div className='p-8'>
-              <div className='text-center mb-8'>
-                <h2 className='text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4'>
-                  Create an account
-                </h2>
-                {error && (
-                  <div className='text-red-400 text-sm text-center p-3 bg-red-500/10 rounded-lg mt-4'>
-                    {error}
-                  </div>
-                )}
-                <p className='text-gray-400'>
-                  Join MeetBuddy to plan your perfect meetup
-                </p>
-              </div>
+            <div className='bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] shadow-2xl overflow-hidden relative'>
 
-              <div className='space-y-1 mb-6 text-center'>
-                <div className='flex justify-center mb-2'>
-                  {currentStageConfig && React.createElement(currentStageConfig.icon, {
-                    className: 'w-6 h-6 text-blue-400'
-                  })}
+              {/* Decorative Elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+
+              <div className='p-8 md:p-10 relative z-10'>
+                <div className='text-center mb-8'>
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+                    className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-purple-500/20"
+                  >
+                    <Sparkles className="w-7 h-7 text-white" />
+                  </motion.div>
+                  <h2 className='text-3xl font-bold text-white mb-2'>Create Account</h2>
+                  <p className='text-gray-400'>Join MeetBuddy to plan your perfect meetup</p>
                 </div>
-                <h3 className='text-xl font-semibold text-white'>{currentStageConfig?.title}</h3>
-                <p className='text-sm text-gray-400'>{currentStageConfig?.description}</p>
-              </div>
 
-              <div className='space-y-6'>
-                {/* Stage 1: User Info */}
-                {stage === 1 && (
-                  <div className='space-y-6'>
-                    <div>
-                      <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          First Name
-                        </label>
-                        <div className='relative'>
-                          <User className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
-                          <Input
-                            type='text'
-                            name='first_name'
-                            placeholder='John'
-                            value={formData.first_name}
-                            onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
-                          />
+                {/* Progress Steps */}
+                <div className="flex items-center justify-center gap-2 mb-8">
+                  <div className={`h-1.5 rounded-full transition-all duration-300 ${stage >= 1 ? 'w-8 bg-blue-500' : 'w-2 bg-white/20'}`} />
+                  <div className={`h-1.5 rounded-full transition-all duration-300 ${stage >= 2 ? 'w-8 bg-purple-500' : 'w-2 bg-white/20'}`} />
+                </div>
+
+                <AnimatePresence mode='wait'>
+                  {stage === 1 && (
+                    <motion.div
+                      key="stage1"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      transition={{ duration: 0.3 }}
+                      className='space-y-4'
+                    >
+                      <div className='grid grid-cols-2 gap-4'>
+                        <div className='space-y-2'>
+                          <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>First Name</label>
+                          <div className='relative group'>
+                            <User className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-blue-400 transition-colors' />
+                            <Input
+                              name='first_name'
+                              placeholder='John'
+                              value={formData.first_name}
+                              onChange={handleChange}
+                              className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-blue-400/50 focus:ring-blue-400/20'
+                            />
+                          </div>
+                        </div>
+                        <div className='space-y-2'>
+                          <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>Last Name</label>
+                          <div className='relative group'>
+                            <User className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-blue-400 transition-colors' />
+                            <Input
+                              name='last_name'
+                              placeholder='Doe'
+                              value={formData.last_name}
+                              onChange={handleChange}
+                              className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-blue-400/50 focus:ring-blue-400/20'
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div>
+
                       <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          Last Name
-                        </label>
-                        <div className='relative'>
-                          <User className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                        <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>Username</label>
+                        <div className='relative group'>
+                          <User className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-purple-400 transition-colors' />
                           <Input
-                            type='text'
-                            name='last_name'
-                            placeholder='Doe'
-                            value={formData.last_name}
-                            onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          Username
-                        </label>
-                        <div className='relative'>
-                          <User className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
-                          <Input
-                            type='text'
                             name='username'
                             placeholder='johndoe'
                             value={formData.username}
                             onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                            className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-purple-400/50 focus:ring-purple-400/20'
                           />
                         </div>
                       </div>
-                    </div>
-                    <div>
+
                       <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          Email
-                        </label>
-                        <div className='relative'>
-                          <Mail className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                        <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>Email</label>
+                        <div className='relative group'>
+                          <Mail className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-blue-400 transition-colors' />
                           <Input
                             type='email'
                             name='email'
                             placeholder='you@example.com'
                             value={formData.email}
                             onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                            className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-blue-400/50 focus:ring-blue-400/20'
                           />
                         </div>
                       </div>
-                    </div>
-                    <div>
+
                       <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          Phone Number
-                        </label>
-                        <div className='relative'>
-                          <Phone className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                        <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>Phone</label>
+                        <div className='relative group'>
+                          <Phone className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-purple-400 transition-colors' />
                           <Input
                             type='tel'
                             name='phone'
-                            placeholder='+1 (123) 456-7890'
+                            placeholder='+1 (555) 000-0000'
                             value={formData.phone}
                             onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                            className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-purple-400/50 focus:ring-purple-400/20'
                           />
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    </motion.div>
+                  )}
 
-                {/* Stage 2: Password */}
-                {stage === 2 && (
-                  <div className='space-y-6'>
-                    <div>
+                  {stage === 2 && (
+                    <motion.div
+                      key="stage2"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                      className='space-y-4'
+                    >
                       <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          Password
-                        </label>
-                        <div className='relative'>
-                          <Lock className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                        <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>Password</label>
+                        <div className='relative group'>
+                          <Lock className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-blue-400 transition-colors' />
                           <Input
                             type='password'
                             name='password'
                             placeholder='••••••••'
                             value={formData.password}
                             onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                            className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-blue-400/50 focus:ring-blue-400/20'
                           />
                         </div>
                       </div>
-                    </div>
-                    <div>
+
                       <div className='space-y-2'>
-                        <label className='block text-sm font-medium text-gray-300'>
-                          Repeat Password
-                        </label>
-                        <div className='relative'>
-                          <Lock className='absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400' />
+                        <label className='text-xs font-semibold text-gray-400 uppercase tracking-wider ml-1'>Confirm Password</label>
+                        <div className='relative group'>
+                          <Lock className='absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500 group-focus-within:text-purple-400 transition-colors' />
                           <Input
                             type='password'
                             name='repeatPassword'
                             placeholder='••••••••'
                             value={formData.repeatPassword}
                             onChange={handleChange}
-                            className='pl-10 w-full h-11 bg-white/5 border-white/10 text-white placeholder-gray-400 focus:border-blue-400/50 focus:ring-1 focus:ring-blue-400/30 rounded-xl'
+                            className='pl-10 bg-white/5 border-white/10 text-white placeholder-gray-500 rounded-xl focus:border-purple-400/50 focus:ring-purple-400/20'
                           />
                         </div>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                {/* Error Message */}
                 {error && (
-                  <div className='bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-xl text-sm font-medium mt-6'>
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className='text-red-400 text-sm text-center p-3 mt-4 bg-red-500/10 border border-red-500/20 rounded-xl'
+                  >
                     {error}
-                  </div>
+                  </motion.div>
                 )}
 
-                {/* Buttons */}
-                <div className='mt-8 flex flex-col gap-4'>
-                  {stage < 2 ? (
+                <div className='mt-8 space-y-3'>
+                  {stage === 1 ? (
                     <Button
-                      type='button'
                       onClick={nextStage}
-                      className='w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
+                      className='w-full py-6 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300 transform hover:-translate-y-0.5'
                     >
-                      Next
-                      <ArrowRight className='w-4 h-4' />
+                      <span className="flex items-center gap-2">Next Step <ArrowRight className='w-5 h-5' /></span>
                     </Button>
                   ) : (
-                    <>
+                    <div className="flex gap-3">
                       <Button
-                        type='button'
-                        onClick={handleSubmit}
-                        disabled={isLoading}
-                        className='w-full py-6 text-base bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg flex items-center justify-center gap-2'
-                      >
-                        {isLoading ? 'Creating Account...' : 'Create Account'}
-                        {!isLoading && <CheckCircle className='w-4 h-4' />}
-                      </Button>
-                      <Button
-                        type='button'
                         onClick={prevStage}
                         variant='outline'
-                        className='w-full flex items-center justify-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3 rounded-xl transition-all mt-2'
+                        className='flex-1 py-6 bg-white/5 border-white/10 text-white hover:bg-white/10 rounded-xl transition-all'
                       >
-                        <ArrowLeft className='w-4 h-4' />
-                        Back
+                        <ArrowLeft className='w-5 h-5' />
                       </Button>
-                    </>
+                      <Button
+                        onClick={handleSubmit}
+                        disabled={isLoading}
+                        className='flex-[3] py-6 text-lg font-semibold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all duration-300 transform hover:-translate-y-0.5'
+                      >
+                        {isLoading ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Creating...</span>
+                          </div>
+                        ) : (
+                          <span className="flex items-center justify-center gap-2">Create Account <CheckCircle className='w-5 h-5' /></span>
+                        )}
+                      </Button>
+                    </div>
                   )}
                 </div>
 
-                {/* Login Link */}
                 <div className='mt-6 pt-6 border-t border-white/10 text-center text-sm'>
                   <p className='text-gray-400'>
                     Already have an account?{' '}
-                    <Link to='/login' className='text-blue-400 hover:text-blue-300 font-medium transition-colors'>
+                    <Link to='/login' className='text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 font-bold hover:opacity-80 transition-opacity'>
                       Sign in
                     </Link>
                   </p>

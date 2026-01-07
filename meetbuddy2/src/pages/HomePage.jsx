@@ -77,7 +77,7 @@ const HomePage = () => {
                 />
             </div>
 
-            <div className="relative z-10 flex flex-col min-h-screen">
+            <div className="relative z-10 flex flex-col min-h-screen pt-24">
                 <Navbar />
 
                 <div className="flex-1 flex flex-col items-center p-6 md:p-12 space-y-20">

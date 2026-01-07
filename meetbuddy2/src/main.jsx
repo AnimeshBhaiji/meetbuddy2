@@ -5,13 +5,16 @@ import App from './App.jsx'
 import './index.css'
 import { BrowserRouter } from 'react-router-dom'
 import { QuestionnaireProvider } from "./context/QuestionnaireContext";
+import { AuthProvider } from "./context/AuthContext";
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-    <QuestionnaireProvider>
-      <App />
-    </QuestionnaireProvider>
+      <AuthProvider>
+        <QuestionnaireProvider>
+          <App />
+        </QuestionnaireProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

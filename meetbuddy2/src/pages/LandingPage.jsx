@@ -10,8 +10,8 @@ import DarkVeil from "@/components/DarkVeil/DarkVeil";
 // Animation variants
 const fadeInUp = {
   hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
+  visible: {
+    opacity: 1,
     y: 0,
     transition: { duration: 0.6 }
   }
@@ -28,7 +28,7 @@ const staggerContainer = {
 };
 
 const FeatureCard = ({ icon: Icon, title, description }) => (
-  <motion.div 
+  <motion.div
     variants={fadeInUp}
     className="bg-white/5 backdrop-blur-sm p-6 rounded-xl border border-white/10 hover:border-blue-400/30 transition-all duration-300 hover:-translate-y-1"
   >
@@ -57,7 +57,7 @@ const LandingPage = () => {
   const handlePlanMeetup = () => {
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
-      navigate("/questionnaire-stage1");
+      navigate("/home");
     } else {
       navigate("/login");
     }
@@ -67,7 +67,7 @@ const LandingPage = () => {
     <div className="relative min-h-screen">
       {/* DarkVeil as a fixed background */}
       <div className="fixed inset-0 z-0">
-        <DarkVeil 
+        <DarkVeil
           hueShift={0}
           noiseIntensity={0.02}
           scanlineIntensity={0.4}  // Increased for better visibility
@@ -77,7 +77,7 @@ const LandingPage = () => {
           debug={false}
         />
       </div>
-      
+
       {/* Main content with semi-transparent background */}
       <div className="relative z-10 min-h-screen flex flex-col">
         <Navbar />
@@ -89,7 +89,7 @@ const LandingPage = () => {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="max-w-4xl mx-auto"
           >
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, delay: 0.4 }}
@@ -97,8 +97,8 @@ const LandingPage = () => {
             >
               <p className="text-sm font-medium text-blue-400">Meet. Plan. Enjoy. 🎉</p>
             </motion.div>
-            
-            <motion.h1 
+
+            <motion.h1
               className="text-6xl md:text-7xl lg:text-8xl font-bold text-white mb-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -106,8 +106,8 @@ const LandingPage = () => {
             >
               Welcome to <span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">MeetBuddy</span>
             </motion.h1>
-            
-            <motion.p 
+
+            <motion.p
               className="text-2xl text-gray-300 max-w-3xl mx-auto mb-12"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -116,22 +116,22 @@ const LandingPage = () => {
               Your ultimate planner for seamless meetups, curated restaurant discovery,
               personalized planning, and smooth bookings — all in one place.
             </motion.p>
-            
+
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.5 }}
               className="flex flex-col sm:flex-row gap-4 justify-center"
             >
-              <Button 
+              <Button
                 onClick={handlePlanMeetup}
                 className="px-8 py-6 text-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg"
               >
                 Plan Your Meetup
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="px-8 py-6 text-lg border-white/20 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5"
                 onClick={() => {
                   document.getElementById('features').scrollIntoView({ behavior: 'smooth' });
@@ -141,8 +141,8 @@ const LandingPage = () => {
               </Button>
             </motion.div>
           </motion.div>
-          
-          <motion.div 
+
+          <motion.div
             className="absolute bottom-10 left-1/2 transform -translate-x-1/2"
             animate={{
               y: [0, 10, 0],
@@ -154,7 +154,7 @@ const LandingPage = () => {
             }}
           >
             <div className="w-10 h-16 border-2 border-white/30 rounded-full flex justify-center p-1">
-              <motion.div 
+              <motion.div
                 className="w-1 h-4 bg-white/60 rounded-full"
                 animate={{
                   y: [0, 20],
@@ -169,31 +169,31 @@ const LandingPage = () => {
             </div>
           </motion.div>
         </div>
-        
+
         {/* Features Section */}
         <section id="features" className="py-20 px-4 bg-gradient-to-b from-black/0 via-black/30 to-black/80">
           <div className="max-w-6xl mx-auto">
-            <motion.div 
+            <motion.div
               ref={ref}
               initial="hidden"
               animate={controls}
               variants={staggerContainer}
               className="text-center mb-16"
             >
-              <motion.h2 
+              <motion.h2
                 variants={fadeInUp}
                 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6"
               >
                 Why Choose MeetBuddy?
               </motion.h2>
-              <motion.p 
+              <motion.p
                 variants={fadeInUp}
                 className="text-gray-400 max-w-2xl mx-auto text-lg"
               >
                 We make planning meetups effortless and enjoyable with our powerful features
               </motion.p>
             </motion.div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               <FeatureCard
                 icon={Calendar}
@@ -228,7 +228,7 @@ const LandingPage = () => {
             </div>
           </div>
         </section>
-        
+
         {/* CTA Section */}
         <section className="py-20 px-4 bg-gradient-to-b from-black/80 via-black to-black">
           <div className="max-w-4xl mx-auto text-center">
@@ -243,7 +243,7 @@ const LandingPage = () => {
               <p className="text-xl text-gray-300 mb-10 max-w-3xl mx-auto">
                 Join thousands of users who are already making their meetups memorable with MeetBuddy.
               </p>
-              <Button 
+              <Button
                 onClick={handlePlanMeetup}
                 className="px-8 py-6 text-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg"
               >
@@ -252,7 +252,7 @@ const LandingPage = () => {
             </motion.div>
           </div>
         </section>
-        
+
         {/* Footer */}
         <footer className="bg-black/80 border-t border-white/10 py-12 px-4">
           <div className="max-w-6xl mx-auto">

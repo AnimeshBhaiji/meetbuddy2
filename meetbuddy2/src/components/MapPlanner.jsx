@@ -116,12 +116,12 @@ const MarkerWithRef = forwardRef(({ position, icon, children, ...props }, ref) =
 
   useEffect(() => {
     if (!markerRef.current) return;
-    
+
     // Get the underlying Leaflet marker instance
     const leafletMarker = markerRef.current.leafletElement;
-    
+
     if (!leafletMarker) return;
-    
+
     // Expose methods via ref
     if (ref) {
       ref.current = {
@@ -160,7 +160,7 @@ MarkerWithRef.displayName = "MarkerWithRef";
  * - userCoords: {lat, lng} for user's current location (GPS)
  * - locationText: string typed area/location (for highlighting when no coords)
  */
-export default function MapPlanner({ options = [], selectedChain = [], onSelect = () => {}, onPreview = () => {}, highlightedPlace = null, userCoords = null, locationText = "" }) {
+export default function MapPlanner({ options = [], selectedChain = [], onSelect = () => { }, onPreview = () => { }, highlightedPlace = null, userCoords = null, locationText = "", className }) {
   const mapRef = useRef(null);
   const markerRefs = useRef({});
 
@@ -242,7 +242,7 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
   // Open popup when highlightedPlace changes
   useEffect(() => {
     if (!mapRef.current) return;
-    
+
     // Close all popups if no place is highlighted
     if (!highlightedPlace) {
       Object.values(markerRefs.current).forEach((marker) => {
@@ -256,16 +256,16 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
       });
       return;
     }
-    
+
     // Small delay to prevent rapid popup opens on hover
     const timeoutId = setTimeout(() => {
       if (!highlightedPlace || !mapRef.current) return;
-      
+
       // Normalize highlighted place for matching
       const hlLat = highlightedPlace.lat ?? highlightedPlace.latitude ?? highlightedPlace.raw?.lat;
       const hlLng = highlightedPlace.lng ?? highlightedPlace.longitude ?? highlightedPlace.raw?.lng;
       const hlTitle = (highlightedPlace.title || highlightedPlace.name || "").toLowerCase().trim();
-      
+
       // Find the marker for the highlighted place
       let matchedIdx = -1;
       for (let idx = 0; idx < normalizedOptions.length; idx++) {
@@ -275,27 +275,27 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
           const latMatch = hlLat != null && Math.abs(o.lat - Number(hlLat)) < 0.0001;
           const lngMatch = hlLng != null && Math.abs(o.lng - Number(hlLng)) < 0.0001;
           const titleMatch = hlTitle && (o.title || "").toLowerCase().trim() === hlTitle;
-          
+
           if ((latMatch && lngMatch) || titleMatch) {
             matchedIdx = idx;
             break;
           }
         }
       }
-      
+
       // If we found a match, open the popup
       if (matchedIdx >= 0) {
         const markerKey = `opt-${matchedIdx}`;
         const marker = markerRefs.current[markerKey];
         const option = normalizedOptions[matchedIdx];
-        
+
         if (option) {
           // Only pan if marker is not already visible in viewport (to avoid unnecessary movement)
           const currentCenter = mapRef.current.getCenter();
           const currentZoom = mapRef.current.getZoom();
           const markerLatLng = L.latLng(option.lat, option.lng);
           const distance = currentCenter.distanceTo(markerLatLng);
-          
+
           // Only pan if marker is more than 500m away from center, and preserve zoom level
           if (distance > 500) {
             mapRef.current.setView([option.lat, option.lng], currentZoom, {
@@ -303,7 +303,7 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
               duration: 0.5
             });
           }
-          
+
           // Try to open popup via ref
           if (marker && marker.openPopup) {
             try {
@@ -338,12 +338,12 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
         }
       }
     }, 100); // 100ms delay for hover
-    
+
     return () => clearTimeout(timeoutId);
   }, [highlightedPlace, normalizedOptions]);
 
   return (
-    <div className="w-full h-[520px] md:h-[640px] rounded-xl overflow-hidden shadow">
+    <div className={className || "w-full h-[520px] md:h-[640px] rounded-xl overflow-hidden shadow"}>
       <MapContainer
         key={mapKey}
         center={center}
@@ -398,9 +398,9 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
           if (o.lat == null || o.lng == null) return null;
           const markerKey = `opt-${idx}`;
           return (
-            <MarkerWithRef 
-              key={markerKey} 
-              position={[o.lat, o.lng]} 
+            <MarkerWithRef
+              key={markerKey}
+              position={[o.lat, o.lng]}
               icon={defaultIcon}
               ref={(ref) => {
                 if (ref) {

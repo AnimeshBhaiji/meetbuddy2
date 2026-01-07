@@ -23,10 +23,9 @@ const Navbar = () => {
   const isActive = (path) => currentPath === path;
 
   const navItemStyle = (path) =>
-    `text-sm px-4 py-2 rounded-xl transition-all duration-200 ${
-      isActive(path)
-        ? "bg-blue-100/80 text-blue-700 font-semibold shadow-sm"
-        : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+    `text-sm px-4 py-2 rounded-xl transition-all duration-200 ${isActive(path)
+      ? "bg-blue-100/80 text-blue-700 font-semibold shadow-sm"
+      : "text-gray-700 hover:bg-blue-50 hover:text-blue-600"
     }`;
 
   const handleProfileClick = () => {
@@ -37,12 +36,12 @@ const Navbar = () => {
     <nav className="flex justify-between items-center px-6 py-4 bg-white/60 backdrop-blur-md border border-white/40 shadow-sm shadow-black/5 transition-all duration-300 mx-4 md:mx-8 lg:mx-16 rounded-2xl mt-4">
       {/* Left side menu */}
       <div className="flex gap-4">
-        <Link to="/">
-          <Button variant="ghost" className={navItemStyle("/")}>
-            Home
+        <Link to={isLoggedIn ? "/home" : "/"}>
+          <Button variant="ghost" className={navItemStyle(isLoggedIn ? "/home" : "/")}>
+            {isLoggedIn ? "Dashboard" : "Home"}
           </Button>
         </Link>
-<Link to="/planner">
+        <Link to="/planner">
           <Button variant="ghost" className={navItemStyle("/planner")}>
             Planner
           </Button>

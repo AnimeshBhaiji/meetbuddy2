@@ -39,7 +39,7 @@ const Login = () => {
       });
 
       console.log('Login response status:', response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Login error response:', errorText);
@@ -48,12 +48,12 @@ const Login = () => {
 
       const data = await response.json();
       console.log('Login successful, user data:', data);
-      
+
       // Handle successful login
       localStorage.setItem('user', JSON.stringify(data));
       resetAnswers();
-      navigate('/questionnaire-stage1');
-      
+      navigate('/home');
+
     } catch (error) {
       console.error('Login error:', error);
       setError(error.message || 'An error occurred during login. Please try again.');

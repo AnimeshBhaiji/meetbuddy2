@@ -13,6 +13,8 @@ import QuestionnaireStage1 from "./pages/QuestionnaireStage1";
 import QuestionnaireStage2 from "./pages/QuestionnaireStage2";
 import QuestionnaireSummary from "./pages/QuestionnaireSummary";
 import CalendarPage from "./pages/CalendarPage";
+import HomePage from "./pages/HomePage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
@@ -29,6 +31,14 @@ function App() {
         <Route path="/questionnaire-stage2" element={<QuestionnaireStage2 />} />
         <Route path="/questionnaire-summary" element={<QuestionnaireSummary />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route
+          path="/home"
+          element={
+            <ProtectedRoute>
+              <HomePage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </div>
   );

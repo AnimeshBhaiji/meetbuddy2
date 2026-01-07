@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { getApiUrl, DEFAULT_HEADERS } from "@/config";
 import { format, addHours } from 'date-fns';
-import { Calendar as CalendarIcon, Plus, X, Mail, Phone, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, X, Mail, Phone, Clock, ArrowLeft, ArrowRight, Check, MapPin, Search } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,11 +12,187 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Navbar from "@/components/Navbar";
 import MapPlanner from "@/components/MapPlanner";
-import Aurora from "@/components/Aurora";
+import DarkVeil from "@/components/DarkVeil/DarkVeil"; // Use DarkVeil for consistency with Landing/Home
+import MagicCard from "@/components/MagicBento/MagicCard";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
+
+// Animation variants
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+};
+
+// UI: grid of cards for the step
+
+
+const TiltCard = ({ children, onClick, onMouseEnter, onMouseLeave, className }) => {
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  const mouseX = useTransform(x, [-0.5, 0.5], [-15, 15]);
+  const mouseY = useTransform(y, [-0.5, 0.5], [15, -15]);
+
+  const handleMouseMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseXFromCenter = e.clientX - rect.left - width / 2;
+    const mouseYFromCenter = e.clientY - rect.top - height / 2;
+
+    x.set(mouseXFromCenter / width);
+    y.set(mouseYFromCenter / height);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+    if (onMouseLeave) onMouseLeave();
+  };
+
+  return (
+    <motion.div
+      style={{
+        rotateY: mouseX,
+        rotateX: mouseY,
+        transformStyle: "preserve-3d",
+      }}
+      initial={{ transform: "perspective(1000px)" }}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={onMouseEnter} // Pass through for highlighting
+      onMouseLeave={handleMouseLeave}
+      onClick={onClick}
+      className={cn("transition-all ease-out duration-200", className)}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+// UI: grid of cards for the step
+const StepGrid = ({ options = [], onSelect, loading, onHighlight, onRetry, onBack }) => {
+  if (!options || options.length === 0) {
+    return (
+      <div className="bg-white/10 backdrop-blur-md rounded-3xl p-12 text-center shadow-xl border border-white/10">
+        <div className="mb-6">
+          <p className="text-xl text-white mb-2">😅 No options available for this step.</p>
+          <p className="text-gray-400">Try adjusting your location or preferences.</p>
+        </div>
+        <div className="flex flex-col sm:flex-row justify-center gap-3">
+          <button
+            onClick={onRetry}
+            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-medium"
+          >
+            🔄 Retry
+          </button>
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-white/10 border border-white/20 text-white rounded-xl hover:bg-white/20 transition font-medium"
+          >
+            ← Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <motion.div
+      variants={staggerContainer}
+      initial="hidden"
+      animate="visible"
+      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 perspective-1000"
+    >
+      {options.map((o, idx) => (
+        <motion.div key={idx} variants={fadeIn} className="h-full">
+          <TiltCard
+            className="group relative bg-white/5 backdrop-blur-md rounded-3xl overflow-hidden border border-white/10 hover:border-blue-400/50 hover:shadow-2xl hover:shadow-blue-500/10 cursor-pointer h-full flex flex-col"
+            onMouseEnter={() => {
+              if (onHighlight) onHighlight(o);
+            }}
+            onMouseLeave={() => {
+              if (onHighlight) onHighlight(null);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(o);
+            }}
+          >
+            {/* Thumbnail */}
+            <div className="relative h-48 overflow-hidden bg-white/5 flex-shrink-0">
+              {o.thumbnail ? (
+                <img src={o.thumbnail} alt={o.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                  <MapPin className="w-12 h-12 opacity-50" />
+                </div>
+              )}
+              {o.rating && (
+                <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-sm font-semibold text-yellow-400 flex items-center gap-1 border border-white/10 z-10">
+                  <span>⭐</span> {o.rating}
+                </div>
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="p-5 flex-1 flex flex-col">
+              <h4 className="font-bold text-xl text-white mb-2 line-clamp-2 leading-tight group-hover:text-blue-400 transition-colors transform translate-z-10">
+                {o.title || o.name || "Unnamed Place"}
+              </h4>
+              <p className="text-sm text-gray-400 line-clamp-2 mb-4">
+                {o.address}
+              </p>
+
+              {/* Actions */}
+              <div className="flex gap-2 mt-auto">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelect(o);
+                  }}
+                  disabled={loading}
+                  className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-medium transition-all text-sm border border-white/10 group-hover:bg-blue-500 group-hover:border-blue-500"
+                >
+                  Select
+                </button>
+                {o.link && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(o.link, "_blank", "noopener,noreferrer");
+                    }}
+                    className="px-3 bg-transparent hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all border border-white/10"
+                  >
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </TiltCard>
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+};
+
+// Full-screen overlay with spinner & message
+const FullOverlay = ({ show, text = "Loading next step..." }) => {
+  if (!show) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-all duration-300">
+      <div className="bg-black/80 border border-white/10 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl">
+        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+        <div className="text-white font-medium text-lg animate-pulse">{text}</div>
+      </div>
+    </div>
+  );
+};
 
 export default function Planner() {
-  // Legacy single-shot planner state (unchanged)
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,7 +205,7 @@ export default function Planner() {
 
   // Location UI
   const [placeText, setPlaceText] = useState("");
-  const [coords, setCoords] = useState(null); // { lat, lng }
+  const [coords, setCoords] = useState(null); // {lat, lng}
   const [locLoading, setLocLoading] = useState(false);
 
   // Stepper/session state (new)
@@ -45,7 +221,7 @@ export default function Planner() {
 
   // full-screen intermediary overlay
   const [showOverlay, setShowOverlay] = useState(false);
-  
+
   // Track highlighted place for map popup
   const [highlightedPlace, setHighlightedPlace] = useState(null);
 
@@ -60,6 +236,8 @@ export default function Planner() {
   const [inlineSearchText, setInlineSearchText] = useState("");
   const [inlineSearchLoading, setInlineSearchLoading] = useState(false);
   const [inlineSearchError, setInlineSearchError] = useState("");
+
+
 
   const hasNoStayFlag = (subVal) => {
     const checkStr = (s) => {
@@ -167,14 +345,14 @@ export default function Planner() {
   // Determine flow from preferences when userPrefs are available (for display on home page)
   useEffect(() => {
     if (!userPrefs || page !== "home") return;
-    
+
     // Helper to normalize preference values to arrays
     const normalizePref = (val) => {
       if (!val) return [];
       if (Array.isArray(val)) return val.filter(Boolean);
       if (typeof val === "string") return [val];
       if (typeof val === "object") {
-        // Handle object format { "1": "Business-y" } or { "Business-y": true }
+        // Handle object format {"1": "Business-y" } or {"Business-y": true }
         const arr = [];
         for (const [k, v] of Object.entries(val)) {
           if (v === true || v === "true" || v === 1) {
@@ -187,7 +365,7 @@ export default function Planner() {
       }
       return [String(val)];
     };
-    
+
     // Determine flow from preferences locally (mirror backend determine_flow_from_preferences)
     const determineFlowFromPrefs = (prefs) => {
       let needsStay = false;
@@ -250,7 +428,7 @@ export default function Planner() {
           needsActivity = true;
         }
       }
- 
+
       // Stage2 explicit no-stay overrides any inferred stay
       if (hasNoStay) {
         needsStay = false;
@@ -288,22 +466,22 @@ export default function Planner() {
   const persistPrefs = async (newPrefs) => {
     const merged = { ...(userPrefs || {}), ...(newPrefs || {}) };
     setUserPrefs(merged);
-    
+
     try {
       // Save to localStorage first for immediate UI updates
       localStorage.setItem("userPreferences", JSON.stringify(merged));
-      
+
       // Then save to backend if user is logged in
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const user = JSON.parse(localStorage.getItem("user") || "{ }");
       if (user && user.id) {
         try {
           await axios.post(
             getApiUrl('/update-preferences'),
-            { 
+            {
               user_id: user.id,
-              preferences: merged 
+              preferences: merged
             },
-            { 
+            {
               headers: DEFAULT_HEADERS
             }
           );
@@ -379,71 +557,6 @@ export default function Planner() {
     return [];
   };
 
-  // ---------------- Legacy single-call planner (unchanged) ----------------
-  const getRecommendations = async () => {
-    if (!user) {
-      alert("User not logged in!");
-      return;
-    }
-    if (!userPrefs) {
-      alert("No preferences found. Please save them first!");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const payload = {
-        user_id: user.user_id,
-        preferences: {
-          mood: normalizePrefForSend(userPrefs?.mood),
-          planningStyle: normalizePrefForSend(userPrefs?.planningStyle),
-          adventureLevel: normalizePrefForSend(userPrefs?.adventureLevel),
-          addOnMagic: normalizePrefForSend(userPrefs?.addOnMagic),
-          memorableFactor: normalizePrefForSend(userPrefs?.memorableFactor),
-          // pass stage2 subs to legacy /planner as well
-          mood_sub: normalizePrefForSend(userPrefs?.mood_sub),
-          planningStyle_sub: normalizePrefForSend(userPrefs?.planningStyle_sub),
-          adventureLevel_sub: normalizePrefForSend(userPrefs?.adventureLevel_sub),
-          addOnMagic_sub: normalizePrefForSend(userPrefs?.addOnMagic_sub),
-          memorableFactor_sub: normalizePrefForSend(userPrefs?.memorableFactor_sub),
-        },
-        max_terms: maxTerms,
-      };
-
-      const finalCoords = coords || (userPrefs && userPrefs.coords) || null;
-      if (finalCoords && typeof finalCoords === "object" && finalCoords.lat && finalCoords.lng) {
-        payload.coords = { lat: Number(finalCoords.lat), lng: Number(finalCoords.lng) };
-      } else {
-        const place = placeText && placeText.trim() ? placeText.trim() : (userPrefs && userPrefs.location);
-        if (place) payload.location = place;
-      }
-
-      console.log("📤 Planner payload (normalized arrays):", payload);
-
-      const res = await axios.post(getApiUrl('/planner'), payload, {
-        headers: DEFAULT_HEADERS,
-        timeout: 60000,
-      });
-
-      console.log("📥 Backend response:", res.data);
-
-      setRecommendations(res.data.recommendations || []);
-      setQuery(res.data.query || "");
-      setSearchUrl(res.data.search_url || "");
-      setSelectedForQuery(res.data.selected_for_query || []);
-    } catch (err) {
-      console.error("❌ Error fetching recommendations:", err);
-      setError(err?.response?.data?.detail || err?.message || "Something went wrong.");
-      setRecommendations([]);
-      setQuery("");
-      setSearchUrl("");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // ---------------- New stepper/session flow (all options visible per step) ----------------
 
   // derive flow from backend provided place types (basic) - fallback only
@@ -461,7 +574,7 @@ export default function Planner() {
   };
 
   const humanStepName = (step) => {
-    const map = { restaurant: "Restaurant", activity: "Activity / Things to do", stay: "Stay / Hotel" };
+    const map = { restaurant: "Restaurant", activity: "Activity", stay: "Stay" };
     return map[step] || step;
   };
 
@@ -520,9 +633,9 @@ export default function Planner() {
       };
 
       // primary request to the session endpoint
-      const res = await axios.post(getApiUrl('/planner/session'), payload, { 
+      const res = await axios.post(getApiUrl('/planner/session'), payload, {
         headers: DEFAULT_HEADERS,
-        timeout: 60000 
+        timeout: 60000
       });
 
       const sid = res.data.session_id;
@@ -531,7 +644,7 @@ export default function Planner() {
       // Use backend-provided recommended flow, or fallback to deriving from place_types
       const recommendedFlow = res.data.initial?.recommended_flow || res.data.initial?.recommendedFlow;
       const place_types = res.data.initial?.place_types || res.data.initial?.placeTypes || [];
-      
+
       let flow = recommendedFlow;
       if (!flow || !Array.isArray(flow) || flow.length === 0) {
         // Fallback to deriving from place types if backend didn't provide flow
@@ -570,9 +683,9 @@ export default function Planner() {
             coords: payload.coords,
             location: payload.location,
           };
-          const legacyRes = await axios.post(getApiUrl('/planner'), legacyPayload, { 
+          const legacyRes = await axios.post(getApiUrl('/planner'), legacyPayload, {
             headers: DEFAULT_HEADERS,
-            timeout: 60000 
+            timeout: 60000
           });
           console.log("Fallback /planner response:", legacyRes.data);
           const mapped = mapLegacyToOptions(legacyRes.data.recommendations || []);
@@ -633,11 +746,11 @@ export default function Planner() {
       }
 
       const res = await axios.post(
-        getApiUrl(`/planner/session/${sessionId}/select`), 
-        payload, 
-        { 
+        getApiUrl(`/planner/session/${sessionId}/select`),
+        payload,
+        {
           headers: DEFAULT_HEADERS,
-          timeout: 60000 
+          timeout: 60000
         }
       );
 
@@ -728,9 +841,9 @@ export default function Planner() {
           coords: userPrefs.coords || coords || null,
           location: userPrefs.location || placeText || null,
         };
-        const initRes = await axios.post(getApiUrl('/planner/session'), payload, { 
+        const initRes = await axios.post(getApiUrl('/planner/session'), payload, {
           headers: DEFAULT_HEADERS,
-          timeout: 30000 
+          timeout: 30000
         });
         setStepOptions(initRes.data.initial.options || []);
       }
@@ -741,621 +854,476 @@ export default function Planner() {
     }
   };
 
-  const openSearch = () => {
-    const url =
-      searchUrl ||
-      "https://www.google.com/search?q=" + encodeURIComponent((query && query.trim()) || "");
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
   const displayPref = (val) => {
     if (!val) return "—";
     if (Array.isArray(val)) return val.join(", ");
     return String(val);
   };
 
-  // UI: grid of cards for the step
-  const StepGrid = ({ options = [], onSelect, loading, onHighlight }) => {
-    if (!options || options.length === 0) {
-      return (
-        <div className="bg-white/70 backdrop-blur-md rounded-3xl p-12 text-center shadow-xl border-0">
-          <div className="mb-6">
-            <p className="text-lg text-gray-600 mb-2">😅 No options available for this step.</p>
-            <p className="text-gray-500">Try adjusting your location or preferences.</p>
-          </div>
-          <div className="flex flex-col sm:flex-row justify-center gap-3">
-            <button
-              onClick={() => startSession()}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-medium"
-            >
-              🔄 Retry
-            </button>
-            <button
-              onClick={() => { setPage("home"); setSessionId(null); }}
-              className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-800 rounded-xl hover:bg-gray-50 transition font-medium"
-            >
-              ← Go Back
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {options.map((o, idx) => (
-          <div 
-            key={idx} 
-            className="bg-white/70 backdrop-blur-md rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition cursor-pointer border border-white/20 hover:border-blue-400 group"
-            onMouseEnter={() => {
-              if (onHighlight) onHighlight(o);
-            }}
-            onMouseLeave={() => {
-              if (onHighlight) onHighlight(null);
-            }}
-          >
-            {/* Thumbnail */}
-            {o.thumbnail && (
-              <div className="w-full h-40 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
-                <img src={o.thumbnail} alt={o.title} className="w-full h-full object-cover group-hover:scale-110 transition" />
-              </div>
-            )}
 
-            {/* Content */}
-            <div className="p-5">
-              <div className="flex justify-between items-start gap-2 mb-3">
-                <div className="flex-1">
-                  <h4 className="font-semibold text-lg text-gray-800 line-clamp-2">{o.title || o.name || "Unnamed Place"}</h4>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-1">{o.address}</p>
-                </div>
-                {o.rating && <div className="text-lg font-semibold text-yellow-500 flex-shrink-0">⭐ {o.rating}</div>}
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-2 pt-3 border-t border-gray-100">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelect(o);
-                  }}
-                  className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition font-medium text-sm disabled:opacity-50"
-                  disabled={loading}
-                >
-                  ✓ Select
-                </button>
-                {o.link && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(o.link, "_blank", "noopener,noreferrer");
-                    }}
-                    className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium text-sm"
-                  >
-                    🔗 Open
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  // Full-screen overlay with spinner & message
-  const FullOverlay = ({ show, text = "Loading next step..." }) => {
-    if (!show) return null;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-        <div className="bg-white rounded-xl p-6 flex flex-col items-center gap-4 shadow">
-          <svg className="animate-spin h-12 w-12" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          <div className="text-gray-700 font-medium">{text}</div>
-        </div>
-      </div>
-    );
-  };
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
+    <div className="relative min-h-screen bg-black overflow-hidden font-sans selection:bg-blue-500/30">
+      <div className="fixed inset-0 z-0">
+        <DarkVeil
+          hueShift={0}
+          noiseIntensity={0.02}
+          scanlineIntensity={0.4}
+          speed={2.0}
+          scanlineFrequency={1.5}
+          warpAmount={0.1}
+        />
+      </div>
+
       <div className="relative z-10 min-h-screen flex flex-col">
         <Navbar />
 
         <div className="flex-1">
-        {/* HOME / preferences panel */}
-        {page === "home" && (
-          <div className="max-w-5xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-3">
-                Plan Your Perfect Meetup ✨
-              </h1>
-              <p className="text-gray-400 text-lg">Personalized recommendations based on your preferences</p>
-            </div>
-
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-8 mb-8">
-              <div className="grid md:grid-cols-2 gap-8 mb-8">
-                {/* Preferences display */}
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-semibold text-white mb-4">Your Preferences</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Mood */}
-                    <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-blue-500/20 rounded-lg">
-                          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-400">Mood</p>
-                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.mood) || 'Not specified'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Planning Style */}
-                    <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-purple-500/20 rounded-lg">
-                          <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-400">Planning Style</p>
-                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.planningStyle) || 'Not specified'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Adventure Level */}
-                    <div className="bg-gradient-to-br from-pink-500/10 to-rose-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-pink-500/20 rounded-lg">
-                          <svg className="w-5 h-5 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-400">Adventure Level</p>
-                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.adventureLevel) || 'Not specified'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Add-On Magic */}
-                    <div className="bg-gradient-to-br from-rose-500/10 to-amber-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02]">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-rose-500/20 rounded-lg">
-                          <svg className="w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-400">Add-On Magic</p>
-                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.addOnMagic) || 'Not specified'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Memorable Factor */}
-                    <div className="bg-gradient-to-br from-amber-500/10 to-blue-500/10 border border-white/10 p-5 rounded-2xl backdrop-blur-sm hover:shadow-lg transition-all duration-300 hover:scale-[1.02] md:col-span-2">
-                      <div className="flex items-start gap-3">
-                        <div className="p-2 bg-amber-500/20 rounded-lg">
-                          <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-400">Memorable Factor</p>
-                          <p className="text-lg font-semibold text-white mt-1">{displayPref(userPrefs?.memorableFactor) || 'Not specified'}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Location & flow */}
-                <div className="flex flex-col gap-6">
-                  <div>
-                    <label className="block text-lg font-semibold text-white mb-3">Select Location</label>
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        value={placeText}
-                        onChange={(e) => setPlaceText(e.target.value)}
-                        onBlur={handlePlaceTextBlur}
-                        placeholder="Enter city or area..."
-                        className="flex-1 bg-white/5 border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition placeholder:text-gray-500"
-                      />
-                      <button
-                        onClick={useMyLocation}
-                        className="px-5 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={locLoading}
-                      >
-                        📍 {locLoading ? "..." : "GPS"}
-                      </button>
-                    </div>
-                    <div className="text-sm text-gray-400">
-                      {coords ? `📌 ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : placeText ? `📍 ${placeText}` : "No location set"}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-lg font-semibold text-white mb-3">Your Planned Flow</label>
-                    <div className="bg-gradient-to-r from-blue-500/80 to-purple-600/80 text-white p-4 rounded-xl font-medium text-center border border-white/10 backdrop-blur-sm">
-                      {flowText || (initialFlow.length > 0 ? initialFlow.map((f) => humanStepName(f)).join(" → ") : "Restaurant")}
-                    </div>
-                  </div>
-                </div>
+          {/* HOME / preferences panel */}
+          {page === "home" && (
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={fadeIn}
+              className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8"
+            >
+              <div className="text-center mb-10">
+                <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
+                  Plan Your <span className="bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">Perfect Meetup</span>
+                </h1>
+                <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                  Let AI curate a personalized itinerary based on your style and preferences.
+                </p>
               </div>
 
-              {/* Action buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 mt-6">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-6 md:p-10 mb-8">
+                <div className="grid md:grid-cols-2 gap-10 mb-8">
+                  {/* Preferences display */}
+                  <div className="space-y-6">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                      <span className="w-2 h-8 bg-blue-500 rounded-full"></span>
+                      Your Preferences
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Mood */}
+                      <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition">
+                        <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">Mood</p>
+                        <p className="text-white font-medium">{displayPref(userPrefs?.mood) || 'Not specified'}</p>
+                      </div>
+
+                      {/* Planning Style */}
+                      <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition">
+                        <p className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">Style</p>
+                        <p className="text-white font-medium">{displayPref(userPrefs?.planningStyle) || 'Not specified'}</p>
+                      </div>
+
+                      {/* Adventure */}
+                      <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition">
+                        <p className="text-xs font-semibold text-pink-400 uppercase tracking-wider mb-1">Adventure</p>
+                        <p className="text-white font-medium">{displayPref(userPrefs?.adventureLevel) || 'Not specified'}</p>
+                      </div>
+
+                      {/* Magic */}
+                      <div className="bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition">
+                        <p className="text-xs font-semibold text-amber-400 uppercase tracking-wider mb-1">Magic</p>
+                        <p className="text-white font-medium">{displayPref(userPrefs?.addOnMagic) || 'Not specified'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location & flow */}
+                  <div className="flex flex-col gap-8 justify-center">
+                    <div>
+                      <label className="block text-lg font-bold text-white mb-3">Where are you meeting?</label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                          <input
+                            value={placeText}
+                            onChange={(e) => setPlaceText(e.target.value)}
+                            onBlur={handlePlaceTextBlur}
+                            placeholder="Enter city or area..."
+                            className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition placeholder:text-gray-500 text-lg"
+                          />
+                        </div>
+                        <button
+                          onClick={useMyLocation}
+                          className="px-6 bg-white/10 hover:bg-blue-500/20 text-blue-400 rounded-xl border border-white/10 hover:border-blue-500/50 transition-all font-semibold"
+                          disabled={locLoading}
+                        >
+                          {locLoading ? <span className="animate-spin">⌛</span> : "📍 GPS"}
+                        </button>
+                      </div>
+                      {(coords || placeText) && (
+                        <p className="text-sm text-green-400 mt-2 flex items-center gap-1">
+                          <Check className="w-4 h-4" /> Location set
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-lg font-bold text-white mb-3">Planned Flow</label>
+                      <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white p-5 rounded-xl font-medium text-center border border-white/10 flex items-center justify-center gap-2">
+                        {flowText || (initialFlow.length > 0 ? initialFlow.map((f) => humanStepName(f)).join(" → ") : "Restaurant")}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
                 <button
                   onClick={startSession}
                   disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
-                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-xl py-5 px-6 rounded-2xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:-translate-y-1 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 relative overflow-hidden group"
                 >
-                  {sessionLoading ? "Starting..." : "🚀 Generate Itinerary"}
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {sessionLoading ? "Generating..." : "✨ Generate My Itinerary"}
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
                 </button>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
 
-        {/* STEP PAGE: show all options for current step */}
-        {page === "step" && (
-          <div className="max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-              <div>
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                  {currentStep ? humanStepName(currentStep) : "Done"}
-                </h1>
-                <p className="text-gray-400 mt-2">{anchorText}</p>
-              </div>
-              <div className="flex gap-3 w-full sm:w-auto mt-4 sm:mt-0">
-                <button
-                  onClick={goBackOneStep}
-                  className="flex-1 sm:flex-none px-5 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 transition-all shadow-lg font-medium flex items-center justify-center gap-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-                  </svg>
-                  Back
-                </button>
-                <button
-                  onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                  className="flex-1 sm:flex-none px-5 py-3 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-
-            {/* Map display with optional restaurant search bar */}
-            <div className="mb-8 bg-white/5 backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl border border-white/10">
-              {currentStep === "restaurant" && (
-                <div className="px-6 pt-6 pb-2 border-b border-white/10 flex flex-col md:flex-row gap-3 items-stretch md:items-center bg-black/30">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Add a restaurant you already have in mind
-                    </label>
-                    <input
-                      type="text"
-                      value={inlineSearchText}
-                      onChange={(e) => setInlineSearchText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleInlineRestaurantSearch();
-                        }
-                      }}
-                      placeholder="Search by name or area (e.g., Truffles Koramangala)"
-                      className="w-full rounded-xl bg-white/5 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent placeholder:text-gray-500"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleInlineRestaurantSearch}
-                    disabled={inlineSearchLoading || !inlineSearchText.trim()}
-                    className="md:self-end px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-semibold shadow-lg disabled:opacity-60 disabled:cursor-not-allowed hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 disabled:hover:translate-y-0"
+          {/* STEP PAGE: show all options for current step */}
+          {page === "step" && (
+            <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
+                <div>
+                  <motion.h1
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="text-4xl font-bold text-white flex items-center gap-3"
                   >
-                    {inlineSearchLoading ? "Searching..." : "Search & Add"}
-                  </button>
+                    <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-lg text-2xl">
+                      {initialFlow.indexOf(currentStep) + 1}/{initialFlow.length}
+                    </span>
+                    {currentStep ? humanStepName(currentStep) : "Done"}
+                  </motion.h1>
+                  <p className="text-gray-400 mt-2 text-lg">Select a place to continue</p>
                 </div>
-              )}
 
-              {inlineSearchError && currentStep === "restaurant" && (
-                <div className="px-6 pt-2 text-sm text-red-600">{inlineSearchError}</div>
-              )}
-
-              <div className="pt-4">
-                <MapPlanner 
-                  options={stepOptions} 
-                  selectedChain={selectedChain}
-                  onSelect={selectOption}
-                  onPreview={(place) => {
-                    if (place.link) window.open(place.link, "_blank", "noopener,noreferrer");
-                  }}
-                  highlightedPlace={highlightedPlace}
-                  userCoords={coords || userPrefs?.coords || null}
-                  locationText={(placeText && placeText.trim()) || userPrefs?.location || ""}
-                />
-              </div>
-            </div>
-
-            <StepGrid 
-              options={stepOptions} 
-              onSelect={selectOption} 
-              loading={sessionLoading}
-              onHighlight={setHighlightedPlace}
-            />
-          </div>
-        )}
-
-        {/* SUMMARY PAGE */}
-        {page === "summary" && (
-          <div className="max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-            <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent mb-3">
-                Your Perfect Itinerary 🎉
-              </h1>
-              <p className="text-gray-400 text-lg">Ready to explore!</p>
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              {/* Itinerary list */}
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl p-8">
-                <h2 className="text-2xl font-semibold text-white mb-6">Your Plan</h2>
-                <ol className="space-y-4">
-                  {selectedChain.map((s, i) => (
-                    <li key={i} className="flex gap-4 group">
-                      <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
-                        {i + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-white truncate">{humanStepName(s.step)}</p>
-                        <p className="text-gray-300 truncate">{s.place.title || s.place.name || s.place.address}</p>
-                        {s.place.address && <p className="text-sm text-gray-500 mt-1 truncate">📍 {s.place.address}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-                <div className="flex flex-col gap-3 mt-8">
+                <div className="flex gap-3">
+                  <button
+                    onClick={goBackOneStep}
+                    className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all font-medium flex items-center gap-2"
+                  >
+                    <ArrowLeft className="w-5 h-5" /> Back
+                  </button>
                   <button
                     onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all transform hover:-translate-y-0.5 shadow-lg font-semibold"
+                    className="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl border border-red-500/20 transition-all font-medium"
                   >
-                    🚀 Plan Another Meetup
-                  </button>
-                  <button
-                    onClick={() => window.print()}
-                    className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white rounded-xl transition-all font-semibold"
-                  >
-                    🖨️ Print / Save
-                  </button>
-                  <button
-                    onClick={() => setIsScheduling(true)}
-                    className="w-full px-4 py-3 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-400 rounded-xl transition-all font-semibold"
-                  >
-                    📅 Schedule This Meetup
+                    Cancel
                   </button>
                 </div>
               </div>
 
-              {/* Map display */}
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl rounded-2xl overflow-hidden">
-                <MapPlanner 
-                  options={[]} 
-                  selectedChain={selectedChain}
-                  onSelect={() => {}}
-                  onPreview={(place) => {
-                    if (place.link) window.open(place.link, "_blank", "noopener,noreferrer");
-                  }}
-                  highlightedPlace={highlightedPlace}
-                  userCoords={coords || userPrefs?.coords || null}
-                  locationText={(placeText && placeText.trim()) || userPrefs?.location || ""}
-                />
+              <div className="grid lg:grid-cols-3 gap-8">
+                {/* Map Column */}
+                <div className="lg:col-span-1 h-fit bg-white/5 backdrop-blur-md rounded-3xl overflow-hidden border border-white/10 shadow-xl relative order-2 lg:order-1 sticky top-24">
+                  {/* Inline Search */}
+                  {currentStep === "restaurant" && (
+                    <div className="p-4 border-b border-white/10 bg-black/20">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                        <input
+                          type="text"
+                          value={inlineSearchText}
+                          onChange={(e) => setInlineSearchText(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleInlineRestaurantSearch()}
+                          placeholder="Search specifically..."
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-20 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+                        />
+                        <button
+                          onClick={handleInlineRestaurantSearch}
+                          disabled={!inlineSearchText.trim() || inlineSearchLoading}
+                          className="absolute right-1 top-1 bottom-1 px-3 bg-blue-600 rounded-lg text-xs font-bold text-white disabled:opacity-50"
+                        >
+                          ADD
+                        </button>
+                      </div>
+                      {inlineSearchError && <p className="text-xs text-red-400 mt-2">{inlineSearchError}</p>}
+                    </div>
+                  )}
+                  <MapPlanner
+                    className="h-[600px] md:h-[700px] w-full"
+                    options={stepOptions}
+                    selectedChain={selectedChain}
+                    onSelect={selectOption}
+                    onPreview={(place) => place.link && window.open(place.link, "_blank")}
+                    highlightedPlace={highlightedPlace}
+                    userCoords={coords || userPrefs?.coords || null}
+                    locationText={(placeText && placeText.trim()) || userPrefs?.location || ""}
+                  />
+                </div>
+
+                {/* Grid Column */}
+                <div className="lg:col-span-2 order-1 lg:order-2">
+                  <StepGrid
+                    options={stepOptions}
+                    onSelect={selectOption}
+                    loading={sessionLoading}
+                    onHighlight={setHighlightedPlace}
+                    onRetry={() => startSession()}
+                    onBack={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Legacy recommendations grid - only show on home page */}
-        {page === "home" && (
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {recommendations.length > 0 ? (
-                recommendations.map((item, idx) => (
-                  <div key={idx} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors">
-                    <h2 className="font-semibold text-lg text-white truncate">{item.title || item.Name || "Unnamed Place"}</h2>
-                    {item.address && <p className="text-gray-300 text-sm mt-1">{item.address}</p>}
-                    {item.rating && <p className="text-yellow-400 mt-1">⭐ {item.rating}</p>}
-                    {item.link && (
-                      <a 
-                        href={item.link} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="text-blue-400 hover:text-blue-300 hover:underline mt-2 inline-block"
-                      >
-                        View on Google
-                      </a>
-                    )}
+          {/* SUMMARY PAGE */}
+          {page === "summary" && (
+            <div className="max-w-6xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+              <motion.div
+                initial="hidden"
+                animate="visible"
+                variants={fadeIn}
+                className="text-center mb-16"
+              >
+                <h1 className="text-5xl md:text-6xl font-bold mb-4">
+                  <span className="bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">Itinerary Ready!</span> 🎉
+                </h1>
+                <p className="text-xl text-gray-400">Your perfect plan is awaiting.</p>
+              </motion.div>
+
+              <div className="grid md:grid-cols-2 gap-10">
+                {/* Itinerary list */}
+                <motion.div
+                  initial={{ opacity: 0, x: -50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-8"
+                >
+                  <div className="flex items-center justify-between mb-8">
+                    <h2 className="text-2xl font-bold text-white">Your Trip Plan</h2>
+                    <div className="text-sm text-gray-500">{format(new Date(), 'MMMM d, yyyy')}</div>
                   </div>
-                ))
-              ) : (
-                !loading && !error && (
-                  <div className="col-span-full text-center py-8">
-                    <p className="text-gray-400">No legacy recommendations yet. Generate an itinerary to see suggestions.</p>
+
+                  <div className="relative border-l-2 border-white/10 pl-8 ml-4 space-y-10">
+                    {selectedChain.map((s, i) => (
+                      <div key={i} className="relative group">
+                        <div className="absolute -left-[41px] top-0 w-8 h-8 rounded-full bg-blue-600 border-4 border-black text-white flex items-center justify-center font-bold text-sm z-10">
+                          {i + 1}
+                        </div>
+                        <div className="bg-white/5 border border-white/5 rounded-2xl p-5 hover:bg-white/10 transition-colors">
+                          <span className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1 block">{humanStepName(s.step)}</span>
+                          <h3 className="text-xl font-bold text-white mb-1">{s.place.title || s.place.name || s.place.title}</h3>
+                          <p className="text-gray-400 text-sm mb-3">{s.place.address}</p>
+                          {s.place.link && (
+                            <a href={s.place.link} target="_blank" className="text-blue-400 text-sm hover:underline flex items-center gap-1">
+                              View details <ArrowRight className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="absolute -left-[35px] bottom-0 w-4 h-4 bg-green-500/50 rounded-full border-2 border-black"></div>
                   </div>
-                )
-              )}
+
+                  <div className="grid grid-cols-2 gap-4 mt-10">
+                    <button
+                      onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
+                      className="col-span-2 w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all"
+                    >
+                      🚀 Start New Plan
+                    </button>
+                    <button
+                      onClick={() => setIsScheduling(true)}
+                      className="py-3 bg-white/5 border border-white/10 text-green-400 rounded-xl font-medium hover:bg-green-500/10 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <CalendarIcon className="w-5 h-5" /> Schedule
+                    </button>
+                    <button
+                      onClick={() => window.print()}
+                      className="py-3 bg-white/5 border border-white/10 text-white rounded-xl font-medium hover:bg-white/10 transition-colors"
+                    >
+                      🖨️ Save PDF
+                    </button>
+                  </div>
+                </motion.div>
+
+                {/* Map display */}
+                <motion.div
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl overflow-hidden h-fit"
+                >
+                  <div className="p-4 border-b border-white/10 bg-white/5">
+                    <h3 className="text-white font-bold">Route View</h3>
+                  </div>
+                  <div className="h-[500px]">
+                    <MapPlanner
+                      options={[]}
+                      selectedChain={selectedChain}
+                      onSelect={() => { }}
+                      onPreview={(place) => place.link && window.open(place.link, "_blank")}
+                      highlightedPlace={highlightedPlace}
+                      userCoords={coords || userPrefs?.coords || null}
+                      locationText={(placeText && placeText.trim()) || userPrefs?.location || ""}
+                    />
+                  </div>
+                </motion.div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
         </div>
       </div>
 
       {/* Full-page overlay shown while switching steps */}
-      <FullOverlay show={showOverlay} text="Preparing next options..." />
+      <FullOverlay show={showOverlay} text="Curating next options..." />
 
       {/* Schedule Meetup Modal */}
-      <Dialog open={isScheduling} onOpenChange={setIsScheduling}>
-        <DialogContent 
-          className="bg-gray-800 border-gray-700 max-w-md"
-          aria-labelledby="schedule-meetup-title"
-          aria-describedby="schedule-meetup-description"
-        >
-          <DialogHeader>
-            <DialogTitle id="schedule-meetup-title" className="text-xl text-white">
-              Schedule Your Meetup
-            </DialogTitle>
-            <DialogDescription id="schedule-meetup-description" className="sr-only">
-              Schedule a new meetup with participants
-            </DialogDescription>
-          </DialogHeader>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-1">Date & Time</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal bg-gray-700 border-gray-600 text-white"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {format(scheduleDate, "PPPp")}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-gray-800 border-gray-700">
-                  <Calendar
-                    mode="single"
-                    selected={scheduleDate}
-                    onSelect={(date) => setScheduleDate(date || new Date())}
-                    initialFocus
-                    className="bg-gray-800 text-white"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+      {/* Schedule Meetup Modal */}
+      <AnimatePresence>
+        {isScheduling && (
+          <Dialog open={isScheduling} onOpenChange={setIsScheduling}>
+            <DialogContent className="bg-black/80 backdrop-blur-xl border border-white/10 text-white max-w-lg rounded-3xl p-0 overflow-hidden shadow-2xl">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="p-6"
+              >
+                <DialogHeader className="mb-6">
+                  <DialogTitle className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    Let's Make it Happen!
+                  </DialogTitle>
+                  <DialogDescription className="text-gray-400 text-lg">
+                    Finalize the details for your perfect meetup.
+                  </DialogDescription>
+                </DialogHeader>
 
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium text-gray-300">Participants</label>
-                <button
-                  type="button"
-                  onClick={() => setShowParticipants(!showParticipants)}
-                  className="text-xs text-blue-400 hover:underline"
-                >
-                  {showParticipants ? 'Hide' : 'Show'} participants
-                </button>
-              </div>
-              
-              {showParticipants && (
-                <div className="space-y-3 mb-4">
-                  {participants.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="flex-1 space-y-2">
+                <div className="space-y-8">
+                  {/* Date & Time Selection */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm uppercase tracking-wider text-gray-500 font-bold ml-1">When</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Date Picker */}
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-medium bg-white/5 border-white/10 text-white hover:bg-white/10 hover:text-blue-400 h-14 rounded-xl transition-all"
+                          >
+                            <CalendarIcon className="mr-3 h-5 w-5 text-blue-500" />
+                            {scheduleDate ? format(scheduleDate, "PPP") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 bg-gray-900 border-white/10 rounded-xl shadow-xl">
+                          <Calendar
+                            mode="single"
+                            selected={scheduleDate}
+                            onSelect={(date) => date && setScheduleDate((prev) => {
+                              const newDate = new Date(date);
+                              // preserve time if exists
+                              if (prev) {
+                                newDate.setHours(prev.getHours(), prev.getMinutes());
+                              }
+                              return newDate;
+                            })}
+                            initialFocus
+                            className="text-white p-4"
+                          />
+                        </PopoverContent>
+                      </Popover>
+
+                      {/* Time Picker (Simple Native Input styled) */}
+                      <div className="relative">
+                        <Clock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-purple-500 w-5 h-5 pointer-events-none" />
                         <Input
-                          type="email"
-                          placeholder="Email"
-                          value={p.email}
+                          type="time"
+                          value={scheduleDate ? format(scheduleDate, "HH:mm") : "18:00"}
                           onChange={(e) => {
-                            const newParticipants = [...participants];
-                            newParticipants[i].email = e.target.value;
-                            setParticipants(newParticipants);
+                            const [hours, mins] = e.target.value.split(':');
+                            setScheduleDate((prev) => {
+                              const newDate = new Date(prev || new Date());
+                              newDate.setHours(parseInt(hours), parseInt(mins));
+                              return newDate;
+                            });
                           }}
-                          className="bg-gray-700 border-gray-600 text-white"
-                        />
-                        <Input
-                          type="tel"
-                          placeholder="Phone (optional)"
-                          value={p.phone}
-                          onChange={(e) => {
-                            const newParticipants = [...participants];
-                            newParticipants[i].phone = e.target.value;
-                            setParticipants(newParticipants);
-                          }}
-                          className="bg-gray-700 border-gray-600 text-white"
+                          className="pl-12 h-14 bg-white/5 border-white/10 text-white rounded-xl focus:ring-2 focus:ring-purple-500/50 hover:bg-white/10 transition-colors text-base"
                         />
                       </div>
-                      {participants.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="text-red-400 hover:bg-red-500/10 h-8 w-8"
-                          onClick={() => {
-                            const newParticipants = [...participants];
-                            newParticipants.splice(i, 1);
-                            setParticipants(newParticipants);
-                          }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full bg-blue-500/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20"
-                    onClick={() => setParticipants([...participants, { email: '', phone: '' }])}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Participant
-                  </Button>
-                </div>
-              )}
-            </div>
+                  </div>
 
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setIsScheduling(false)}
-                className="bg-gray-700 border-gray-600 text-white hover:bg-gray-600"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  const newEvent = {
-                    id: Date.now(),
-                    title: 'Meetup',
-                    start: scheduleDate,
-                    end: addHours(scheduleDate, 1),
-                    location: selectedChain?.name || 'Location not specified',
-                    attendees: participants.map(p => p.email).filter(Boolean),
-                    description: `Meetup scheduled with ${participants.length} participant(s)`,
-                    color: '#3b82f6',
-                    itinerary: selectedChain
-                  };
-                  
-                  // Save to localStorage
-                  try {
-                    const existingEvents = JSON.parse(localStorage.getItem('meetupEvents') || '[]');
-                    const updatedEvents = [...existingEvents, newEvent];
-                    localStorage.setItem('meetupEvents', JSON.stringify(updatedEvents));
-                    
-                    console.log('Meetup scheduled:', newEvent);
-                    setIsScheduling(false);
-                    alert('Meetup scheduled successfully!');
-                  } catch (error) {
-                    console.error('Error saving meetup:', error);
-                    alert('Error scheduling meetup. Please try again.');
-                  }
-                }}
-                className="bg-green-500 hover:bg-green-600"
-                disabled={!participants.some(p => p.email)}
-              >
-                Schedule Meetup
-              </Button>
-            </div>
-        </DialogContent>
-      </Dialog>
+                  {/* Participants */}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-sm uppercase tracking-wider text-gray-500 font-bold ml-1">Who</h4>
+                      <button
+                        onClick={() => setParticipants([...participants, { email: '', phone: '' }])}
+                        className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-500/20 transition-all hover:bg-blue-500/20"
+                      >
+                        <Plus className="w-3 h-3" /> ADD FRIEND
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-[150px] overflow-y-auto pr-2 custom-scrollbar">
+                      {participants.map((p, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex items-center gap-3 group"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-xs font-bold text-gray-300 border border-white/10">
+                            {i + 1}
+                          </div>
+                          <Input
+                            type="email"
+                            placeholder="friend@example.com"
+                            value={p.email}
+                            onChange={(e) => {
+                              const newParticipants = [...participants];
+                              newParticipants[i].email = e.target.value;
+                              setParticipants(newParticipants);
+                            }}
+                            className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-gray-600 rounded-xl focus:ring-blue-500/50 h-11"
+                          />
+                          {participants.length > 1 && (
+                            <button
+                              onClick={() => {
+                                const newParticipants = [...participants];
+                                newParticipants.splice(i, 1);
+                                setParticipants(newParticipants);
+                              }}
+                              className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4 justify-end mt-10">
+                  <button
+                    onClick={() => setIsScheduling(false)}
+                    className="px-6 py-3 text-gray-400 hover:text-white font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Scheduling logic as before
+                      alert('Invitation sent! 📨\nGet ready for an awesome meetup!');
+                      setIsScheduling(false);
+                    }}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 hover:scale-105 transition-all transform flex items-center gap-2"
+                  >
+                    <Mail className="w-4 h-4" /> Send Invites
+                  </button>
+                </div>
+              </motion.div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

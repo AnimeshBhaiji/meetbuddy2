@@ -5,6 +5,7 @@ import { useInView } from "react-intersection-observer";
 import { Calendar, MapPin, Users, Utensils, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import DarkVeil from "@/components/DarkVeil/DarkVeil";
 
 // Animation variants
@@ -254,47 +255,7 @@ const LandingPage = () => {
         </section>
 
         {/* Footer */}
-        <footer className="bg-black/80 border-t border-white/10 py-12 px-4">
-          <div className="max-w-6xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
-              <div>
-                <h3 className="text-xl font-bold text-white mb-4">MeetBuddy</h3>
-                <p className="text-gray-400">Making meetups simple, fun, and memorable.</p>
-              </div>
-              <div>
-                <h4 className="text-white font-semibold mb-4">Features</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Scheduling</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Location Finder</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Restaurant Discovery</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Group Planning</a></li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-white font-semibold mb-4">Company</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">About Us</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Careers</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Blog</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Contact</a></li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-white font-semibold mb-4">Legal</h4>
-                <ul className="space-y-2">
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Privacy Policy</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Terms of Service</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition-colors">Cookie Policy</a></li>
-                </ul>
-              </div>
-            </div>
-            <div className="pt-8 border-t border-white/10">
-              <p className="text-center text-gray-500 text-sm">
-                &copy; {new Date().getFullYear()} MeetBuddy. All rights reserved.
-              </p>
-            </div>
-          </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );

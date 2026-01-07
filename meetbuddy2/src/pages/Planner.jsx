@@ -1123,16 +1123,16 @@ export default function Planner() {
 
                   <div className="grid grid-cols-2 gap-4 mt-10">
                     <button
-                      onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                      className="col-span-2 w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all"
+                      onClick={() => setIsScheduling(true)}
+                      className="col-span-2 w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
                     >
-                      🚀 Start New Plan
+                      <CalendarIcon className="w-5 h-5" /> Schedule Meetup
                     </button>
                     <button
-                      onClick={() => setIsScheduling(true)}
-                      className="py-3 bg-white/5 border border-white/10 text-green-400 rounded-xl font-medium hover:bg-green-500/10 transition-colors flex items-center justify-center gap-2"
+                      onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
+                      className="py-3 bg-white/5 border border-white/10 text-white rounded-xl font-medium hover:bg-white/10 transition-colors"
                     >
-                      <CalendarIcon className="w-5 h-5" /> Schedule
+                      🚀 Start New Plan
                     </button>
                     <button
                       onClick={() => window.print()}

@@ -110,8 +110,8 @@ const AboutUs = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
                 {[
-                  { name: 'Darrel', role: 'Founder', bio: 'Visionary leader driving MeetBuddy\'s mission forward' },
-                  { name: 'Sree Devi', role: 'Founder', bio: 'Passionate about creating meaningful connections' },
+                  { name: 'Sree Devi', role: 'Founder', bio: 'Visionary leader driving MeetBuddy\'s mission forward' },
+                  { name: 'Darrel', role: 'Co-Founder', bio: 'Passionate about creating meaningful connections' },
                   { name: 'Animesh Bhaiji', role: 'Lead Developer', bio: 'Full-stack engineer building seamless experiences' }
                 ].map((member, index) => (
                   <motion.div

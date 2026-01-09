@@ -20,23 +20,18 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # -------- CORS --------
-# Add your ngrok URL here (replace with your actual ngrok URL)
-# main.py - Update CORS settings
-NGROK_URL = "https://a202eba53520.ngrok-free.app"
-
+# -------- CORS --------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Local development
         "http://127.0.0.1:5173",  # Alternative localhost
-        "https://a202eba53520.ngrok-free.app",  # Your ngrok URL
-        "http://a202eba53520.ngrok-free.app"   # HTTP version for ngrok
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    allow_origin_regex=r"https?://[a-zA-Z0-9-]+\.ngrok-free\.app"  # Allow all ngrok subdomains
+    allow_origin_regex=r"https?://.*\.ngrok-free\.app"  # Allow ALL ngrok subdomains dynamically
 )
 
 # -------- FILE PATHS (UNIFIED) --------

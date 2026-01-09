@@ -120,24 +120,17 @@ export default function DarkVeil({
   const ref = useRef(null);
 
   useEffect(() => {
-    console.log('DarkVeil: useEffect triggered');
     const canvas = ref.current;
     if (!canvas) {
       console.error('DarkVeil: Canvas ref is null');
       return;
     }
-    
+
     const parent = canvas.parentElement;
     if (!parent) {
       console.error('DarkVeil: Parent element not found');
       return;
     }
-
-    console.log('DarkVeil: Initializing with canvas size:', {
-      width: parent.clientWidth,
-      height: parent.clientHeight,
-      dpr: Math.min(window.devicePixelRatio, 2)
-    });
 
     try {
       const renderer = new Renderer({
@@ -152,11 +145,11 @@ export default function DarkVeil({
       });
 
       const gl = renderer.gl;
-      
+
       // Set a transparent clear color
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
-      
+
       const geometry = new Triangle(gl);
 
       // Create program and attach shaders
@@ -198,7 +191,7 @@ export default function DarkVeil({
           program.uniforms.uScan.value = scanlineIntensity;
           program.uniforms.uScanFreq.value = scanlineFrequency;
           program.uniforms.uWarp.value = warpAmount;
-          
+
           renderer.render({ scene: mesh });
           frame = requestAnimationFrame(animate);
         } catch (error) {
@@ -213,7 +206,7 @@ export default function DarkVeil({
       return () => {
         if (frame) cancelAnimationFrame(frame);
         window.removeEventListener('resize', resize);
-        
+
         // Clean up WebGL resources
         if (gl) {
           if (program && program.program) {

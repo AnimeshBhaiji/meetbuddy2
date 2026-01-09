@@ -7,16 +7,16 @@ import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import prefsData from "../../backend/preferences.json";
 import subQuestionMap from "@/data/subQuestionMap";
-import Aurora from "@/components/Aurora";
+import DarkVeil from "@/components/DarkVeil/DarkVeil";
 
 const humanizeKey = (k) =>
-  ({
-    mood: "Mood",
-    planningStyle: "Planning Style",
-    adventureLevel: "Adventure Level",
-    addOnMagic: "Add-On Magic",
-    memorableFactor: "Memorable Factor",
-  }[k] || k.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()));
+({
+  mood: "Mood",
+  planningStyle: "Planning Style",
+  adventureLevel: "Adventure Level",
+  addOnMagic: "Add-On Magic",
+  memorableFactor: "Memorable Factor",
+}[k] || k.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()));
 
 const normalizeMainValue = (val) => {
   if (val === null || val === undefined) return "";
@@ -35,7 +35,6 @@ const normalizeMainValue = (val) => {
   return "";
 };
 
-// ID -> label lookup for main categories using preferences.json
 const idMapToLabel = (category, idOrLabel) => {
   if (!idOrLabel && idOrLabel !== 0) return "";
   const catMap = prefsData?.[category];
@@ -47,7 +46,6 @@ const idMapToLabel = (category, idOrLabel) => {
   return found || raw;
 };
 
-// Find the original question text for a sub-question id within a category.
 const getSubQuestionText = (category, subId) => {
   const mapForCat = subQuestionMap?.[category];
   if (!mapForCat) return subId;
@@ -69,10 +67,8 @@ const getSubQuestionText = (category, subId) => {
   return String(subId).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
-// normalize a stored sub-value into array of readable strings (handles arrays/objects/booleans/primitives)
 const normalizeSubValue = (category, v) => {
   if (v === null || v === undefined || v === "") return [];
-  // array -> map as-is
   if (Array.isArray(v)) {
     return v
       .map((x) => {
@@ -81,33 +77,27 @@ const normalizeSubValue = (category, v) => {
       })
       .filter(Boolean);
   }
-  // boolean true -> ambiguous; return ["Yes"] or the sub-question text is shown in summary UI
   if (typeof v === "boolean") {
     return [v ? "Yes" : "No"];
   }
-  // object -> try to extract useful string values or { value: '...' }
   if (typeof v === "object") {
     if ("value" in v && (typeof v.value === "string" || typeof v.value === "number")) {
       return [String(v.value).trim()];
     }
-    // object-of-boolean flags -> return keys that are truthy
     const truthy = Object.entries(v)
       .filter(([k, val]) => val === true || val === "true" || val === 1)
       .map(([k]) => idMapToLabel(category, k) || String(k));
     if (truthy.length) return truthy;
-    // string fields inside object
     const strings = Object.values(v).filter((x) => typeof x === "string" && x.trim());
     if (strings.length) return strings.map((s) => String(s));
     return [];
   }
-  // primitive string/number
   return [String(v)];
 };
 
 const renderSubValue = (category, subId, val) => {
   let arr = normalizeSubValue(category, val);
   if (!arr || arr.length === 0) {
-    // fallback: if boolean true -> show "Yes"
     if (val === true) return "Yes";
     return "Not set";
   }
@@ -118,144 +108,187 @@ const QuestionnaireSummary = () => {
   const { answers, resetAnswers } = useQuestionnaire() || {};
   const navigate = useNavigate();
 
-  // Build groupedAnswers (main + subs)
   const grouped = {};
-  for (const [key, val] of Object.entries(answers || {})) {
-    if (key.endsWith("_sub")) continue;
-    const subKey = `${key}_sub`;
-    grouped[key] = {
-      main: normalizeMainValue(val),
-      subs: [],
-    };
-    const rawSubs = answers?.[subKey];
-    if (rawSubs && typeof rawSubs === "object") {
-      for (const [subId, subVal] of Object.entries(rawSubs)) {
-        grouped[key].subs.push({ id: subId, value: subVal });
+  if (answers) {
+    for (const [key, val] of Object.entries(answers)) {
+      if (key.endsWith("_sub")) continue;
+      const subKey = `${key}_sub`;
+      grouped[key] = {
+        main: normalizeMainValue(val),
+        subs: [],
+      };
+      const rawSubs = answers[subKey];
+      if (rawSubs && typeof rawSubs === "object") {
+        for (const [subId, subVal] of Object.entries(rawSubs)) {
+          grouped[key].subs.push({ id: subId, value: subVal });
+        }
       }
     }
   }
 
-  // Filter out non-preference keys
   const visibleKeys = Object.keys(grouped).filter((k) => !["user_id", "user", "id"].includes(k));
 
-  // Build payload that includes stage1 main + stage2 normalized subs
-  const buildReadablePayload = () => {
-    const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-    if (!storedUser || !storedUser.user_id) return null;
-    return { user_id: storedUser.user_id };
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: "easeOut" }
+    }
   };
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className="relative z-10 min-h-screen flex flex-col">
+    <div className="relative min-h-screen bg-black overflow-hidden font-sans selection:bg-blue-500/30">
+      {/* Background */}
+      <div className="fixed inset-0 z-0">
+        <DarkVeil
+          hueShift={0}
+          noiseIntensity={0.02}
+          scanlineIntensity={0.4}
+          speed={2.0}
+          scanlineFrequency={1.5}
+          warpAmount={0.1}
+        />
+      </div>
+
+      <div className="relative z-10 min-h-screen flex flex-col pt-28">
         <Navbar />
-        
-        <div className="flex-1 flex flex-col items-center py-12 px-4">
-          <motion.div 
-            className="w-full max-w-4xl"
+
+        <div className="flex-1 flex flex-col items-center py-12 px-4 max-w-6xl mx-auto w-full">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-center mb-16"
+          >
+            <h1 className="text-4xl md:text-5xl lg:text-7xl font-black tracking-tighter text-white mb-6">
+              Your <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-500 bg-clip-text text-transparent italic">MeetBuddy</span> Profile
+            </h1>
+            <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed font-medium">
+              We've analyzed your style. Here's your personalized adventure blueprint.
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence>
+              {visibleKeys.length === 0 ? (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="col-span-full py-20 text-center"
+                >
+                  <p className="text-2xl text-gray-500 font-medium italic">No preferences selected yet.</p>
+                </motion.div>
+              ) : (
+                visibleKeys.map((key) => {
+                  const data = grouped[key];
+                  const mainLabel = idMapToLabel(key, data.main) || "";
+
+                  const gradients = {
+                    mood: "from-blue-500/20 via-blue-600/5 to-transparent",
+                    planningStyle: "from-purple-500/20 via-purple-600/5 to-transparent",
+                    adventureLevel: "from-pink-500/20 via-pink-600/5 to-transparent",
+                    addOnMagic: "from-amber-500/20 via-amber-600/5 to-transparent",
+                    memorableFactor: "from-emerald-500/20 via-emerald-600/5 to-transparent"
+                  };
+                  const gradient = gradients[key] || "from-gray-500/20 via-gray-600/5 to-transparent";
+
+                  return (
+                    <motion.div
+                      key={key}
+                      variants={itemVariants}
+                      whileHover={{ y: -8, transition: { duration: 0.3 } }}
+                      className="relative group h-full"
+                    >
+                      <div className="absolute -inset-0.5 bg-gradient-to-r from-white/10 to-transparent rounded-[2rem] blur opacity-0 group-hover:opacity-100 transition duration-500" />
+                      <div className="relative h-full bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2rem] overflow-hidden p-8 flex flex-col">
+                        <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
+
+                        <div className="relative z-10 flex flex-col h-full">
+                          <div className="flex items-center justify-between mb-8">
+                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 group-hover:text-white/70 transition-colors">
+                              {humanizeKey(key)}
+                            </span>
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
+                          </div>
+
+                          {mainLabel ? (
+                            <div className="mb-8">
+                              <h4 className="text-2xl font-bold text-white tracking-tight leading-tight group-hover:scale-105 transition-transform origin-left duration-300">
+                                {mainLabel}
+                              </h4>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 italic mb-8">
+                              Refined selection below
+                            </p>
+                          )}
+
+                          <div className="mt-auto space-y-4">
+                            {data.subs && data.subs.length > 0 ? (
+                              data.subs.map((s) => {
+                                const qText = getSubQuestionText(key, s.id);
+                                const displayVal = renderSubValue(key, s.id, s.value);
+                                return (
+                                  <div key={s.id} className="bg-white/5 rounded-2xl p-5 border border-white/5 group-hover:border-white/10 transition-colors">
+                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">{qText}</p>
+                                    <p className="text-sm text-gray-200 font-semibold leading-relaxed">{displayVal}</p>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="h-0" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </AnimatePresence>
+          </motion.div>
+
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ delay: 0.8, duration: 0.5 }}
+            className="mt-20 w-full flex flex-col sm:flex-row justify-center gap-6"
           >
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-              <div className="p-8 text-center">
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                  Your MeetBuddy Preferences ✨
-                </h1>
-                <p className="text-gray-400 mt-3 text-base md:text-lg">
-                  Here's a summary of your selected preferences. You can save, modify, or move on to plan your meetup!
-                </p>
-              </div>
-
-              <div className="px-6 pb-8 space-y-8">
-                <AnimatePresence mode="wait">
-                  {visibleKeys.length === 0 ? (
-                    <p className="text-center text-gray-400 py-8">No preferences selected yet.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {visibleKeys.map((key, index) => {
-                        const data = grouped[key];
-                        const mainLabel = idMapToLabel(key, data.main) || "";
-                        return (
-                          <motion.div
-                            key={key}
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="bg-white/5 border border-white/10 rounded-xl p-6 hover:bg-white/10 transition-colors"
-                          >
-                            <h3 className="text-xl font-semibold text-white mb-3">
-                              {humanizeKey(key)}
-                            </h3>
-                            {mainLabel ? (
-                              <p className="text-base text-transparent bg-clip-text bg-gradient-to-r from-blue-300 to-purple-300 font-medium mb-4">
-                                {mainLabel}
-                              </p>
-                            ) : (
-                              <p className="text-sm text-gray-400 italic mb-4">
-                                No main selection — refined answers shown below
-                              </p>
-                            )}
-
-                            {data.subs && data.subs.length > 0 ? (
-                              <div className="space-y-3">
-                                {data.subs.map((s) => {
-                                  const qText = getSubQuestionText(key, s.id);
-                                  const displayVal = renderSubValue(key, s.id, s.value);
-                                  return (
-                                    <div
-                                      key={s.id}
-                                      className="bg-black/30 rounded-lg border border-white/5 p-3"
-                                    >
-                                      <div className="text-sm text-gray-300 font-medium">
-                                        {qText}
-                                      </div>
-                                      <div className="text-sm text-gray-400 mt-1">
-                                        {displayVal}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500">
-                                No sub-questions answered for this category.
-                              </p>
-                            )}
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </AnimatePresence>
-
-                <div className="flex flex-col sm:flex-row justify-center gap-4 pt-8 border-t border-white/10 mt-8">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      try {
-                        if (typeof resetAnswers === "function") resetAnswers();
-                      } catch {}
-                      try {
-                        localStorage.removeItem("questionnaireAnswers");
-                      } catch {}
-                      navigate("/questionnaire-stage1");
-                    }}
-                    className="flex-1 sm:flex-none border border-blue-400/30 text-blue-400 hover:bg-blue-500/10 px-6 py-3 rounded-xl transition-all"
-                  >
-                    Modify Preferences
-                  </Button>
-                  <Button
-                    onClick={() => navigate("/planner")}
-                    className="flex-1 sm:flex-none bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-0.5"
-                  >
-                    Plan My Meetup
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <button
+              onClick={() => {
+                try {
+                  if (typeof resetAnswers === "function") resetAnswers();
+                } catch { }
+                try {
+                  localStorage.removeItem("questionnaireAnswers");
+                } catch { }
+                navigate("/questionnaire-stage1");
+              }}
+              className="px-12 py-6 bg-white/5 border border-white/10 text-white hover:bg-white/10 rounded-2xl text-lg font-bold transition-all transform hover:scale-[1.02] active:scale-95"
+            >
+              Modify My Preferences
+            </button>
+            <button
+              onClick={() => navigate("/planner")}
+              className="px-12 py-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-2xl text-lg font-bold shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all transform hover:scale-[1.02] hover:-translate-y-1 active:scale-95"
+            >
+              Start Planning Now ✨
+            </button>
           </motion.div>
         </div>
       </div>

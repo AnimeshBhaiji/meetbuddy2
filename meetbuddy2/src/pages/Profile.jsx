@@ -84,7 +84,7 @@ const Profile = () => {
     console.log('User object:', user);
 
     // Try different possible ID properties
-    const userId = user.id || user.user_id || (user.user && (user.user.id || user.user.user_id));
+    const userId = user.user_id || user.id;
 
     if (!userId) {
       console.error('Could not determine user ID from:', user);

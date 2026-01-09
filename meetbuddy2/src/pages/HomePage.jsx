@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -7,9 +7,14 @@ import { motion } from "framer-motion";
 import { Calendar, MonitorPlay, MapPin, Star, TrendingUp, Zap, Clock, ArrowRight, Users } from "lucide-react";
 import DarkVeil from "@/components/DarkVeil/DarkVeil";
 
+import AccessDeniedModal from "@/components/AccessDeniedModal";
+
 const HomePage = () => {
     const { user, logout } = useContext(AuthContext);
     const navigate = useNavigate();
+
+    // Access Modal State
+    const [showAccessModal, setShowAccessModal] = useState(false);
 
     // Staggered container for text
     const container = {
@@ -77,6 +82,8 @@ const HomePage = () => {
                 />
             </div>
 
+            <AccessDeniedModal isOpen={showAccessModal} onClose={() => setShowAccessModal(false)} />
+
             <div className="relative z-10 flex flex-col min-h-screen pt-24">
                 <Navbar />
 
@@ -120,29 +127,35 @@ const HomePage = () => {
 
                         </div>
 
-                        {/* Main Cards Section */}
                         <motion.div
                             initial="hidden"
                             animate="visible"
                             variants={fadeInUp}
-                            className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-24"
+                            className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24"
                         >
                             {/* Plan Card */}
                             <motion.div
                                 whileHover={{ scale: 1.03, translateY: -10 }}
                                 whileTap={{ scale: 0.98 }}
-                                onClick={() => navigate('/planner')}
-                                className="group relative cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-10 overflow-hidden hover:border-blue-500/50 transition-all duration-500 shadow-2xl"
+                                onClick={() => {
+                                    const hasPrefs = localStorage.getItem("userPreferences") || localStorage.getItem("questionnaireAnswers");
+                                    if (!hasPrefs) {
+                                        setShowAccessModal(true);
+                                        return;
+                                    }
+                                    navigate('/planner');
+                                }}
+                                className="group relative cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-8 overflow-hidden hover:border-blue-500/50 transition-all duration-500 shadow-2xl"
                             >
                                 <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                <div className="absolute -right-10 -top-10 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-500" />
+                                <div className="absolute -right-10 -top-10 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all duration-500" />
 
-                                <div className="relative z-10">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl flex items-center justify-center mb-8 border border-blue-500/20 group-hover:scale-110 transition-transform duration-500">
-                                        <MonitorPlay className="w-10 h-10 text-blue-400" />
+                                <div className="relative z-10 flex flex-col h-full">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/20 group-hover:scale-110 transition-transform duration-500">
+                                        <MonitorPlay className="w-8 h-8 text-blue-400" />
                                     </div>
-                                    <h2 className="text-4xl font-bold text-white mb-4 group-hover:text-blue-200 transition-colors">Start Planning</h2>
-                                    <p className="text-gray-400 text-lg mb-8 leading-relaxed">
+                                    <h2 className="text-2xl font-bold text-white mb-3 group-hover:text-blue-200 transition-colors">Start Planning</h2>
+                                    <p className="text-gray-400 text-base mb-6 leading-relaxed flex-grow">
                                         Create a new meetup, invite friends, and coordinate the perfect time with our AI planner.
                                     </p>
                                     <span className="inline-flex items-center gap-2 text-blue-400 font-bold tracking-wide group-hover:gap-4 transition-all duration-300">
@@ -156,21 +169,45 @@ const HomePage = () => {
                                 whileHover={{ scale: 1.03, translateY: -10 }}
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => navigate('/calendar')}
-                                className="group relative cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-10 overflow-hidden hover:border-purple-500/50 transition-all duration-500 shadow-2xl"
+                                className="group relative cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-8 overflow-hidden hover:border-purple-500/50 transition-all duration-500 shadow-2xl"
                             >
                                 <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                <div className="absolute -right-10 -top-10 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all duration-500" />
+                                <div className="absolute -right-10 -top-10 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl group-hover:bg-purple-500/20 transition-all duration-500" />
 
-                                <div className="relative z-10">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl flex items-center justify-center mb-8 border border-purple-500/20 group-hover:scale-110 transition-transform duration-500">
-                                        <Calendar className="w-10 h-10 text-purple-400" />
+                                <div className="relative z-10 flex flex-col h-full">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl flex items-center justify-center mb-6 border border-purple-500/20 group-hover:scale-110 transition-transform duration-500">
+                                        <Calendar className="w-8 h-8 text-purple-400" />
                                     </div>
-                                    <h2 className="text-4xl font-bold text-white mb-4 group-hover:text-purple-200 transition-colors">View Calendar</h2>
-                                    <p className="text-gray-400 text-lg mb-8 leading-relaxed">
+                                    <h2 className="text-2xl font-bold text-white mb-3 group-hover:text-purple-200 transition-colors">View Calendar</h2>
+                                    <p className="text-gray-400 text-base mb-6 leading-relaxed flex-grow">
                                         Check your upcoming meetups, manage schedule conflicts, and sync with your friends.
                                     </p>
                                     <span className="inline-flex items-center gap-2 text-purple-400 font-bold tracking-wide group-hover:gap-4 transition-all duration-300">
                                         VIEW CALENDAR <span className="text-xl">→</span>
+                                    </span>
+                                </div>
+                            </motion.div>
+
+                            {/* Preferences Card */}
+                            <motion.div
+                                whileHover={{ scale: 1.03, translateY: -10 }}
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => navigate('/questionnaire-stage1')}
+                                className="group relative cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-8 overflow-hidden hover:border-pink-500/50 transition-all duration-500 shadow-2xl"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-br from-pink-600/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                <div className="absolute -right-10 -top-10 w-48 h-48 bg-pink-500/10 rounded-full blur-3xl group-hover:bg-pink-500/20 transition-all duration-500" />
+
+                                <div className="relative z-10 flex flex-col h-full">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-pink-500/20 to-pink-600/10 rounded-2xl flex items-center justify-center mb-6 border border-pink-500/20 group-hover:scale-110 transition-transform duration-500">
+                                        <Star className="w-8 h-8 text-pink-400" />
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-white mb-3 group-hover:text-pink-200 transition-colors">Preferences</h2>
+                                    <p className="text-gray-400 text-base mb-6 leading-relaxed flex-grow">
+                                        Customize your travel style, interests, and dietary needs for better recommendations.
+                                    </p>
+                                    <span className="inline-flex items-center gap-2 text-pink-400 font-bold tracking-wide group-hover:gap-4 transition-all duration-300">
+                                        CUSTOMIZE <span className="text-xl">→</span>
                                     </span>
                                 </div>
                             </motion.div>

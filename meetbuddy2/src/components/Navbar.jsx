@@ -5,6 +5,8 @@ import { User, Calendar as CalendarIcon, Menu, X, LogOut, Home, Map, Info } from
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+import AccessDeniedModal from "@/components/AccessDeniedModal";
+
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -12,6 +14,9 @@ const Navbar = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  // Custom Modal State
+  const [showAccessModal, setShowAccessModal] = useState(false);
 
   // Check login status and handle scroll
   useEffect(() => {
@@ -51,6 +56,8 @@ const Navbar = () => {
 
   return (
     <>
+      <AccessDeniedModal isOpen={showAccessModal} onClose={() => setShowAccessModal(false)} />
+
       <motion.nav
         initial={{ y: -100 }}
         animate={{ y: 0 }}
@@ -75,32 +82,48 @@ const Navbar = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-2">
-            {navLinks.map((link) => (
-              <Link key={link.path} to={link.path}>
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className={cn(
-                    "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 relative overflow-hidden",
-                    isActive(link.path)
-                      ? "text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  )}
-                >
-                  {isActive(link.path) && (
-                    <motion.div
-                      layoutId="nav-pill"
-                      className="absolute inset-0 bg-white/10 rounded-full"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                  <span className="relative z-10 flex items-center gap-2">
-                    <link.icon className="w-4 h-4" />
-                    {link.label}
-                  </span>
-                </motion.div>
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const requiresPrefs = link.path === "/planner";
+
+              const handleClick = (e) => {
+                if (requiresPrefs) {
+                  const hasPrefs = localStorage.getItem("userPreferences") || localStorage.getItem("questionnaireAnswers");
+                  if (!hasPrefs) {
+                    e.preventDefault();
+                    setShowAccessModal(true);
+                    return;
+                  }
+                }
+              };
+
+              return (
+                <Link key={link.path} to={link.path} onClick={handleClick}>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn(
+                      "px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 flex items-center gap-2 relative overflow-hidden",
+                      isActive(link.path)
+                        ? "text-white"
+                        : "text-gray-400 hover:text-white hover:bg-white/5",
+                      requiresPrefs && !localStorage.getItem("userPreferences") && !localStorage.getItem("questionnaireAnswers") && "opacity-50 hover:opacity-75"
+                    )}
+                  >
+                    {isActive(link.path) && (
+                      <motion.div
+                        layoutId="nav-pill"
+                        className="absolute inset-0 bg-white/10 rounded-full"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+                    <span className="relative z-10 flex items-center gap-2">
+                      <link.icon className="w-4 h-4" />
+                      {link.label}
+                    </span>
+                  </motion.div>
+                </Link>
+              );
+            })}
           </div>
 
           {/* Right Side Actions */}

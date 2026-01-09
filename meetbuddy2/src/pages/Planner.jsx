@@ -1,5 +1,6 @@
 // src/pages/Planner.jsx
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { getApiUrl, DEFAULT_HEADERS } from "@/config";
 import { format, addHours } from 'date-fns';
@@ -193,6 +194,7 @@ const FullOverlay = ({ show, text = "Loading next step..." }) => {
 };
 
 export default function Planner() {
+  const navigate = useNavigate();
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -472,13 +474,13 @@ export default function Planner() {
       localStorage.setItem("userPreferences", JSON.stringify(merged));
 
       // Then save to backend if user is logged in
-      const user = JSON.parse(localStorage.getItem("user") || "{ }");
-      if (user && user.id) {
+      const userId = user.user_id || user.id;
+      if (user && userId) {
         try {
           await axios.post(
             getApiUrl('/update-preferences'),
             {
-              user_id: user.id,
+              user_id: userId,
               preferences: merged
             },
             {
@@ -604,7 +606,9 @@ export default function Planner() {
     const hasPlace = placeText && placeText.trim();
     const hasSavedLocation = userPrefs && userPrefs.location && userPrefs.location.trim();
 
-    if (!hasCoords && !hasPlace && !hasSavedLocation) {
+    const userId = user?.user_id || user?.id;
+
+    if (!userId && !hasCoords && !hasPlace && !hasSavedLocation) {
       alert("Please enter your current location or allow GPS access before starting your itinerary.");
       return;
     }
@@ -612,7 +616,7 @@ export default function Planner() {
     setSessionLoading(true);
     try {
       const payload = {
-        user_id: user.user_id,
+        user_id: userId,
         preferences: {
           mood: userPrefs.mood,
           planningStyle: userPrefs.planningStyle,
@@ -631,6 +635,8 @@ export default function Planner() {
         location: (placeText && placeText.trim() ? placeText.trim() : null) || userPrefs.location || null,
         max_terms: maxTerms,
       };
+
+      console.log("🚀 Starting session with payload:", payload);
 
       // primary request to the session endpoint
       const res = await axios.post(getApiUrl('/planner/session'), payload, {
@@ -971,16 +977,24 @@ export default function Planner() {
                 </div>
 
                 {/* Action buttons */}
-                <button
-                  onClick={startSession}
-                  disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-xl py-5 px-6 rounded-2xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:-translate-y-1 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 relative overflow-hidden group"
-                >
-                  <span className="relative z-10 flex items-center justify-center gap-2">
-                    {sessionLoading ? "Generating..." : "✨ Generate My Itinerary"}
-                  </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
-                </button>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={() => navigate("/questionnaire-stage1")}
+                    className="flex-1 bg-white/5 border border-white/10 text-white font-bold text-lg py-5 px-6 rounded-2xl hover:bg-white/10 transition-all transform hover:-translate-y-1"
+                  >
+                    Modify my preferences
+                  </button>
+                  <button
+                    onClick={startSession}
+                    disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
+                    className="flex-[2] bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold text-xl py-5 px-6 rounded-2xl hover:from-blue-500 hover:to-purple-500 transition-all transform hover:-translate-y-1 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 relative overflow-hidden group"
+                  >
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      {sessionLoading ? "Generating..." : "✨ Generate My Itinerary"}
+                    </span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-xl" />
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

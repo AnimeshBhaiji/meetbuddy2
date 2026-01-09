@@ -33,21 +33,23 @@ export const QuestionnaireProvider = ({ children }) => {
   const updateAnswers = async (newAnswers) => {
     const updatedAnswers = { ...answers, ...newAnswers };
     setAnswers(updatedAnswers);
-    
+
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
-      if (user && user.id) {
+      const userId = user.user_id || user.id;
+
+      if (user && userId) {
         await axios.post(
           getApiUrl('/update-preferences'),
-          { 
-            user_id: user.id,
-            preferences: updatedAnswers 
+          {
+            user_id: userId,
+            preferences: updatedAnswers
           },
-          { 
+          {
             headers: {
               ...DEFAULT_HEADERS,
               'Content-Type': 'application/json'
-            } 
+            }
           }
         );
         console.log("Preferences saved to backend successfully");

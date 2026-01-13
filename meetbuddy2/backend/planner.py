@@ -8,6 +8,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from scraper import get_places
 from planner_sessions import create_session, get_session, push_selection, set_last_options
+from place_analyzer import (
+    analyze_mood_fit, detect_atmosphere, detect_parking, 
+    analyze_stage2_preferences, filter_by_distance_preference,
+    calculate_distance_category
+)
 
 PREFERENCES_FILE = "preferences.json"
 USER_PREFS_FILE = "user_last_prefs.json"
@@ -293,12 +298,59 @@ def tag_place_minimal(place: Dict[str, Any]) -> List[str]:
     return tags
 
 
-def score_place_minimal(place: Dict[str, Any], labels_used: Dict[str, List[str]]) -> float:
+def score_place_comprehensive(place: Dict[str, Any], labels_used: Dict[str, List[str]], stage2_prefs: Dict[str, Any] = None) -> float:
+    """
+    Comprehensive scoring that considers Stage 1 labels, Stage 2 sub-preferences,
+    mood fit, atmosphere, parking, and other amenities.
+    """
     score = 0.0
+    
+    # Base rating score (3.0+ gets bonus)
     try:
-        score += max(0.0, (float(place.get("rating", 0)) - 3.0)) * 1.5
+        rating = float(place.get("rating", 0))
+        if rating >= 4.5:
+            score += 3.0
+        elif rating >= 4.0:
+            score += 2.0
+        elif rating >= 3.5:
+            score += 1.0
+        elif rating >= 3.0:
+            score += 0.5
     except Exception:
         pass
+    
+    # Stage 2 comprehensive analysis
+    if stage2_prefs:
+        stage2_analysis = analyze_stage2_preferences(place, stage2_prefs)
+        score += stage2_analysis.get('compatibility_score', 0)
+        # Store analysis results in place for frontend display
+        place['stage2_analysis'] = stage2_analysis
+    
+    # Mood-based scoring
+    mood_labels = labels_used.get('mood', [])
+    if mood_labels and len(mood_labels) > 0:
+        user_mood = mood_labels[0]  # Primary mood
+        mood_subs = stage2_prefs.get('mood_sub', {}) if stage2_prefs else None
+        mood_analysis = analyze_mood_fit(place, user_mood, mood_subs)
+        score += mood_analysis.get('mood_match_score', 0)
+        place['mood_analysis'] = mood_analysis
+    
+    # Atmosphere detection and scoring
+    atmosphere = detect_atmosphere(place)
+    place['atmosphere'] = atmosphere
+    
+    # Parking detection if required
+    adventure_sub = stage2_prefs.get('adventureLevel_sub', {}) if stage2_prefs else {}
+    parking_required = 'Parking' in str(adventure_sub.get('sc_transport', ''))
+    parking_info = detect_parking(place, parking_required)
+    place['parking'] = parking_info
+    
+    if parking_required and parking_info['status'] == 'available':
+        score += 1.5
+        if parking_info['has_valet']:
+            score += 0.5
+    
+    # Legacy keyword matching for backward compatibility
     txt = (place.get("title", "") + " " + place.get("address", "")).lower()
     if any("music" in s.lower() for lst in labels_used.values() for s in lst):
         if "music" in txt or "live" in txt:
@@ -306,7 +358,14 @@ def score_place_minimal(place: Dict[str, Any], labels_used: Dict[str, List[str]]
     if any("weekend" in s.lower() or "escape" in s.lower() for lst in labels_used.values() for s in lst):
         if "resort" in txt or "getaway" in txt:
             score += 1.2
+    
     return float(round(score, 3))
+
+
+# Keep old function for backward compatibility
+def score_place_minimal(place: Dict[str, Any], labels_used: Dict[str, List[str]]) -> float:
+    """Legacy minimal scoring - use score_place_comprehensive instead."""
+    return score_place_comprehensive(place, labels_used, None)
 
 
 def dedupe_places(list_of_places: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -547,11 +606,35 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     # Deduplicate & score
     options = dedupe_places(options)
 
-    # Add distance-based scoring boost (closer places get higher score)
-    coords_tuple = _prepare_coords_tuple(coords)
+    # Extract Stage 2 sub-preferences for comprehensive analysis
+    stage2_prefs = {
+        'mood_sub': prefs_data.get('mood_sub') or prefs_data.get('moodSub'),
+        'planningStyle_sub': prefs_data.get('planningStyle_sub') or prefs_data.get('planningStyleSub'),
+        'adventureLevel_sub': prefs_data.get('adventureLevel_sub') or prefs_data.get('adventureLevelSub'),
+        'addOnMagic_sub': prefs_data.get('addOnMagic_sub') or prefs_data.get('addOnMagicSub'),
+        'memorableFactor_sub': prefs_data.get('memorableFactor_sub') or prefs_data.get('memorableFactorSub'),
+    }
+    
+    # Get area and distance preferences from Stage 2
+    adv_sub = stage2_prefs.get('adventureLevel_sub') or {}
+    area_preference = adv_sub.get('sc_area') if isinstance(adv_sub, dict) else None
+    distance_preference = adv_sub.get('distance_range') if isinstance(adv_sub, dict) else None
+    
+    # Apply distance-based filtering if we have adventure level
+    if adventure_labels and coords_tuple:
+        primary_adventure = adventure_labels[0] if adventure_labels else None
+        if primary_adventure:
+            options = filter_by_distance_preference(
+                options, 
+                primary_adventure,
+                area_preference,
+                distance_preference
+            )
+    
+    # Score each place with comprehensive analysis
     for p in options:
-        p["tags"] = tag_place_minimal(p)
-        base_score = score_place_minimal(p, labels_used)
+        p["tags"] = tag_place_minimal(p) # Keep minimal tags for now
+        base_score = score_place_comprehensive(p, labels_used, stage2_prefs)
         
         # Boost score based on distance if we have coords
         if coords_tuple and p.get("lat") and p.get("lng"):

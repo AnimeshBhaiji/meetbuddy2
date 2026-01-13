@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, forwardRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { ParkingIndicator, AtmosphereTags, DistanceBadge, MoodMatchBadge } from "./PlaceEnhancements";
 
 // Fix default Leaflet icon images (works with CRA/Vite)
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -160,7 +161,17 @@ MarkerWithRef.displayName = "MarkerWithRef";
  * - userCoords: {lat, lng} for user's current location (GPS)
  * - locationText: string typed area/location (for highlighting when no coords)
  */
-export default function MapPlanner({ options = [], selectedChain = [], onSelect = () => { }, onPreview = () => { }, highlightedPlace = null, userCoords = null, locationText = "", className }) {
+export default function MapPlanner({
+  options = [],
+  selectedChain = [],
+  onSelect = () => { },
+  onPreview = () => { },
+  highlightedPlace = null,
+  userCoords = null,
+  locationText = "",
+  onAddToItinerary = null,  // New prop for adding to itinerary
+  className = "",
+}) {
   const mapRef = useRef(null);
   const markerRefs = useRef({});
 
@@ -199,6 +210,10 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
         lng,
         rating: opt.rating ?? opt.Rating ?? opt.raw?.rating ?? null,
         link: opt.link || opt.GoogleMaps || opt.website || opt.raw?.link || "",
+        parking: opt.parking || opt.raw?.parking || null,
+        atmosphere: opt.atmosphere || opt.raw?.atmosphere || null,
+        mood_analysis: opt.mood_analysis || opt.raw?.mood_analysis || null,
+        distance_meters: opt.distance_meters || opt.raw?.distance_meters || null,
         raw: opt.raw || opt,
         __sourceIndex: idx,
       };
@@ -415,20 +430,50 @@ export default function MapPlanner({ options = [], selectedChain = [], onSelect 
                   <div style={{ fontWeight: 700 }}>{o.title}</div>
                   <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{o.address}</div>
                   {o.rating != null && <div style={{ marginTop: 6 }}>⭐ {o.rating}</div>}
-                  <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-                    <button
-                      onClick={(ev) => {
-                        ev.preventDefault();
-                        ev.stopPropagation();
-                        onSelect({ ...o, raw: o.raw });
-                      }}
-                      style={{ padding: "6px 10px", background: "#16a34a", color: "white", borderRadius: 6, border: 0 }}
-                    >
-                      Select
-                    </button>
+
+                  {/* Distance Badge */}
+                  {o.distance_meters && (
+                    <DistanceBadge distanceMeters={o.distance_meters} />
+                  )}
+
+                  {/* Parking Indicator */}
+                  {o.parking && (
+                    <ParkingIndicator parking={o.parking} />
+                  )}
+
+                  {/* Atmosphere Tags */}
+                  {o.atmosphere && (
+                    <AtmosphereTags atmosphere={o.atmosphere} />
+                  )}
+
+                  {/* Mood Match Badge */}
+                  {o.mood_analysis?.is_good_fit && (
+                    <div style={{ marginTop: 8, padding: '4px 8px', background: '#ec4899', color: 'white', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
+                      ✨ Perfect Match
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 8, display: "flex", gap: 8, flexDirection: 'column' }}>
+                    {onAddToItinerary && (
+                      <button
+                        onClick={(ev) => {
+                          ev.preventDefault();
+                          ev.stopPropagation();
+                          onAddToItinerary({ ...o, raw: o.raw });
+                        }}
+                        style={{ width: '100%', padding: "8px 10px", background: "#3b82f6", color: "white", borderRadius: 6, border: 0, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(59,130,246,0.3)' }}
+                      >
+                        ➕ Add to Itinerary
+                      </button>
+                    )}
                     {o.link && (
-                      <a href={o.link} target="_blank" rel="noreferrer" style={{ padding: "6px 10px", background: "#e5e7eb", borderRadius: 6 }}>
-                        Open
+                      <a
+                        href={o.link}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ width: '100%', padding: "6px 10px", background: "#f3f4f6", borderRadius: 6, textDecoration: 'none', color: '#374151', fontSize: '12px', fontWeight: 600, textAlign: 'center', border: '1px solid #e5e7eb' }}
+                      >
+                        View Details →
                       </a>
                     )}
                   </div>

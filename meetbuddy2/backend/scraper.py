@@ -238,6 +238,22 @@ def get_places(
                 except Exception:
                     lat = None; lng = None
 
+            # Extract description/snippet and reviews for analysis
+            description = item.get("description") or item.get("snippet") or ""
+            snippet = item.get("snippet") or ""
+            
+            # Extract reviews if available
+            reviews = []
+            reviews_data = item.get("reviews") or item.get("user_reviews") or []
+            if isinstance(reviews_data, list):
+                for review in reviews_data[:5]:  # Top 5 reviews
+                    if isinstance(review, dict):
+                        review_text = review.get("snippet") or review.get("text") or review.get("review") or ""
+                        if review_text:
+                            reviews.append(review_text)
+                    elif isinstance(review, str):
+                        reviews.append(review)
+
             # link & thumbnail
             maps_link = item.get("link") or item.get("Google Maps Link") or (f"https://www.google.com/maps/place/?q=place_id:{place_id}" if place_id else "")
             thumbnail = None
@@ -259,6 +275,9 @@ def get_places(
                 "thumbnail": thumbnail,
                 "lat": lat,
                 "lng": lng,
+                "description": description,
+                "snippet": snippet,
+                "reviews": reviews,
                 "raw": item,
             })
         except Exception:

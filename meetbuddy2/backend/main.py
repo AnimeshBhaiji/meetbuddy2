@@ -457,17 +457,40 @@ async def search_place(req: SearchPlaceRequest):
     if max_results <= 0:
         max_results = 5
 
+    # Normalize coords from dict to tuple if needed
+    coords_param = req.coords
+    if coords_param:
+        if isinstance(coords_param, dict):
+            lat = coords_param.get("lat") or coords_param.get("latitude")
+            lng = coords_param.get("lng") or coords_param.get("lon") or coords_param.get("longitude")
+            if lat is not None and lng is not None:
+                try:
+                    coords_param = (float(lat), float(lng))
+                except (ValueError, TypeError):
+                    print(f"⚠️ Invalid coords format: {coords_param}")
+                    coords_param = None
+            else:
+                coords_param = None
+        elif isinstance(coords_param, (list, tuple)) and len(coords_param) >= 2:
+            try:
+                coords_param = (float(coords_param[0]), float(coords_param[1]))
+            except (ValueError, TypeError, IndexError):
+                print(f"⚠️ Invalid coords format: {coords_param}")
+                coords_param = None
+
     try:
         places = get_places(
             q,
             num_results=max_results,
-            coords=req.coords,
+            coords=coords_param,
             place_type="restaurant",
             max_distance_meters=3000,
         )
     except Exception as e:
         print("❌ Error in /search_place:", e)
-        raise HTTPException(status_code=500, detail="Failed to search places")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to search places: {str(e)}")
 
     return {"results": places}
 
@@ -570,10 +593,200 @@ async def planner_session_select(sid: str, request: Request):
         "next_step": next_step,
         "options": follow.get("options", []),
         "anchor_text": follow.get("anchor_text"),
-    }# Read session state
+    }
+
+# Finalize current step (move to next without picking a single place)
+@app.post("/planner/session/{sid}/finalize_step")
+async def planner_session_finalize_step(sid: str, request: Request):
+    try:
+        raw = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    
+    session = get_session(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+
+    current_step = raw.get("step")
+    next_step = raw.get("next_step")
+    
+    # If the user has items in their itinerary for this step, 
+    # use the last item as context for the next step's recommendations
+    itinerary = session.get("itinerary", [])
+    if itinerary:
+        # Use the very last place added to the itinerary to anchor next step suggestions
+        last_item = itinerary[-1]
+        session["last_selected"] = last_item.get("place") or last_item
+    
+    # Generate followup suggestions
+    follow = generate_followup_suggestions(session, next_step, num_results=15)
+    set_last_options(sid, next_step, follow.get("options", []))
+
+    return {
+        "session_id": sid,
+        "next_step": next_step,
+        "options": follow.get("options", []),
+        "anchor_text": follow.get("anchor_text"),
+        "itinerary": itinerary,
+    }
+
+# Read session state
 @app.get("/planner/session/{sid}")
 def read_planner_session(sid: str):
     s = get_session(sid)
     if not s:
         raise HTTPException(status_code=404, detail="Session not found or expired")
     return s
+
+
+# -------- ITINERARY MANAGEMENT ENDPOINTS --------
+from itinerary_manager import (
+    get_itinerary, add_place_to_itinerary, remove_place_from_itinerary,
+    reorder_itinerary, insert_place_after, clear_itinerary
+)
+
+
+@app.get("/planner/session/{sid}/itinerary")
+def get_session_itinerary(sid: str):
+    """Get the current itinerary for a session."""
+    try:
+        itinerary = get_itinerary(sid)
+        return {"session_id": sid, "itinerary": itinerary}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/planner/session/{sid}/itinerary/add")
+async def add_to_itinerary(sid: str, request: Request):
+    """Add a place to the itinerary."""
+    try:
+        body = await request.json()
+        place = body.get("place")
+        position = body.get("position")  # Optional
+        
+        if not place:
+            raise HTTPException(status_code=400, detail="Missing place data")
+        
+        # Add step context to the place
+        step = body.get("step")
+        if step:
+            place["step_type"] = step
+            
+        session = add_place_to_itinerary(sid, place, position)
+        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/planner/session/{sid}/itinerary/{place_id}")
+def remove_from_itinerary(sid: str, place_id: str):
+    """Remove a place from the itinerary."""
+    try:
+        session = remove_place_from_itinerary(sid, place_id)
+        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/planner/session/{sid}/itinerary/reorder")
+async def reorder_session_itinerary(sid: str, request: Request):
+    """Reorder the itinerary."""
+    try:
+        body = await request.json()
+        new_order = body.get("order")  # List of place IDs
+        
+        if not new_order or not isinstance(new_order, list):
+            raise HTTPException(status_code=400, detail="Missing or invalid order array")
+        
+        session = reorder_itinerary(sid, new_order)
+        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/planner/session/{sid}/itinerary/insert-after")
+async def insert_after_place(sid: str, request: Request):
+    """Insert a place after another place in the itinerary."""
+    try:
+        body = await request.json()
+        after_place_id = body.get("after_place_id")
+        new_place = body.get("place")
+        
+        if not after_place_id or not new_place:
+            raise HTTPException(status_code=400, detail="Missing after_place_id or place data")
+        
+        session = insert_place_after(sid, after_place_id, new_place)
+        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/planner/session/{sid}/itinerary")
+def clear_session_itinerary(sid: str):
+    """Clear all places from the itinerary."""
+    try:
+        session = clear_itinerary(sid)
+        return {"session_id": sid, "itinerary": []}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------- CAB SERVICE ENDPOINTS (MOCK/WIP) --------
+from cab_service import estimate_ride, book_ride, get_available_ride_types
+
+
+@app.post("/cab/estimate")
+async def get_cab_estimate(request: Request):
+    """Get a mock cab fare estimate between two locations."""
+    try:
+        body = await request.json()
+        origin = body.get("origin")  # {lat, lng}
+        destination = body.get("destination")  # {lat, lng}
+        ride_type = body.get("ride_type", "economy")
+        
+        if not origin or not destination:
+            raise HTTPException(status_code=400, detail="Missing origin or destination")
+        
+        estimate = estimate_ride(origin, destination, ride_type)
+        return estimate
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/cab/book")
+async def book_cab(request: Request):
+    """Mock cab booking (WIP - requires API keys)."""
+    try:
+        body = await request.json()
+        origin = body.get("origin")
+        destination = body.get("destination")
+        ride_type = body.get("ride_type", "economy")
+        
+        if not origin or not destination:
+            raise HTTPException(status_code=400, detail="Missing origin or destination")
+        
+        booking = book_ride(origin, destination, ride_type)
+        return booking
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/cab/available")
+async def get_available_cabs(lat: float, lng: float):
+    """Get available ride types at a location."""
+    try:
+        location = {"lat": lat, "lng": lng}
+        rides = get_available_ride_types(location)
+        return rides
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

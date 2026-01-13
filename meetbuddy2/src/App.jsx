@@ -24,7 +24,7 @@ function App() {
         <Route path="/restaurant" element={<RestaurantList />} />
         <Route path="/about" element={<AboutUs />} />
         <Route
-          path="/planner"
+          path="/planner/*"
           element={
             <ProtectedRoute>
               <Planner />

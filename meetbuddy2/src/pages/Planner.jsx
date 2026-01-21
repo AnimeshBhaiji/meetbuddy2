@@ -810,10 +810,24 @@ export default function Planner() {
 
     const userId = user?.user_id || user?.id;
 
-    if (!userId && !hasCoords && !hasPlace && !hasSavedLocation) {
-      alert("Please enter your current location or allow GPS access before starting your itinerary.");
+    if (!userId) {
+      alert("Please log in first.");
       return;
     }
+
+    if (!hasCoords && !hasPlace && !hasSavedLocation) {
+      alert("Please enter your current location or allow GPS access before starting your itinerary.");
+      console.warn("⚠️ Start failed: No location context (coords/placeText/savedPrefs) found.");
+      return;
+    }
+
+    console.log("📍 Location context for payload:", {
+      hasCoords,
+      hasPlace,
+      hasSavedLocation,
+      resolvedCoords: coords || userPrefs.coords,
+      resolvedLocation: (placeText && placeText.trim() ? placeText.trim() : null) || userPrefs.location
+    });
 
     setSessionLoading(true);
     try {
@@ -919,8 +933,16 @@ export default function Planner() {
         }
       }
     } catch (err) {
-      console.error("Failed to start session", err);
-      alert("Failed to start itinerary session. See console for details.");
+      console.error("❌ Failed to start session. Error details:", {
+        message: err.message,
+        url: err.config?.url,
+        method: err.config?.method,
+        status: err.response?.status,
+        data: err.response?.data
+      });
+      // Also log to a dedicated window property for easy inspection
+      window.last_planner_error = err;
+      alert(`Itinerary session failed: ${err.response?.data?.detail || err.message}`);
     } finally {
       setSessionLoading(false);
     }
@@ -1242,8 +1264,9 @@ export default function Planner() {
                         </button>
                       </div>
                       {(coords || placeText) && (
-                        <p className="text-sm text-green-400 mt-2 flex items-center gap-1">
-                          <Check className="w-4 h-4" /> Location set
+                        <p className="text-sm text-green-400 mt-2 flex items-center gap-1 font-medium bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20 w-fit">
+                          <Check className="w-3 h-3" />
+                          {placeText && !placeText.includes("Lat") ? `Set to: ${placeText}` : "GPS Location Active"}
                         </p>
                       )}
                     </div>

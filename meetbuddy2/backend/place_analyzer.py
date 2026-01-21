@@ -35,7 +35,7 @@ def analyze_mood_fit(place: Dict[str, Any], user_mood: str, mood_subs: Dict = No
     
     # Stage 2 specific keywords for Romantic mood
     if user_mood == 'Romantic' and mood_subs:
-        setting = mood_subs.get('ro_setting', '')
+        setting = mood_subs.get('ro_setting') or ''
         if 'Scenic' in setting or 'view' in setting.lower():
             mood_keywords['Romantic'].extend(['view', 'scenic', 'panoramic', 'overlook', 'vista'])
         if 'Rooftop' in setting:
@@ -155,12 +155,12 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
     }
     
     # Mood sub-preferences
-    mood_sub = stage2_prefs.get('mood_sub', {})
+    mood_sub = stage2_prefs.get('mood_sub') or {}
     if mood_sub:
         atm = detect_atmosphere(place)
         
         # Romantic setting preferences
-        ro_setting = mood_sub.get('ro_setting', '')
+        ro_setting = mood_sub.get('ro_setting') or ''
         if 'Scenic' in ro_setting and atm['has_view']:
             results['compatibility_score'] += 2
             results['matches'].append('Scenic view available')
@@ -172,9 +172,9 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
             results['matches'].append('Indoor seating')
     
     # Planning style sub-preferences
-    planning_sub = stage2_prefs.get('planningStyle_sub', {})
+    planning_sub = stage2_prefs.get('planningStyle_sub') or {}
     if planning_sub:
-        fc_filters = planning_sub.get('fc_filters', [])
+        fc_filters = planning_sub.get('fc_filters') or []
         if isinstance(fc_filters, list):
             if 'Private seating' in fc_filters and detect_private_seating(place):
                 results['compatibility_score'] += 2
@@ -186,9 +186,9 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
                     results['matches'].append('Live music')
     
     # Adventure level sub-preferences
-    adventure_sub = stage2_prefs.get('adventureLevel_sub', {})
+    adventure_sub = stage2_prefs.get('adventureLevel_sub') or {}
     if adventure_sub:
-        sc_transport = adventure_sub.get('sc_transport', '')
+        sc_transport = adventure_sub.get('sc_transport') or ''
         if 'Parking' in sc_transport:
             parking = detect_parking(place, parking_required=True)
             if parking['status'] == 'available':
@@ -258,12 +258,13 @@ def filter_by_distance_preference(
                 elif '50km+' in distance_preference and dist >= 50000:
                     include = True
             else:
-                # Default: 20-50km range
-                include = 20000 <= dist <= 50000
+                # Default: Relaxed to 5-60km range (was 20-50km which killed results)
+                include = 5000 <= dist <= 60000
         
         # Short drive to hidden gem - moderate distance
         elif adventure_level == 'Short drive to hidden gem':
-            include = 10000 <= dist <= 30000
+            # Relaxed to 3-40km (was 10-30km)
+            include = 3000 <= dist <= 40000
         
         # Stick to the city - respect area preference
         elif adventure_level == 'Stick to the city':

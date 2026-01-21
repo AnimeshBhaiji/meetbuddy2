@@ -34,6 +34,19 @@ app.add_middleware(
     allow_origin_regex=r"https?://.*\.ngrok-free\.app"  # Allow ALL ngrok subdomains dynamically
 )
 
+# -------- LOGGING MIDDLEWARE --------
+import traceback
+@app.middleware("http")
+async def log_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        print(f"\n❌ [CRITICAL ERROR] {request.method} {request.url.path}")
+        print(f"Error: {str(e)}")
+        traceback.print_exc()
+        # Still raise it so FastAPI's error handlers can take over for the response
+        raise e
+
 # -------- FILE PATHS (UNIFIED) --------
 ROOT_DIR = os.path.dirname(__file__)
 PREFERENCES_FILE = os.path.join(ROOT_DIR, "preferences.json")
@@ -516,7 +529,16 @@ async def planner_session_start(request: Request):
         "location": raw.get("location") or raw.get("place") or None,
     }
 
-    initial = generate_initial_suggestions(payload, num_results=15)
+    print(f"🚀 [SESSION START] Received payload for user {user_id}")
+    print(f"   - Preferences: {payload['preferences']}")
+    print(f"   - Location/Coords: {payload['location']} / {payload['coords']}")
+    
+    try:
+        initial = generate_initial_suggestions(payload, num_results=15)
+    except Exception as e:
+        print(f"❌ [GENERATE INITIAL FAILED] {str(e)}")
+        traceback.print_exc()
+        raise e
     
     # If no options returned from new session flow, fall back to legacy generate_plan
     if not initial.get("options"):
@@ -565,6 +587,7 @@ async def planner_session_select(sid: str, request: Request):
         raise HTTPException(status_code=404, detail="Session not found or expired")
 
     step = raw.get("step") or "default"
+    print(f"👉 [SESSION SELECT] Session {sid}, Step: {step}")
     selected_place = raw.get("place")
     if not selected_place:
         raise HTTPException(status_code=400, detail="Missing selected place")
@@ -609,6 +632,7 @@ async def planner_session_finalize_step(sid: str, request: Request):
 
     current_step = raw.get("step")
     next_step = raw.get("next_step")
+    print(f"🏁 [SESSION FINALIZE] Session {sid}, Step: {current_step} -> Next: {next_step}")
     
     # If the user has items in their itinerary for this step, 
     # use the last item as context for the next step's recommendations

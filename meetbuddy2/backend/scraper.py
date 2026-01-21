@@ -179,10 +179,11 @@ def get_places(
     if coords_tuple:
         lat, lng = coords_tuple
         # SerpAPI expects ll like "@lat,lng,zoomz" (zoom optional) and center "lat,lng"
-        # Reduced radius to 2000 meters (2km) to keep places closer to anchor location
+        # Use requested max_distance_meters for SerpAPI radius, cap at 50km for safety
+        radius_val = int(max_distance_meters) if max_distance_meters else 5000
         params["ll"] = f"@{lat:.7f},{lng:.7f},15z"
         params["center"] = f"{lat:.7f},{lng:.7f}"
-        params["radius"] = "2000"
+        params["radius"] = str(min(radius_val, 50000))
 
     # Send request
     resp = requests.get(base_url, params=params, timeout=15)

@@ -1,21 +1,19 @@
 # planner.py
 import json
 import os
+import traceback
 import urllib.parse
 import requests
 from fastapi import HTTPException
+from math import radians, sin, cos, sqrt, atan2
 from typing import Any, Dict, List, Optional, Tuple
 
 from scraper import get_places
 from planner_sessions import create_session, get_session, push_selection, set_last_options
-from place_analyzer import (
-    analyze_mood_fit, detect_atmosphere, detect_parking, 
-    analyze_stage2_preferences, filter_by_distance_preference,
-    calculate_distance_category
-)
 
-PREFERENCES_FILE = "preferences.json"
-USER_PREFS_FILE = "user_last_prefs.json"
+_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+PREFERENCES_FILE = os.path.join(_ROOT_DIR, "preferences.json")
+USER_PREFS_FILE = os.path.join(_ROOT_DIR, "user_last_prefs.json")
 
 # Load preferences mapping (id -> label) if present
 if os.path.exists(PREFERENCES_FILE):
@@ -37,25 +35,6 @@ LABEL_TO_PLACE_TYPES = {
     "Chill & Relaxed": ["cafe", "park", "co_working"],
     "Romantic": ["restaurant", "hotel", "rooftop", "scenic"],
     "Family": ["play_area", "park", "museum"],
-}
-
-# Map preferences to recommended flow steps
-PREFERENCE_TO_FLOW = {
-    # Adventure level strongly influences flow
-    "Weekend escape": ["restaurant", "activity", "stay"],  # Always include stay for weekend escapes
-    "Short drive to hidden gem": ["restaurant", "activity"],  # Activities likely, stay optional
-    "Stick to the city": ["restaurant", "activity"],  # Usually no stay needed for city trips
-    
-    # Mood influences activity inclusion
-    "Fun & Energetic": ["restaurant", "activity"],  # Activities are important
-    "Chill & Relaxed": ["restaurant", "activity"],  # Activities can be parks/cafes
-    "Business-y": ["restaurant"],  # Usually just restaurant, maybe activity
-    "Romantic": ["restaurant", "activity", "stay"],  # Often includes stay for romantic getaways
-    
-    # Memorable factor influences what's included
-    "A unique place": ["restaurant", "activity"],  # Activities help find unique places
-    "Amazing food": ["restaurant"],  # Focus on food, activities optional
-    "Deep conversations / Capture moments": ["restaurant", "activity"],  # Activities for memorable moments
 }
 
 
@@ -179,16 +158,16 @@ def determine_flow_from_preferences(labels_used: Dict[str, List[str]]) -> List[s
     Intelligently determines which steps are needed based on preferences.
     """
     flow_steps = set()
-    
+
     # Always include restaurant as the first step (default)
     flow_steps.add("restaurant")
-    
+
     # Analyze adventure level - strongest indicator for stay
     adventure_labels = labels_used.get("adventureLevel", [])
     needs_stay = False
     needs_activity = False
     force_no_activity = False  # Flag to explicitly exclude activities
-    
+
     for label in adventure_labels:
         if label == "Weekend escape":
             needs_stay = True  # Weekend escapes almost always need accommodation
@@ -199,7 +178,7 @@ def determine_flow_from_preferences(labels_used: Dict[str, List[str]]) -> List[s
         elif label == "Stick to the city":
             needs_activity = True  # City activities are common
             # Usually no stay needed for city trips
-    
+
     # Analyze mood - can override or reinforce decisions
     mood_labels = labels_used.get("mood", [])
     for label in mood_labels:
@@ -215,7 +194,7 @@ def determine_flow_from_preferences(labels_used: Dict[str, List[str]]) -> List[s
             # Override activity requirement unless adventure level strongly suggests it
             if "Weekend escape" not in adventure_labels and "Short drive to hidden gem" not in adventure_labels:
                 force_no_activity = True  # Business-y overrides city activities
-    
+
     # Analyze memorable factor - can add activities
     memorable_labels = labels_used.get("memorableFactor", [])
     for label in memorable_labels:
@@ -227,13 +206,13 @@ def determine_flow_from_preferences(labels_used: Dict[str, List[str]]) -> List[s
             pass
         elif label == "Deep conversations / Capture moments":
             needs_activity = True  # Activities create memorable moments
-    
+
     # Add steps based on analysis (respect force_no_activity flag)
     if needs_activity and not force_no_activity:
         flow_steps.add("activity")
     if needs_stay:
         flow_steps.add("stay")
-    
+
     # Build ordered flow (restaurant first, then activity, then stay)
     ordered_flow = []
     if "restaurant" in flow_steps:
@@ -242,11 +221,11 @@ def determine_flow_from_preferences(labels_used: Dict[str, List[str]]) -> List[s
         ordered_flow.append("activity")
     if "stay" in flow_steps:
         ordered_flow.append("stay")
-    
+
     # Ensure at least restaurant is included
     if not ordered_flow:
         ordered_flow = ["restaurant"]
-    
+
     return ordered_flow
 
 
@@ -298,59 +277,12 @@ def tag_place_minimal(place: Dict[str, Any]) -> List[str]:
     return tags
 
 
-def score_place_comprehensive(place: Dict[str, Any], labels_used: Dict[str, List[str]], stage2_prefs: Dict[str, Any] = None) -> float:
-    """
-    Comprehensive scoring that considers Stage 1 labels, Stage 2 sub-preferences,
-    mood fit, atmosphere, parking, and other amenities.
-    """
+def score_place_minimal(place: Dict[str, Any], labels_used: Dict[str, List[str]]) -> float:
     score = 0.0
-    
-    # Base rating score (3.0+ gets bonus)
     try:
-        rating = float(place.get("rating", 0))
-        if rating >= 4.5:
-            score += 3.0
-        elif rating >= 4.0:
-            score += 2.0
-        elif rating >= 3.5:
-            score += 1.0
-        elif rating >= 3.0:
-            score += 0.5
+        score += max(0.0, (float(place.get("rating", 0)) - 3.0)) * 1.5
     except Exception:
         pass
-    
-    # Stage 2 comprehensive analysis
-    if stage2_prefs:
-        stage2_analysis = analyze_stage2_preferences(place, stage2_prefs)
-        score += stage2_analysis.get('compatibility_score', 0)
-        # Store analysis results in place for frontend display
-        place['stage2_analysis'] = stage2_analysis
-    
-    # Mood-based scoring
-    mood_labels = labels_used.get('mood', [])
-    if mood_labels and len(mood_labels) > 0:
-        user_mood = mood_labels[0]  # Primary mood
-        mood_subs = (stage2_prefs.get('mood_sub') or {}) if stage2_prefs else None
-        mood_analysis = analyze_mood_fit(place, user_mood, mood_subs)
-        score += mood_analysis.get('mood_match_score', 0)
-        place['mood_analysis'] = mood_analysis
-    
-    # Atmosphere detection and scoring
-    atmosphere = detect_atmosphere(place)
-    place['atmosphere'] = atmosphere
-    
-    # Parking detection if required
-    adventure_sub = (stage2_prefs.get('adventureLevel_sub') or {}) if stage2_prefs else {}
-    parking_required = 'Parking' in str(adventure_sub.get('sc_transport') or '')
-    parking_info = detect_parking(place, parking_required)
-    place['parking'] = parking_info
-    
-    if parking_required and parking_info['status'] == 'available':
-        score += 1.5
-        if parking_info['has_valet']:
-            score += 0.5
-    
-    # Legacy keyword matching for backward compatibility
     txt = (place.get("title", "") + " " + place.get("address", "")).lower()
     if any("music" in s.lower() for lst in labels_used.values() for s in lst):
         if "music" in txt or "live" in txt:
@@ -358,14 +290,7 @@ def score_place_comprehensive(place: Dict[str, Any], labels_used: Dict[str, List
     if any("weekend" in s.lower() or "escape" in s.lower() for lst in labels_used.values() for s in lst):
         if "resort" in txt or "getaway" in txt:
             score += 1.2
-    
     return float(round(score, 3))
-
-
-# Keep old function for backward compatibility
-def score_place_minimal(place: Dict[str, Any], labels_used: Dict[str, List[str]]) -> float:
-    """Legacy minimal scoring - use score_place_comprehensive instead."""
-    return score_place_comprehensive(place, labels_used, None)
 
 
 def dedupe_places(list_of_places: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -405,33 +330,49 @@ def _prepare_coords_tuple(coords) -> Optional[Tuple[float, float]]:
     return None
 
 
+def _haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    R = 6371000
+    lat1, lng1, lat2, lng2 = map(radians, [lat1, lng1, lat2, lng2])
+    dlat = lat2 - lat1
+    dlng = lng2 - lng1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+
+
+def _distance_boost(base_score: float, distance_m: float, is_weekend_escape: bool = False) -> float:
+    if is_weekend_escape:
+        if distance_m <= 1000:
+            base_score -= 0.3
+        elif 2000 <= distance_m <= 8000:
+            base_score += 0.8
+        elif distance_m > 12000:
+            base_score -= 0.4
+    else:
+        if distance_m <= 500:
+            base_score += 2.0
+        elif distance_m <= 1000:
+            base_score += 1.0
+        elif distance_m <= 2000:
+            base_score += 0.5
+    return base_score
+
+
 def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15):
     prefs_data = payload.get("preferences", {}) or {}
     coords = payload.get("coords")
     location_hint = payload.get("location")
 
-    print(f"DEBUG: generate_initial_suggestions called with location_hint='{location_hint}', coords={coords}")
-
     coords_tuple = _prepare_coords_tuple(coords)
-    
-    # If coordinates exist, prioritize them. 
-    # Also ignore location_hint if it's just whitespace or the raw 'Lat ... Lng ...' string
-    if location_hint and (not location_hint.strip() or _is_coord_string(location_hint)):
-        location_hint = None
 
     # If we have a textual location but no coords, try to geocode it
-    if location_hint and not coords_tuple:
-        print(f"DEBUG: Attempting to geocode location '{location_hint}'")
+    if location_hint and not coords_tuple and not _is_coord_string(location_hint):
         from scraper import _geocode_address_nominatim
         try:
             geocoded_coords = _geocode_address_nominatim(location_hint)
             if geocoded_coords:
                 coords_tuple = geocoded_coords
-                print(f"DEBUG: Successfully geocoded to {coords_tuple}")
-            else:
-                print(f"DEBUG: Geocoding failed for '{location_hint}'")
-        except Exception as e:
-            print(f"DEBUG: Geocoding error: {e}")
+        except Exception:
+            pass
 
     # If coords exist but location_hint is a raw lat/lng string, avoid using it in textual queries.
     loc_text_for_display = location_hint
@@ -457,8 +398,6 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
             loc_text_for_query = location_hint
         else:
             loc_text_for_query = ""
-
-    print(f"DEBUG: loc_text_for_query='{loc_text_for_query}', loc_text_for_display='{loc_text_for_display}', coords_tuple={coords_tuple}")
 
     mood_labels = normalize_to_labels("mood", prefs_data.get("mood"))
     planning_labels = normalize_to_labels("planningStyle", prefs_data.get("planningStyle"))
@@ -490,31 +429,18 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         "memorableFactor": memorable_labels,
     }
 
-    # Build top tokens (max 3), EXCLUDING meta-preferences that aren't good search terms
-    # "planningStyle" (e.g. "Full control", "Surprise me") produces bad search results.
-    # "memorableFactor" (e.g. "Deep conversations") is also vague for search.
-    # We prioritize "mood" and "adventureLevel" and "addOnMagic" (some are useful).
-    searchable_categories = ("mood", "adventureLevel")
-    
+    # Build top tokens (max 3)
     tokens = []
-    # 1. Add Mood (High priority)
-    for v in (labels_used.get("mood") or []):
-        if v: tokens.append({"category": "mood", "label": v, "phrase": v})
-        
-    # 2. Add Adventure Level (Medium priority)
-    for v in (labels_used.get("adventureLevel") or []):
-        if v and "city" not in v.lower(): # "Stick to the city" is not a helpful search term
-            tokens.append({"category": "adventureLevel", "label": v, "phrase": v})
-            
-    # 3. Add explicit Magic tags if helpful (Low priority)
-    for v in (labels_used.get("addOnMagic") or []):
-        # Only add if it looks like a place attribute (e.g. "Live music")
-        if v and ("music" in v.lower() or "unique" in v.lower()):
-            tokens.append({"category": "addOnMagic", "label": v, "phrase": v})
+    for cat in ("mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor"):
+        for v in (labels_used.get(cat) or []):
+            if len(tokens) >= 3:
+                break
+            if v:
+                tokens.append({"category": cat, "label": v, "phrase": v})
+        if len(tokens) >= 3:
+            break
 
-    # Slice to max 3
-    final_tokens = tokens[:3]
-    short_q = short_query_from_selected(final_tokens)
+    short_q = short_query_from_selected(tokens)
 
     # select place types based on labels and prioritize
     place_types = select_place_types(labels_used)
@@ -537,168 +463,91 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         "activity": "things to do",
     }
 
-    # Try queries: multiple variations to get better results
+    # Build attempts list of (q, place_type, coords) — max 4 attempts
     attempts = []
+    top_type = primary_types[0] if primary_types else "restaurant"
+    top_name = place_type_names.get(top_type, top_type)
 
-    # Build attempts list of (q, place_type, coords)
-    for pt in primary_types[:3]:
-        pt_name = place_type_names.get(pt, pt)
-        
-        # Variation 1: preferences + place type + location
-        if loc_text_for_query:
-            q = f"{short_q} {pt_name} near {loc_text_for_query}".strip()
-        else:
-            q = f"{short_q} {pt_name}".strip()
-        attempts.append((q, pt, coords_tuple))
-        
-        # Variation 2: just place type + location (simpler query for better results)
-        if loc_text_for_query:
-            q2 = f"{pt_name} in {loc_text_for_query}".strip()
-            attempts.append((q2, pt, coords_tuple))
-        
-        # Variation 3: place type + location (another format)
-        if loc_text_for_query:
-            q3 = f"best {pt_name} {loc_text_for_query}".strip()
-            attempts.append((q3, pt, coords_tuple))
+    # Attempt 1: preference-driven query with location
+    if loc_text_for_query:
+        attempts.append((f"{short_q} {top_name} near {loc_text_for_query}".strip(), top_type, coords_tuple))
+    else:
+        attempts.append((f"{short_q} {top_name}".strip(), top_type, coords_tuple))
 
-    print(f"DEBUG: Built {len(attempts)} attempts: {attempts}")
+    # Attempt 2: plain place type + location (broader, better coverage)
+    if loc_text_for_query:
+        attempts.append((f"{top_name} in {loc_text_for_query}".strip(), top_type, coords_tuple))
+
+    # Attempt 3: second place type if available
+    if len(primary_types) > 1:
+        pt2 = primary_types[1]
+        pt2_name = place_type_names.get(pt2, pt2)
+        q3 = f"{pt2_name} in {loc_text_for_query}".strip() if loc_text_for_query else f"{pt2_name}".strip()
+        attempts.append((q3, pt2, coords_tuple))
+
+    # Compute max distance once before the loop
+    max_base_dist = 10000 if is_weekend_escape else 2500
 
     # Run attempts, stop early when we have enough results
     for idx, (q, pt, ctuple) in enumerate(attempts):
         # Early exit if we already have enough results (increased threshold for better selection)
         if len(options) >= max(num_results * 3, 40):
             break
-        
+
         try:
             # Fetch more results (40-50) to have better selection, then filter by distance.
             # For weekend escapes, allow a moderately larger radius (not too far from the city).
             fetch_count = max(num_results * 3, 40)
-            max_base_dist = 15000 # Increased from 2500 to 15km for better city-wide coverage
-            if is_weekend_escape:
-                max_base_dist = 50000  # up to ~50km for weekend trips
             max_dist = max_base_dist if ctuple else None
-            print(f"DEBUG: Attempting fetch with q='{q}', pt={pt}, coords={ctuple}, max_dist={max_dist}")
             fetched = get_places(q, num_results=fetch_count, coords=ctuple, place_type=pt, max_distance_meters=max_dist)
             if fetched:
-                print(f"🔎 initial fetch succeeded on attempt {idx+1} q='{q}' pt={pt} coords={'yes' if ctuple else 'no'} -> {len(fetched)} results")
                 options.extend(fetched)
                 # Stop early if we have enough results (reduced threshold)
                 if len(options) >= max(num_results, 15):
                     break
-            else:
-                print(f"🔎 initial fetch returned 0 on attempt {idx+1} q='{q}' pt={pt} coords={'yes' if ctuple else 'no'}")
         except Exception as e:
-            print(f"⚠️ initial get_places failed on attempt {idx+1} q='{q}' pt={pt} coords={'yes' if ctuple else 'no'}:", e)
-            import traceback
-            traceback.print_exc()
-    
+            pass
+
     # Only try generic fallback if we still don't have enough results
     if len(options) < num_results:
         try:
             fetch_count = max(num_results * 2, 25)
-            max_base_dist = 2500
-            if is_weekend_escape:
-                max_base_dist = 10000
             max_dist = max_base_dist if coords_tuple else None
-            print(f"DEBUG: Trying generic fallback with q='{short_q}'")
             fetched = get_places(short_q, num_results=fetch_count, coords=coords_tuple, place_type=None, max_distance_meters=max_dist)
             if fetched:
-                print(f"🔎 fallback generic query succeeded -> {len(fetched)} results")
                 options.extend(fetched)
         except Exception as e:
-            print(f"⚠️ fallback query failed:", e)
-    
+            pass
+
     # Last resort: if still no results, try just location-based search (no preferences)
     if len(options) < num_results and loc_text_for_query:
         try:
             fetch_count = max(num_results * 2, 25)
             max_dist = 2500 if coords_tuple else None
-            print(f"DEBUG: Trying location-only fallback with q='{loc_text_for_query}'")
             fetched = get_places(loc_text_for_query, num_results=fetch_count, coords=coords_tuple, place_type=None, max_distance_meters=max_dist)
             if fetched:
-                print(f"🔎 location-only fallback succeeded -> {len(fetched)} results")
                 options.extend(fetched)
         except Exception as e:
-            print(f"⚠️ location-only fallback failed:", e)
-
-    # FINAL RESORT: If still 0 results, try a generic search with NO distance limit and NO place type
-    if not options and loc_text_for_query:
-        try:
-            print(f"DEBUG: FINAL RESORT - Trying generic search for '{loc_text_for_query}' with NO distance limit")
-            fetched = get_places(loc_text_for_query, num_results=15, coords=coords_tuple, place_type=None, max_distance_meters=None)
-            if fetched:
-                print(f"🔎 Final resort succeeded -> {len(fetched)} results")
-                options.extend(fetched)
-        except Exception as e:
-            print(f"⚠️ Final resort failed:", e)
+            pass
 
     # Deduplicate & score
     options = dedupe_places(options)
 
-    # Extract Stage 2 sub-preferences for comprehensive analysis
-    stage2_prefs = {
-        'mood_sub': prefs_data.get('mood_sub') or prefs_data.get('moodSub'),
-        'planningStyle_sub': prefs_data.get('planningStyle_sub') or prefs_data.get('planningStyleSub'),
-        'adventureLevel_sub': prefs_data.get('adventureLevel_sub') or prefs_data.get('adventureLevelSub'),
-        'addOnMagic_sub': prefs_data.get('addOnMagic_sub') or prefs_data.get('addOnMagicSub'),
-        'memorableFactor_sub': prefs_data.get('memorableFactor_sub') or prefs_data.get('memorableFactorSub'),
-    }
-    
-    # Get area and distance preferences from Stage 2
-    adv_sub = stage2_prefs.get('adventureLevel_sub') or {}
-    area_preference = adv_sub.get('sc_area') if isinstance(adv_sub, dict) else None
-    distance_preference = adv_sub.get('distance_range') if isinstance(adv_sub, dict) else None
-    
-    # Apply distance-based filtering if we have adventure level
-    if adventure_labels and coords_tuple:
-        primary_adventure = adventure_labels[0] if adventure_labels else None
-        if primary_adventure:
-            options = filter_by_distance_preference(
-                options, 
-                primary_adventure,
-                area_preference,
-                distance_preference
-            )
-    
-    # Score each place with comprehensive analysis
+    # Add distance-based scoring boost (closer places get higher score)
+    coords_tuple = _prepare_coords_tuple(coords)
     for p in options:
-        p["tags"] = tag_place_minimal(p) # Keep minimal tags for now
-        base_score = score_place_comprehensive(p, labels_used, stage2_prefs)
-        
+        p["tags"] = tag_place_minimal(p)
+        base_score = score_place_minimal(p, labels_used)
+
         # Boost score based on distance if we have coords
         if coords_tuple and p.get("lat") and p.get("lng"):
             try:
-                from math import radians, sin, cos, sqrt, atan2
-                R = 6371000  # Earth radius in meters
-                lat1, lng1 = radians(coords_tuple[0]), radians(coords_tuple[1])
-                lat2, lng2 = radians(float(p["lat"])), radians(float(p["lng"]))
-                delta_lat = lat2 - lat1
-                delta_lng = lng2 - lng1
-                a = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lng / 2) ** 2
-                c = 2 * atan2(sqrt(a), sqrt(1 - a))
-                distance_m = R * c
+                distance_m = _haversine_meters(coords_tuple[0], coords_tuple[1], float(p["lat"]), float(p["lng"]))
                 p["distance_meters"] = distance_m
-
-                if is_weekend_escape:
-                    # Weekend escape: prefer moderately away places (2–8km),
-                    # avoid both ultra-close (<1km) and very far (>12km).
-                    if distance_m <= 1000:
-                        base_score -= 0.3
-                    elif 2000 <= distance_m <= 8000:
-                        base_score += 0.8
-                    elif distance_m > 12000:
-                        base_score -= 0.4
-                else:
-                    # Default behavior: boost closer places
-                    if distance_m <= 500:
-                        base_score += 2.0
-                    elif distance_m <= 1000:
-                        base_score += 1.0
-                    elif distance_m <= 2000:
-                        base_score += 0.5
+                base_score = _distance_boost(base_score, distance_m, is_weekend_escape=is_weekend_escape)
             except Exception:
                 pass
-        
+
         p["score"] = base_score
 
     # Sort by score (which includes distance boost), then by distance if available
@@ -711,8 +560,6 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     # are not overly clustered in one area of the outskirts.
     if is_weekend_escape and coords_tuple and options_sorted:
         try:
-            from math import atan2
-
             def _sector(place, center):
                 try:
                     plat = float(place.get("lat"))
@@ -828,14 +675,14 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
         "restaurant": ["restaurant", "cafe", "bar"],
         "activity": [
             "tourist_attraction", "park", "amusement_park", "play_area", "scenic",
-            "escape_room", "bowling", "go_karting", "arcade", "laser_tag", 
+            "escape_room", "bowling", "go_karting", "arcade", "laser_tag",
             "paintball", "trampoline", "adventure_sports", "indoor_activities"
         ],
         "stay": ["hotel", "resort"],
         "default": select_place_types(labels_used),
     }
     desired_types = mapping.get(next_step, mapping["default"])
-    
+
     # Only prioritize types for restaurant step or default - don't add restaurant defaults to activity/stay
     if next_step == "restaurant" or next_step not in mapping:
         desired_types = _prioritize_types(desired_types)
@@ -846,38 +693,26 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
 
     fetched = []
 
-    # For activity step, also add direct activity searches beyond place types
-    # Reduced to 2-3 most common activity types to save API calls
+    # For activity step, use a single broad search to reduce API calls
     if next_step == "activity":
-        # Only search for top 2-3 most popular activity types
-        activity_queries = [
-            "escape rooms",
-            "bowling alleys",
-            "go karting",
-        ]
-        for activity_q in activity_queries[:2]:  # Reduced from 5 to 2
-            # Early exit if we have enough results
-            if len(fetched) >= num_results * 2:
-                break
-            try:
-                fetch_count = max(num_results * 2, 20)
-                max_dist = 15000 if anchor_coords else None # Increased from 2500 to 15km
-                res = get_places(activity_q, num_results=fetch_count, coords=anchor_coords, place_type=None, max_distance_meters=max_dist)
-                if res:
-                    print(f"🔎 activity query succeeded q='{activity_q}' coords={'yes' if anchor_coords else 'no'} -> {len(res)}")
-                    fetched.extend(res)
-            except Exception as e:
-                print(f"⚠️ activity query failed for '{activity_q}':", e)
+        try:
+            fetch_count = max(num_results * 2, 20)
+            max_dist = 2500 if anchor_coords else None
+            res = get_places("things to do", num_results=fetch_count, coords=anchor_coords, place_type=None, max_distance_meters=max_dist)
+            if res:
+                fetched.extend(res)
+        except Exception as e:
+            pass
 
     # Try a short clean query per desired type, prefer using anchor_coords if available.
-    # Limit to top 3-4 types to reduce API calls
-    limited_types = desired_types[:4] if len(desired_types) > 4 else desired_types
-    
+    # Limit to top 2 types to reduce API calls
+    limited_types = desired_types[:2]
+
     for pt in limited_types:
         # Early exit if we have enough results
         if len(fetched) >= num_results * 2:
             break
-            
+
         # For activity step, use activity-specific queries (no restaurant-related terms)
         if next_step == "activity":
             # Map place types to better search queries for activities
@@ -906,51 +741,47 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
 
         # If we have an anchor_text (address) but also anchor_coords, do not append long address to q; prefer coords
         try:
-            # Fetch more results and filter by distance (15km max from anchor)
+            # Fetch more results and filter by distance (2.5km max from anchor)
             fetch_count = max(num_results * 2, 20)
-            max_dist = 15000 if anchor_coords else None  # Increased from 2500 to 15km
+            max_dist = 2500 if anchor_coords else None  # 2.5km max distance from anchor
             res = get_places(q, num_results=fetch_count, coords=anchor_coords, place_type=pt, max_distance_meters=max_dist)
-            if res:
-                print(f"🔎 followup succeeded q='{q}' pt={pt} coords={'yes' if anchor_coords else 'no'} -> {len(res)}")
-            else:
-                print(f"🔎 followup returned 0 q='{q}' pt={pt} coords={'yes' if anchor_coords else 'no'}")
             fetched.extend(res)
         except Exception as e:
-            print(f"⚠️ followup get_places failed for {pt} q='{q}' coords={'yes' if anchor_coords else 'no'}:", e)
+            pass
 
     fetched = dedupe_places(fetched)
-    
+
     # Filter out inappropriate place types based on next_step
     if next_step == "activity":
         # Remove restaurants, cafes, bars from activity results
         activity_keywords = ["restaurant", "cafe", "bar", "diner", "bistro", "eatery", "food"]
         fetched = [p for p in fetched if not any(
-            kw in (p.get("title", "") + " " + p.get("address", "")).lower() 
+            kw in (p.get("title", "") + " " + p.get("address", "")).lower()
             for kw in activity_keywords
         )]
     elif next_step == "stay":
         # Remove restaurants, cafes from stay results (keep hotels/resorts)
         stay_keywords = ["restaurant", "cafe", "bar"]
         fetched = [p for p in fetched if not any(
-            kw in (p.get("title", "") + " " + p.get("address", "")).lower() 
+            kw in (p.get("title", "") + " " + p.get("address", "")).lower()
             for kw in stay_keywords
         )]
-    
+
     # Add distance-based scoring boost for followup suggestions
     for p in fetched:
         p["tags"] = tag_place_minimal(p)
         base_score = score_place_minimal(p, labels_used)
-        
+
         # Boost score for activity-relevant places when in activity step
         if next_step == "activity":
             title_addr = (p.get("title", "") + " " + p.get("address", "")).lower()
             activity_keywords = [
                 # Outdoor activities
-                "park", "playground", "attraction", "museum", "zoo", "aquarium", "garden", 
+                "park", "playground", "attraction", "museum", "zoo", "aquarium", "garden",
                 "scenic", "viewpoint", "monument", "temple", "church", "beach", "lake",
                 # Indoor/Entertainment activities
-                "escape room", "escape", "bowling", "go kart", "gokart", "karting", 
-                "arcade", "laser tag", "paintball", "trampoline", "adventure", 
+                "escape room", "escape", "bowling", "go kart", "gokart", "karting",
+                "arcade", "laser tag", "paintball", "trampoline", "adventure",
                 "activity", "activities", "fun", "entertainment", "recreation",
                 "sports", "game", "games", "play", "indoor", "outdoor",
                 "cinema", "theater", "theatre", "stadium", "arena", "club",
@@ -960,30 +791,16 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
             ]
             if any(kw in title_addr for kw in activity_keywords):
                 base_score += 1.5
-        
+
         # Boost score for closer places if we have anchor coords
         if anchor_coords and p.get("lat") and p.get("lng"):
             try:
-                from math import radians, sin, cos, sqrt, atan2
-                R = 6371000  # Earth radius in meters
-                lat1, lng1 = radians(anchor_coords[0]), radians(anchor_coords[1])
-                lat2, lng2 = radians(float(p["lat"])), radians(float(p["lng"]))
-                delta_lat = lat2 - lat1
-                delta_lng = lng2 - lng1
-                a = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lng / 2) ** 2
-                c = 2 * atan2(sqrt(a), sqrt(1 - a))
-                distance_m = R * c
+                distance_m = _haversine_meters(anchor_coords[0], anchor_coords[1], float(p["lat"]), float(p["lng"]))
                 p["distance_meters"] = distance_m
-                # Boost: places within 500m get +2, within 1km get +1, within 2km get +0.5
-                if distance_m <= 500:
-                    base_score += 2.0
-                elif distance_m <= 1000:
-                    base_score += 1.0
-                elif distance_m <= 2000:
-                    base_score += 0.5
+                base_score = _distance_boost(base_score, distance_m)
             except Exception:
                 pass
-        
+
         p["score"] = base_score
 
     # Sort by score (which includes distance boost), then by distance
@@ -996,129 +813,4 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
         "next_step": next_step,
         "options": fetched_sorted[:num_results],
         "desired_types": desired_types,
-    }
-
-
-# ----------------- Backwards-compatible single-call generate_plan -----------------
-def _map_place_to_frontend(item: Dict[str, Any]) -> Dict[str, Any]:
-    title = item.get("title") or item.get("name") or item.get("Name") or "Unnamed Place"
-    address = item.get("address") or item.get("Address") or item.get("vicinity") or ""
-    rating = item.get("rating") or item.get("Rating") or 0
-    link = item.get("link") or item.get("Google Maps Link") or item.get("website") or ""
-    thumbnail = item.get("thumbnail") or item.get("serpapi_thumbnail") or None
-    try:
-        rating = float(rating) if rating not in (None, "") else 0.0
-    except Exception:
-        rating = 0.0
-    return {
-        "title": title,
-        "address": address,
-        "rating": rating,
-        "link": link,
-        "thumbnail": thumbnail,
-        "raw": item,
-    }
-
-
-def generate_plan(payload: Dict[str, Any]):
-    """
-    Backwards-compatible single-shot generate_plan.
-    This wraps the new initial suggestion logic and returns a response shape similar to older generate_plan.
-    """
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="payload must be a JSON object")
-
-    print("📥 planner.generate_plan received payload:", json.dumps(payload, ensure_ascii=False))
-    user_id = payload.get("user_id")
-    prefs_data = payload.get("preferences", {}) or {}
-    max_terms = int(payload.get("max_terms", payload.get("maxTerms", 3)) or 3)
-    num_results = int(payload.get("num_results", 10) or 10)
-
-    coords = payload.get("coords") or payload.get("coordinate") or payload.get("latlng")
-    location_hint = payload.get("location") or payload.get("place") or None
-
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Missing user_id.")
-    if not isinstance(prefs_data, dict):
-        raise HTTPException(status_code=400, detail="preferences must be an object")
-
-    # If coords provided attempt reverse geocode for friendly display; otherwise keep textual hint
-    if coords and not location_hint:
-        try:
-            location_hint = reverse_geocode_to_text(coords)
-            if location_hint:
-                print("🔍 Reverse-geocoded coords to:", location_hint)
-        except Exception:
-            pass
-
-    mood_labels = normalize_to_labels("mood", prefs_data.get("mood"))
-    planning_labels = normalize_to_labels("planningStyle", prefs_data.get("planningStyle"))
-    adventure_labels = normalize_to_labels("adventureLevel", prefs_data.get("adventureLevel"))
-    addon_labels = normalize_to_labels("addOnMagic", prefs_data.get("addOnMagic"))
-    memorable_labels = normalize_to_labels("memorableFactor", prefs_data.get("memorableFactor"))
-
-    labels_used = {
-        "mood": mood_labels,
-        "planningStyle": planning_labels,
-        "adventureLevel": adventure_labels,
-        "addOnMagic": addon_labels,
-        "memorableFactor": memorable_labels,
-    }
-
-    print("📚 labels_used after normalization:", json.dumps(labels_used, ensure_ascii=False))
-
-    # build selected tokens (simple top-k from priority)
-    selected_tokens = []
-    for cat in CATEGORY_PRIORITY:
-        if len(selected_tokens) >= max_terms:
-            break
-        vals = labels_used.get(cat, []) or []
-        for v in vals:
-            if len(selected_tokens) >= max_terms:
-                break
-            selected_tokens.append({"category": cat, "label": v, "phrase": v})
-
-    # Build display query and short query
-    short_q = short_query_from_selected(selected_tokens)
-
-    # For display, avoid showing raw "Lat ..." if coords were provided.
-    if coords and isinstance(location_hint, str) and _is_coord_string(location_hint):
-        # try reverse geocode
-        try:
-            rc = reverse_geocode_to_text(coords)
-            if rc:
-                display_loc = rc
-            else:
-                display_loc = None
-        except Exception:
-            display_loc = None
-    else:
-        display_loc = location_hint
-
-    display_q = short_q
-    if display_loc:
-        display_q = f"{display_q} near {display_loc}"
-    search_url = "https://www.google.com/search?q=" + urllib.parse.quote_plus(display_q)
-
-    # call initial suggestions to fetch options (reuse logic)
-    initial_payload = {
-        "user_id": user_id,
-        "preferences": prefs_data,
-        "coords": coords,
-        "location": location_hint,
-        "max_terms": max_terms,
-    }
-    initial = generate_initial_suggestions(initial_payload, num_results=num_results)
-    recommendations_raw = initial.get("options", []) or []
-
-    recommendations_mapped = [_map_place_to_frontend(r) for r in recommendations_raw]
-
-    return {
-        "user_id": user_id,
-        "query": display_q,
-        "search_url": search_url,
-        "labels_used": labels_used,
-        "selected_for_query": selected_tokens,
-        "recommendations": recommendations_mapped,
-        "note": "Generated query and fetched recommendations via SerpAPI (google_maps).",
     }

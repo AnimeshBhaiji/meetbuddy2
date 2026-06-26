@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI, Depends, HTTPException, Request, Body
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
@@ -9,10 +9,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json, os
 from pathlib import Path
-from planner import generate_plan 
 from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import create_session, get_session, push_selection, set_last_options
-from scraper import get_places
 
 
 # -------- DATABASE SETUP --------
@@ -20,32 +18,13 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 # -------- CORS --------
-# -------- CORS --------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Local development
-        "http://127.0.0.1:5173",  # Alternative localhost
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    allow_origin_regex=r"https?://.*\.ngrok-free\.app"  # Allow ALL ngrok subdomains dynamically
 )
-
-# -------- LOGGING MIDDLEWARE --------
-import traceback
-@app.middleware("http")
-async def log_exceptions_middleware(request: Request, call_next):
-    try:
-        return await call_next(request)
-    except Exception as e:
-        print(f"\n❌ [CRITICAL ERROR] {request.method} {request.url.path}")
-        print(f"Error: {str(e)}")
-        traceback.print_exc()
-        # Still raise it so FastAPI's error handlers can take over for the response
-        raise e
 
 # -------- FILE PATHS (UNIFIED) --------
 ROOT_DIR = os.path.dirname(__file__)
@@ -96,178 +75,51 @@ class UserPreferences(BaseModel):
     class Config:
         extra = "allow"
 
-
-class SearchPlaceRequest(BaseModel):
-    query: str
-    coords: Optional[dict] = None
-    max_results: Optional[int] = 5
-
-# -------- ROOT ENDPOINT --------
-@app.get("/")
-async def root():
-    return {"message": "MeetBuddy API is running"}
-
-
-@app.post("/update-preferences")
-async def update_preferences(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    try:
-        data = await request.json()
-        user_id = data.get("user_id")
-        preferences = data.get("preferences", {})
-        
-        if not user_id:
-            raise HTTPException(status_code=400, detail="User ID is required")
-            
-        # Get the user
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-            
-        # Update preferences
-        user.preferences = json.dumps(preferences)
-        db.commit()
-        
-        # Also save to file for backward compatibility
-        with open(USER_PREFS_FILE, "w") as f:
-            json.dump({str(user_id): preferences}, f)
-            
-        return {"status": "success", "message": "Preferences updated successfully"}
-        
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
 # -------- USER AUTH --------
 @app.post("/signup")
-async def signup(user: UserCreate, db: Session = Depends(get_db)):
-    try:
-        print(f"Signup attempt for user: {user.username}")  # Debug log
-        
-        # Check if email already exists
-        if db.query(User).filter(User.email == user.email).first():
-            raise HTTPException(
-                status_code=400,
-                detail="Email already registered"
-            )
-            
-        # Check if username already exists
-        if db.query(User).filter(User.username == user.username).first():
-            raise HTTPException(
-                status_code=400,
-                detail="Username already exists"
-            )
+def signup(user: UserCreate, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if db.query(User).filter(User.username == user.username).first():
+        raise HTTPException(status_code=400, detail="Username already exists")
 
-        # Create new user
-        hashed_password = hash_password(user.password)
-        new_user = User(
-            first_name=user.first_name,
-            last_name=user.last_name,
-            email=user.email,
-            phone=user.phone,
-            username=user.username,
-            password=hashed_password,
-        )
-        
-        db.add(new_user)
-        db.commit()
-        db.refresh(new_user)
-        
-        print(f"User created successfully: {new_user.id}")  # Debug log
-        return {
-            "message": "User created successfully",
-            "user_id": new_user.id,
-            "username": new_user.username
-        }
-        
-    except HTTPException as he:
-        # Re-raise HTTP exceptions
-        raise he
-    except Exception as e:
-        db.rollback()
-        print(f"Error during signup: {str(e)}")  # Debug log
-        raise HTTPException(
-            status_code=500,
-            detail=f"An error occurred during signup: {str(e)}"
-        )
+    new_user = User(
+        first_name=user.first_name,
+        last_name=user.last_name,
+        email=user.email,
+        phone=user.phone,
+        username=user.username,
+        password=hash_password(user.password),
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return {"message": "User created successfully", "user_id": new_user.id}
 
 @app.post("/login")
-async def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    try:
-        print(f"Login attempt for: {credentials.identifier}")  # Debug log
-        
-        user = db.query(User).filter(
-            (User.username == credentials.identifier) | 
-            (User.email == credentials.identifier)
-        ).first()
-        
-        if not user:
-            print("User not found")  # Debug log
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid username or password"
-            )
-            
-        if not verify_password(credentials.password, user.password):
-            print("Invalid password")  # Debug log
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid username or password"
-            )
-            
-        print(f"Login successful for user: {user.id}")  # Debug log
-        return {
-            "message": "Login successful",
-            "user_id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name
-        }
-        
-    except Exception as e:
-        print(f"Login error: {str(e)}")  # Debug log
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(
+        (User.username == credentials.identifier) | (User.email == credentials.identifier)
+    ).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+    if not verify_password(credentials.password, user.password):
+        raise HTTPException(status_code=400, detail="Incorrect password")
+    return {"message": "Login successful", "user_id": user.id, "username": user.username}
 
 @app.get("/user/{user_id}")
 def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user_dict = {k: v for k, v in user.__dict__.items() if k != 'password'}
-    return user_dict
-
-@app.delete("/user/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    try:
-        db.delete(user)
-        db.commit()
-        
-        if PREF_FILE.exists():
-            try:
-                with open(USER_PREFS_FILE, 'r+', encoding='utf-8') as f:
-                    prefs = json.load(f)
-                    if str(user_id) in prefs:
-                        del prefs[str(user_id)]
-                        f.seek(0)
-                        json.dump(prefs, f, indent=2)
-                        f.truncate()
-            except Exception as e:
-                print(f"Warning: Could not remove user preferences: {e}")
-        
-        return {"message": "User account deleted successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
+    return {
+        "user_id": user.id,
+        "firstName": user.first_name,
+        "lastName": user.last_name,
+        "email": user.email,
+        "contact": user.phone,
+        "username": user.username,
+    }
 
 # -------------------------------
 # Helper: normalize incoming value -> list of strings
@@ -334,27 +186,19 @@ async def save_preferences(request: Request):
 
     # Overwrite behavior: do not preserve other users' saved preferences.
     # We'll build merged_for_user and write a file that contains only this user's prefs.
-    user_existing = {}
 
     MAIN_KEYS = ["mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor"]
 
-    merged_for_user = dict(user_existing)
+    merged_for_user = {}
 
     for k in MAIN_KEYS:
         incoming = data.get(k, None)
         incoming_list = _to_list_of_strings(incoming)
-        existing_list = [str(x).strip() for x in (user_existing.get(k) or []) if str(x).strip()]
 
-        # Keep the full ordered list of main values so stage1 + stage2 are preserved
-        # (e.g. ["Weekend escape", "Couple", "No"]). If nothing incoming, fall back
-        # to any existing list for this user.
         if incoming_list:
             merged_for_user[k] = incoming_list
         else:
-            if existing_list:
-                merged_for_user[k] = existing_list
-            else:
-                merged_for_user.pop(k, None)
+            merged_for_user.pop(k, None)
 
     for raw_key, raw_val in data.items():
         if not isinstance(raw_key, str):
@@ -407,45 +251,6 @@ async def save_preferences(request: Request):
     print(f"✅ Saved preferences for user {user_id}: {merged_for_user}")
     return {"message": "Preferences saved successfully", "prefs": merged_for_user}
 
-# -------- PLANNER (forwarding payloads) --------
-@app.post("/planner")
-async def planner_endpoint(request: Request):
-    try:
-        raw = await request.json()
-    except Exception as e:
-        print("❌ Error reading planner request body:", e)
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-
-    print("📥 Planner request (raw):", raw)
-
-    # If the payload is the standard shape, keep preferences and also forward coords/location if present
-    if isinstance(raw, dict):
-        payload = {
-            "user_id": raw.get("user_id"),
-            "preferences": raw.get("preferences", {}) if isinstance(raw.get("preferences", {}), dict) else {},
-            "max_terms": raw.get("max_terms", raw.get("maxTerms", 3)),
-            # pass location / coords through if present
-            "location": raw.get("location") or raw.get("place") or None,
-            "coords": raw.get("coords") or raw.get("coordinate") or raw.get("latlng") or None,
-        }
-    else:
-        raise HTTPException(status_code=400, detail="Invalid payload format")
-
-    if not isinstance(payload.get("preferences"), dict):
-        payload["preferences"] = {}
-
-    print("📤 Planner payload forwarded to planner.generate_plan:", payload)
-
-    try:
-        result = generate_plan(payload)
-    except HTTPException:
-        raise
-    except Exception as e:
-        print("❌ Error while generating plan:", e)
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return result
-
 # -------- READ SAVED PREFS --------
 @app.get("/user_prefs/{user_id}")
 def read_user_prefs(user_id: int):
@@ -457,55 +262,6 @@ def read_user_prefs(user_id: int):
     if not prefs:
         raise HTTPException(status_code=404, detail="No prefs for this user")
     return {"user_id": user_id, "prefs": prefs}
-
-
-# Lightweight place search for Planner (e.g., user-typed restaurant)
-@app.post("/search_place")
-async def search_place(req: SearchPlaceRequest):
-    q = (req.query or "").strip()
-    if not q:
-        raise HTTPException(status_code=400, detail="Missing query")
-
-    max_results = req.max_results or 5
-    if max_results <= 0:
-        max_results = 5
-
-    # Normalize coords from dict to tuple if needed
-    coords_param = req.coords
-    if coords_param:
-        if isinstance(coords_param, dict):
-            lat = coords_param.get("lat") or coords_param.get("latitude")
-            lng = coords_param.get("lng") or coords_param.get("lon") or coords_param.get("longitude")
-            if lat is not None and lng is not None:
-                try:
-                    coords_param = (float(lat), float(lng))
-                except (ValueError, TypeError):
-                    print(f"⚠️ Invalid coords format: {coords_param}")
-                    coords_param = None
-            else:
-                coords_param = None
-        elif isinstance(coords_param, (list, tuple)) and len(coords_param) >= 2:
-            try:
-                coords_param = (float(coords_param[0]), float(coords_param[1]))
-            except (ValueError, TypeError, IndexError):
-                print(f"⚠️ Invalid coords format: {coords_param}")
-                coords_param = None
-
-    try:
-        places = get_places(
-            q,
-            num_results=max_results,
-            coords=coords_param,
-            place_type="restaurant",
-            max_distance_meters=3000,
-        )
-    except Exception as e:
-        print("❌ Error in /search_place:", e)
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to search places: {str(e)}")
-
-    return {"results": places}
 
 
 # Start a planner session (create initial suggestions)
@@ -529,17 +285,8 @@ async def planner_session_start(request: Request):
         "location": raw.get("location") or raw.get("place") or None,
     }
 
-    print(f"🚀 [SESSION START] Received payload for user {user_id}")
-    print(f"   - Preferences: {payload['preferences']}")
-    print(f"   - Location/Coords: {payload['location']} / {payload['coords']}")
-    
-    try:
-        initial = generate_initial_suggestions(payload, num_results=15)
-    except Exception as e:
-        print(f"❌ [GENERATE INITIAL FAILED] {str(e)}")
-        traceback.print_exc()
-        raise e
-    
+    initial = generate_initial_suggestions(payload, num_results=15)
+
     # If no options returned from new session flow, fall back to legacy generate_plan
     if not initial.get("options"):
         print("⚠️ No options from generate_initial_suggestions, falling back to legacy generate_plan")
@@ -552,13 +299,11 @@ async def planner_session_start(request: Request):
             "location_hint": legacy_result.get("query"),
             "selected_tokens": legacy_result.get("selected_for_query", []),
         }
-    
+
     # include selected_tokens into session state for downstream
     session_id = create_session(user_id, payload, initial_state={"selected_tokens": initial.get("selected_tokens", [])})
-    
+
     # save selected_tokens and last_options in session
-    s = get_session(session_id)
-    s["selected_tokens"] = initial.get("selected_tokens", [])
     set_last_options(session_id, "initial", initial.get("options", []))
 
     return {
@@ -581,13 +326,12 @@ async def planner_session_select(sid: str, request: Request):
         raw = await request.json()
     except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
-    
+
     session = get_session(sid)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found or expired")
 
     step = raw.get("step") or "default"
-    print(f"👉 [SESSION SELECT] Session {sid}, Step: {step}")
     selected_place = raw.get("place")
     if not selected_place:
         raise HTTPException(status_code=400, detail="Missing selected place")
@@ -618,42 +362,6 @@ async def planner_session_select(sid: str, request: Request):
         "anchor_text": follow.get("anchor_text"),
     }
 
-# Finalize current step (move to next without picking a single place)
-@app.post("/planner/session/{sid}/finalize_step")
-async def planner_session_finalize_step(sid: str, request: Request):
-    try:
-        raw = await request.json()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-    
-    session = get_session(sid)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
-
-    current_step = raw.get("step")
-    next_step = raw.get("next_step")
-    print(f"🏁 [SESSION FINALIZE] Session {sid}, Step: {current_step} -> Next: {next_step}")
-    
-    # If the user has items in their itinerary for this step, 
-    # use the last item as context for the next step's recommendations
-    itinerary = session.get("itinerary", [])
-    if itinerary:
-        # Use the very last place added to the itinerary to anchor next step suggestions
-        last_item = itinerary[-1]
-        session["last_selected"] = last_item.get("place") or last_item
-    
-    # Generate followup suggestions
-    follow = generate_followup_suggestions(session, next_step, num_results=15)
-    set_last_options(sid, next_step, follow.get("options", []))
-
-    return {
-        "session_id": sid,
-        "next_step": next_step,
-        "options": follow.get("options", []),
-        "anchor_text": follow.get("anchor_text"),
-        "itinerary": itinerary,
-    }
-
 # Read session state
 @app.get("/planner/session/{sid}")
 def read_planner_session(sid: str):
@@ -661,156 +369,3 @@ def read_planner_session(sid: str):
     if not s:
         raise HTTPException(status_code=404, detail="Session not found or expired")
     return s
-
-
-# -------- ITINERARY MANAGEMENT ENDPOINTS --------
-from itinerary_manager import (
-    get_itinerary, add_place_to_itinerary, remove_place_from_itinerary,
-    reorder_itinerary, insert_place_after, clear_itinerary
-)
-
-
-@app.get("/planner/session/{sid}/itinerary")
-def get_session_itinerary(sid: str):
-    """Get the current itinerary for a session."""
-    try:
-        itinerary = get_itinerary(sid)
-        return {"session_id": sid, "itinerary": itinerary}
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.post("/planner/session/{sid}/itinerary/add")
-async def add_to_itinerary(sid: str, request: Request):
-    """Add a place to the itinerary."""
-    try:
-        body = await request.json()
-        place = body.get("place")
-        position = body.get("position")  # Optional
-        
-        if not place:
-            raise HTTPException(status_code=400, detail="Missing place data")
-        
-        # Add step context to the place
-        step = body.get("step")
-        if step:
-            place["step_type"] = step
-            
-        session = add_place_to_itinerary(sid, place, position)
-        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/planner/session/{sid}/itinerary/{place_id}")
-def remove_from_itinerary(sid: str, place_id: str):
-    """Remove a place from the itinerary."""
-    try:
-        session = remove_place_from_itinerary(sid, place_id)
-        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.put("/planner/session/{sid}/itinerary/reorder")
-async def reorder_session_itinerary(sid: str, request: Request):
-    """Reorder the itinerary."""
-    try:
-        body = await request.json()
-        new_order = body.get("order")  # List of place IDs
-        
-        if not new_order or not isinstance(new_order, list):
-            raise HTTPException(status_code=400, detail="Missing or invalid order array")
-        
-        session = reorder_itinerary(sid, new_order)
-        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/planner/session/{sid}/itinerary/insert-after")
-async def insert_after_place(sid: str, request: Request):
-    """Insert a place after another place in the itinerary."""
-    try:
-        body = await request.json()
-        after_place_id = body.get("after_place_id")
-        new_place = body.get("place")
-        
-        if not after_place_id or not new_place:
-            raise HTTPException(status_code=400, detail="Missing after_place_id or place data")
-        
-        session = insert_place_after(sid, after_place_id, new_place)
-        return {"session_id": sid, "itinerary": session.get('itinerary', [])}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/planner/session/{sid}/itinerary")
-def clear_session_itinerary(sid: str):
-    """Clear all places from the itinerary."""
-    try:
-        session = clear_itinerary(sid)
-        return {"session_id": sid, "itinerary": []}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# -------- CAB SERVICE ENDPOINTS (MOCK/WIP) --------
-from cab_service import estimate_ride, book_ride, get_available_ride_types
-
-
-@app.post("/cab/estimate")
-async def get_cab_estimate(request: Request):
-    """Get a mock cab fare estimate between two locations."""
-    try:
-        body = await request.json()
-        origin = body.get("origin")  # {lat, lng}
-        destination = body.get("destination")  # {lat, lng}
-        ride_type = body.get("ride_type", "economy")
-        
-        if not origin or not destination:
-            raise HTTPException(status_code=400, detail="Missing origin or destination")
-        
-        estimate = estimate_ride(origin, destination, ride_type)
-        return estimate
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/cab/book")
-async def book_cab(request: Request):
-    """Mock cab booking (WIP - requires API keys)."""
-    try:
-        body = await request.json()
-        origin = body.get("origin")
-        destination = body.get("destination")
-        ride_type = body.get("ride_type", "economy")
-        
-        if not origin or not destination:
-            raise HTTPException(status_code=400, detail="Missing origin or destination")
-        
-        booking = book_ride(origin, destination, ride_type)
-        return booking
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/cab/available")
-async def get_available_cabs(lat: float, lng: float):
-    """Get available ride types at a location."""
-    try:
-        location = {"lat": lat, "lng": lng}
-        rides = get_available_ride_types(location)
-        return rides
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

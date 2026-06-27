@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -NonInteractive -Command \"& { $d = [Console]::In.ReadToEnd() | ConvertFrom-Json; $f = $d.tool_input.file_path; if ($f -match '\\.(jsx?)$') { Push-Location 'C:/Users/Anime/Documents/meetbuddy2/meetbuddy2'; npx eslint --fix $f; Pop-Location } }\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

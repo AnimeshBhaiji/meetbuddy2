@@ -83,7 +83,7 @@ export const MoodMatchBadge = ({ moodAnalysis }) => {
 };
 
 // Itinerary Panel Component
-export const ItineraryPanel = ({ sessionId, itinerary, onRemove, onFinalize, isOpen, onClose, currentStep, isLastStep }) => {
+export const ItineraryPanel = ({ itinerary, onRemove, onFinalize, isOpen, onClose, isLastStep }) => {
     if (!isOpen) return null;
 
     return (

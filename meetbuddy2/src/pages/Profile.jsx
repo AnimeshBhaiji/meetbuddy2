@@ -2,13 +2,49 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Phone, User, LogOut, Settings, Calendar, MapPin, Users, Clock, AlertTriangle } from 'lucide-react';
+import {
+  Mail,
+  User,
+  LogOut,
+  Settings,
+  Calendar,
+  MapPin,
+  Users,
+  Clock,
+  AlertTriangle,
+} from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import Aurora from '@/components/Aurora';
+import AmbientBackground from '@/components/AmbientBackground';
+import GlassCard from '@/components/ui/GlassCard';
+import GlowButton from '@/components/ui/GlowButton';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
 import { API_BASE_URL } from '@/config';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+
+const PREF_META = [
+  { key: 'mood', emoji: '🎭' },
+  { key: 'planningStyle', emoji: '🗺️' },
+  { key: 'adventureLevel', emoji: '🧭' },
+  { key: 'addOnMagic', emoji: '✨' },
+  { key: 'memorableFactor', emoji: '💫' },
+];
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: 0.15 + i * 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+  }),
+};
 
 const Profile = () => {
   const [user, setUser] = useState(null);
@@ -16,24 +52,27 @@ const Profile = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [prefs, setPrefs] = useState(null);
   const navigate = useNavigate();
   const { resetAnswers } = useQuestionnaire();
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
+    try {
+      const stored = JSON.parse(localStorage.getItem('userPreferences') || 'null');
+      setPrefs(stored);
+    } catch { /* ignore */ }
+
+    const storedUser = localStorage.getItem('user');
 
     if (!storedUser) {
-      navigate("/login");
+      navigate('/login');
     } else {
       try {
         const parsedUser = JSON.parse(storedUser);
-        console.log('Stored user data:', parsedUser);
 
         // Always fetch fresh user data from the server using the user_id
         const userId = parsedUser.id || parsedUser.user_id;
         if (userId) {
-          console.log('Fetching complete user data for user ID:', userId);
-
           fetch(`${API_BASE_URL}/user/${userId}`)
             .then((res) => {
               if (!res.ok) {
@@ -42,7 +81,6 @@ const Profile = () => {
               return res.json();
             })
             .then((userData) => {
-              console.log('Complete user data from server:', userData);
               // Update localStorage with the complete user data
               localStorage.setItem('user', JSON.stringify(userData));
               setUser(userData);
@@ -61,33 +99,27 @@ const Profile = () => {
           setLoading(false);
         }
       } catch (err) {
-        console.error("Error parsing user data:", err);
+        console.error('Error parsing user data:', err);
         setLoading(false);
       }
     }
   }, [navigate]);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
+    localStorage.removeItem('user');
     resetAnswers();
-    navigate("/login");
+    navigate('/login');
   };
 
   const handleDeleteAccount = async () => {
     if (!user) {
-      console.error('No user data available');
       setDeleteError('User data not found. Please try logging out and back in.');
       return;
     }
 
-    // Log the user object to debug
-    console.log('User object:', user);
-
-    // Try different possible ID properties
     const userId = user.user_id || user.id;
 
     if (!userId) {
-      console.error('Could not determine user ID from:', user);
       setDeleteError('Could not determine your user ID. Please try logging out and back in.');
       return;
     }
@@ -96,7 +128,6 @@ const Profile = () => {
     setDeleteError('');
 
     try {
-      console.log(`Attempting to delete user with ID: ${userId}`);
       const response = await fetch(`http://localhost:8000/user/${userId}`, {
         method: 'DELETE',
         headers: {
@@ -107,224 +138,258 @@ const Profile = () => {
       const responseData = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        console.error('Delete account failed:', response.status, responseData);
-        throw new Error(responseData.detail || `Failed to delete account: ${response.status} ${response.statusText}`);
+        throw new Error(
+          responseData.detail || `Failed to delete account: ${response.status} ${response.statusText}`
+        );
       }
 
-      console.log('Account deleted successfully');
-
       // Logout the user after successful deletion
-      localStorage.removeItem("user");
+      localStorage.removeItem('user');
       resetAnswers();
-      navigate("/signup");
-
+      navigate('/signup');
     } catch (error) {
       console.error('Error deleting account:', error);
-      setDeleteError(error.message || 'An error occurred while deleting your account. Please try again.');
+      setDeleteError(
+        error.message || 'An error occurred while deleting your account. Please try again.'
+      );
     } finally {
       setIsDeleting(false);
     }
   };
 
   const handlePreferences = () => {
-    navigate("/questionnaire-summary");
+    navigate('/questionnaire-summary');
   };
 
-  if (loading) {
-    return null;
-  }
+  const initials =
+    `${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`.toUpperCase() ||
+    user?.username?.[0]?.toUpperCase() ||
+    '?';
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="animate-pulse text-white">Loading profile...</div>
+      <div className="relative min-h-screen overflow-x-clip">
+        <AmbientBackground intensity="app" />
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="relative w-14 h-14">
+            <div className="absolute inset-0 rounded-full border-4 border-white/10" />
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand border-r-brand-2 animate-spin" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className="relative z-10 min-h-screen flex flex-col pt-24">
-        <Navbar />
+    <div className="relative min-h-screen overflow-x-clip">
+      <AmbientBackground intensity="app" />
+      <Navbar />
 
-        <main className="flex-1 py-12 px-4">
-          <motion.div
-            className="max-w-4xl mx-auto"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            {/* Profile Header */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden mb-8">
-              <div className="p-8 text-center">
-                <motion.div
-                  className="w-32 h-32 mx-auto rounded-full bg-gradient-to-r from-blue-500/20 to-purple-500/20 flex items-center justify-center text-5xl font-bold text-white/90 mb-6"
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+      <main className="min-h-screen pt-32 pb-16 px-4">
+        <motion.div
+          className="max-w-4xl mx-auto"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {/* Profile Header */}
+          <GlassCard variant="gradient" className="overflow-hidden mb-8">
+            <div className="p-8 md:p-10 text-center relative">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 bg-brand/12 rounded-full blur-3xl pointer-events-none" />
+
+              <motion.div
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 220, damping: 16, delay: 0.1 }}
+                whileHover={{ scale: 1.05 }}
+                className="relative w-28 h-28 mx-auto rounded-full p-[3px] bg-gradient-to-br from-brand via-brand-2 to-brand-3 glow-md mb-6"
+              >
+                <div
+                  className="w-full h-full rounded-full flex items-center justify-center text-4xl font-bold font-display text-white"
+                  style={{ background: "oklch(0.16 0.025 275)" }}
                 >
-                  {user?.firstName?.[0]}{user?.lastName?.[0]}
-                </motion.div>
-
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-3">
-                  {user?.first_name} {user?.last_name}
-                </h1>
-                <p className="text-lg text-gray-400">@{user?.username}</p>
-
-                <div className="mt-6 flex flex-wrap justify-center gap-4">
-                  <Button
-                    variant="outline"
-                    className="bg-white/5 border-white/10 hover:bg-white/10 text-white hover:text-white text-base"
-                    onClick={handlePreferences}
-                  >
-                    <Settings className="w-5 h-5 mr-2" />
-                    Preferences
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    className="bg-white/5 border-white/10 hover:bg-white/10 text-white hover:text-white text-base"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="w-5 h-5 mr-2" />
-                    Logout
-                  </Button>
-
-                  <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                    <DialogTrigger asChild>
-                      <Button
-                        variant="destructive"
-                        className="bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/30 text-base"
-                      >
-                        <AlertTriangle className="w-5 h-5 mr-2" />
-                        Delete Account
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="bg-gray-900 border-red-500/30 max-w-md">
-                      <DialogHeader>
-                        <DialogTitle className="text-2xl text-red-400 flex items-center">
-                          <AlertTriangle className="w-6 h-6 mr-2" />
-                          Delete Your Account?
-                        </DialogTitle>
-                        <DialogDescription className="text-red-300/80 mt-2">
-                          This action cannot be undone. All your data, including preferences and meetup history, will be permanently deleted.
-                        </DialogDescription>
-                        {deleteError && (
-                          <div className="mt-4 p-3 bg-red-900/30 border border-red-500/30 rounded-md text-red-300">
-                            {deleteError}
-                          </div>
-                        )}
-                      </DialogHeader>
-                      <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowDeleteDialog(false)}
-                          className="w-full sm:w-auto"
-                          disabled={isDeleting}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={handleDeleteAccount}
-                          className="w-full sm:w-auto"
-                          disabled={isDeleting}
-                        >
-                          {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                  {initials}
                 </div>
+              </motion.div>
+
+              <h1 className="text-4xl md:text-5xl font-bold text-white mb-2">
+                {user?.first_name} <span className="text-gradient">{user?.last_name}</span>
+              </h1>
+              <p className="text-lg text-muted-foreground">@{user?.username}</p>
+
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <GlowButton variant="ghost" onClick={handlePreferences}>
+                  <Settings className="w-4.5 h-4.5" />
+                  Preferences
+                </GlowButton>
+
+                <GlowButton variant="ghost" onClick={handleLogout}>
+                  <LogOut className="w-4.5 h-4.5" />
+                  Logout
+                </GlowButton>
+
+                <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                  <DialogTrigger asChild>
+                    <GlowButton variant="danger">
+                      <AlertTriangle className="w-4.5 h-4.5" />
+                      Delete account
+                    </GlowButton>
+                  </DialogTrigger>
+                  <DialogContent className="glass-strong border-destructive/30 max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl text-red-400 flex items-center">
+                        <AlertTriangle className="w-6 h-6 mr-2" />
+                        Delete your account?
+                      </DialogTitle>
+                      <DialogDescription className="text-red-300/80 mt-2">
+                        This action cannot be undone. All your data, including preferences and
+                        meetup history, will be permanently deleted.
+                      </DialogDescription>
+                      {deleteError && (
+                        <div className="mt-4 p-3 bg-destructive/15 border border-destructive/30 rounded-xl text-red-300 text-sm">
+                          {deleteError}
+                        </div>
+                      )}
+                    </DialogHeader>
+                    <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3">
+                      <GlowButton
+                        variant="ghost"
+                        onClick={() => setShowDeleteDialog(false)}
+                        className="w-full sm:w-auto"
+                        disabled={isDeleting}
+                      >
+                        Cancel
+                      </GlowButton>
+                      <GlowButton
+                        variant="danger"
+                        onClick={handleDeleteAccount}
+                        className="w-full sm:w-auto"
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? 'Deleting...' : 'Yes, delete my account'}
+                      </GlowButton>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
+          </GlassCard>
 
-            {/* User Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <motion.div
-                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                <h3 className="text-xl font-semibold text-white/90 mb-5 flex items-center">
-                  <User className="w-5 h-5 mr-2 text-blue-400" />
-                  Personal Information
+          {/* User Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <motion.div custom={0} variants={cardVariants} initial="hidden" animate="visible">
+              <GlassCard hover variant="strong" className="p-7 h-full">
+                <h3 className="text-lg font-semibold text-white mb-5 flex items-center gap-2.5">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand/30 to-brand-2/25 border border-white/10">
+                    <User className="w-4.5 h-4.5 text-brand-3" />
+                  </span>
+                  Personal information
                 </h3>
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div>
-                    <p className="text-base text-gray-400">Full Name</p>
-                    <p className="text-lg text-white/90">
+                    <p className="text-sm text-muted-foreground">Full name</p>
+                    <p className="text-lg text-white">
                       {user?.first_name} {user?.last_name}
                     </p>
                   </div>
                   <div>
-                    <p className="text-base text-gray-400">Username</p>
-                    <p className="text-lg text-white/90">{user?.username ? `@${user.username}` : 'Not set'}</p>
+                    <p className="text-sm text-muted-foreground">Username</p>
+                    <p className="text-lg text-white">
+                      {user?.username ? `@${user.username}` : 'Not set'}
+                    </p>
                   </div>
                 </div>
-              </motion.div>
+              </GlassCard>
+            </motion.div>
 
-              <motion.div
-                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                <h3 className="text-xl font-semibold text-white/90 mb-5 flex items-center">
-                  <Mail className="w-5 h-5 mr-2 text-purple-400" />
-                  Contact Information
+            <motion.div custom={1} variants={cardVariants} initial="hidden" animate="visible">
+              <GlassCard hover variant="strong" className="p-7 h-full">
+                <h3 className="text-lg font-semibold text-white mb-5 flex items-center gap-2.5">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-2/30 to-brand/25 border border-white/10">
+                    <Mail className="w-4.5 h-4.5 text-brand-3" />
+                  </span>
+                  Contact information
                 </h3>
-                <div className="space-y-5">
+                <div className="space-y-4">
                   <div>
-                    <p className="text-base text-gray-400">Email</p>
-                    <p className="text-lg text-white/90 break-all">{user?.email || 'Not provided'}</p>
+                    <p className="text-sm text-muted-foreground">Email</p>
+                    <p className="text-lg text-white break-all">{user?.email || 'Not provided'}</p>
                   </div>
                   <div>
-                    <p className="text-base text-gray-400">Phone</p>
-                    <p className="text-lg text-white/90">{user?.phone || user?.contact || 'Not provided'}</p>
+                    <p className="text-sm text-muted-foreground">Phone</p>
+                    <p className="text-lg text-white">
+                      {user?.phone || user?.contact || 'Not provided'}
+                    </p>
                   </div>
                 </div>
-              </motion.div>
+              </GlassCard>
+            </motion.div>
 
-              <motion.div
-                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                <h3 className="text-xl font-semibold text-white/90 mb-5 flex items-center">
-                  <Calendar className="w-5 h-5 mr-2 text-green-400" />
+            <motion.div custom={2} variants={cardVariants} initial="hidden" animate="visible">
+              <GlassCard hover variant="strong" className="p-7 h-full">
+                <h3 className="text-lg font-semibold text-white mb-5 flex items-center gap-2.5">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-3/25 to-brand/25 border border-white/10">
+                    <Calendar className="w-4.5 h-4.5 text-brand-3" />
+                  </span>
                   Activity
                 </h3>
-                <div className="space-y-5">
-                  <div className="flex items-center">
-                    <Users className="w-5 h-5 mr-3 text-gray-400" />
-                    <span className="text-base text-gray-400">Meetups planned: <span className="text-lg text-white/90">12</span></span>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <Users className="w-4.5 h-4.5 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Meetups planned: <span className="text-base text-white font-medium">12</span>
+                    </span>
                   </div>
-                  <div className="flex items-center">
-                    <MapPin className="w-5 h-5 mr-3 text-gray-400" />
-                    <span className="text-base text-gray-400">Favorite spot: <span className="text-lg text-white/90">Downtown Cafe</span></span>
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-4.5 h-4.5 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Favorite spot:{' '}
+                      <span className="text-base text-white font-medium">Downtown Cafe</span>
+                    </span>
                   </div>
-                  <div className="flex items-center">
-                    <Clock className="w-5 h-5 mr-3 text-gray-400" />
-                    <span className="text-base text-gray-400">Member since: <span className="text-lg text-white/90">Jan 2023</span></span>
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-4.5 h-4.5 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Member since: <span className="text-base text-white font-medium">Jan 2023</span>
+                    </span>
                   </div>
                 </div>
-              </motion.div>
+              </GlassCard>
+            </motion.div>
 
-              <motion.div
-                className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors"
-                whileHover={{ y: -2 }}
-              >
-                <h3 className="text-xl font-semibold text-white/90 mb-5">Preferences</h3>
-                <p className="text-base text-gray-400 mb-6">Your selected preferences will appear here after completing the questionnaire.</p>
-                <Button
-                  variant="outline"
-                  className="w-full bg-white/5 border-white/10 hover:bg-white/10 text-white text-base py-2"
-                  onClick={handlePreferences}
-                >
-                  View Preferences
-                </Button>
-              </motion.div>
-            </div>
-          </motion.div>
-        </main>
-      </div>
+            <motion.div custom={3} variants={cardVariants} initial="hidden" animate="visible">
+              <GlassCard hover variant="strong" className="p-7 h-full flex flex-col">
+                <h3 className="text-lg font-semibold text-white mb-5 flex items-center gap-2.5">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand/25 to-brand-3/25 border border-white/10">
+                    <Settings className="w-4.5 h-4.5 text-brand-3" />
+                  </span>
+                  Preferences
+                </h3>
+                {prefs ? (
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {PREF_META.filter(({ key }) => prefs[key]).map(({ key, emoji }) => (
+                      <span
+                        key={key}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 glass rounded-full text-sm text-foreground/90"
+                      >
+                        <span>{emoji}</span>
+                        {Array.isArray(prefs[key]) ? prefs[key].join(', ') : String(prefs[key])}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Your selected preferences will appear here after completing the questionnaire.
+                  </p>
+                )}
+                <GlowButton variant="ghost" className="w-full mt-auto" onClick={handlePreferences}>
+                  View preferences
+                </GlowButton>
+              </GlassCard>
+            </motion.div>
+          </div>
+        </motion.div>
+      </main>
     </div>
   );
 };

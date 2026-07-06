@@ -42,8 +42,8 @@ export const CustomToolbar = ({ date, onNavigate, onView, view }) => {
         </Button>
         <Button
           variant="outline"
-          size="icon"
-          className="h-8 w-8 bg-white/5 border-white/10 hover:bg-white/10"
+          size="sm"
+          className="h-8 px-3 bg-white/5 border-white/10 hover:bg-white/10 text-white hover:text-white"
           onClick={() => navigate('TODAY')}
         >
           Today

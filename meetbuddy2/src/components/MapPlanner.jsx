@@ -103,9 +103,8 @@ function FitBounds({ points = [] }) {
     try {
       const bounds = L.latLngBounds(valid);
       map.fitBounds(bounds.pad(0.25));
-    } catch (err) {
+    } catch {
       // swallow fitBounds issues
-      // console.warn("FitBounds error", err);
     }
   }, [points, map]);
   return null;
@@ -164,8 +163,8 @@ MarkerWithRef.displayName = "MarkerWithRef";
 export default function MapPlanner({
   options = [],
   selectedChain = [],
-  onSelect = () => { },
-  onPreview = () => { },
+  onSelect: _onSelect = () => { },
+  onPreview: _onPreview = () => { },
   highlightedPlace = null,
   userCoords = null,
   locationText = "",
@@ -264,7 +263,7 @@ export default function MapPlanner({
         if (marker && marker.closePopup) {
           try {
             marker.closePopup();
-          } catch (e) {
+          } catch {
             // Ignore errors if popup is not open
           }
         }
@@ -369,8 +368,8 @@ export default function MapPlanner({
         }}
       >
         <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
         <FitBounds points={[
@@ -428,7 +427,7 @@ export default function MapPlanner({
               <Popup>
                 <div style={{ minWidth: 220 }}>
                   <div style={{ fontWeight: 700 }}>{o.title}</div>
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{o.address}</div>
+                  <div style={{ fontSize: 12, color: "#a3a9c2", marginTop: 4 }}>{o.address}</div>
                   {o.rating != null && <div style={{ marginTop: 6 }}>⭐ {o.rating}</div>}
 
                   {/* Distance Badge */}
@@ -471,7 +470,7 @@ export default function MapPlanner({
                         href={o.link}
                         target="_blank"
                         rel="noreferrer"
-                        style={{ width: '100%', padding: "6px 10px", background: "#f3f4f6", borderRadius: 6, textDecoration: 'none', color: '#374151', fontSize: '12px', fontWeight: 600, textAlign: 'center', border: '1px solid #e5e7eb' }}
+                        style={{ width: '100%', padding: "6px 10px", background: 'rgba(255,255,255,0.08)', borderRadius: 6, textDecoration: 'none', color: '#e6e8f2', fontSize: '12px', fontWeight: 600, textAlign: 'center', border: '1px solid rgba(255,255,255,0.15)' }}
                       >
                         View Details →
                       </a>
@@ -491,7 +490,7 @@ export default function MapPlanner({
               <Popup>
                 <div style={{ minWidth: 200 }}>
                   <div style={{ fontWeight: 700 }}>{`#${i + 1} ${p.title}`}</div>
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 4 }}>{p.address}</div>
+                  <div style={{ fontSize: 12, color: "#a3a9c2", marginTop: 4 }}>{p.address}</div>
                 </div>
               </Popup>
             </Marker>

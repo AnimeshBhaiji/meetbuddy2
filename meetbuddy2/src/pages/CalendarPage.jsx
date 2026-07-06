@@ -5,11 +5,11 @@ import CustomToolbar from '@/components/calendar/CustomToolbar';
 import { format, parse, startOfWeek, getDay, addHours, isValid } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Plus, Calendar as CalendarIcon, Clock, MapPin, Users, X, Edit2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Navbar from '@/components/Navbar';
-import Aurora from '@/components/Aurora';
+import AmbientBackground from '@/components/AmbientBackground';
+import GlassCard from '@/components/ui/GlassCard';
+import GlowButton from '@/components/ui/GlowButton';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
 const localizer = dateFnsLocalizer({
@@ -47,7 +47,7 @@ const sampleEvents = [
 ];
 
 const CalendarPage = () => {
-  const [events, setEvents] = useState(() => {
+  const [events] = useState(() => {
     try {
       const savedEvents = localStorage.getItem('meetupEvents');
       if (!savedEvents) return sampleEvents;
@@ -66,25 +66,9 @@ const CalendarPage = () => {
   });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
-  const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [date, setDate] = useState(() => new Date());
   const [view, setView] = useState(Views.MONTH);
   const navigate = useNavigate();
-
-  // Save events to localStorage whenever they change
-  const saveEvents = (updatedEvents) => {
-    try {
-      // Convert Date objects to ISO strings for storage
-      const eventsToSave = updatedEvents.map(event => ({
-        ...event,
-        start: event.start.toISOString(),
-        end: event.end.toISOString()
-      }));
-      localStorage.setItem('meetupEvents', JSON.stringify(eventsToSave));
-    } catch (error) {
-      console.error('Error saving events:', error);
-    }
-  };
 
   const handleSelectEvent = useCallback((event) => {
     // Convert string dates back to Date objects
@@ -97,17 +81,12 @@ const CalendarPage = () => {
     setShowEventModal(true);
   }, []);
 
+  // Clicking an empty slot starts planning a meetup for that date
   const handleSelectSlot = useCallback(({ start }) => {
-    setSelectedEvent({
-      start,
-      end: addHours(start, 1),
-      title: 'New Meetup',
-      location: '',
-      attendees: [],
-      description: ''
+    navigate('/planner', {
+      state: { startDate: start, endDate: addHours(start, 1) },
     });
-    setShowNewEventModal(true);
-  }, []);
+  }, [navigate]);
 
   const handleNavigateToPlanner = () => {
     if (selectedEvent) {
@@ -124,50 +103,47 @@ const CalendarPage = () => {
 
   const eventStyleGetter = (event) => {
     const style = {
-      backgroundColor: event.color || '#3b82f6',
-      borderRadius: '4px',
-      opacity: 0.9,
+      background: event.color
+        ? event.color
+        : 'linear-gradient(100deg, oklch(0.55 0.2 285), oklch(0.58 0.24 320))',
+      borderRadius: '8px',
       color: 'white',
       border: '0px',
       display: 'block',
       padding: '2px 8px',
+      boxShadow: '0 2px 10px oklch(0.62 0.22 285 / 30%)',
     };
     return { style };
   };
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className="relative z-10 min-h-screen flex flex-col pt-24">
-        <Navbar />
-
+    <div className="relative min-h-screen overflow-x-clip">
+      <AmbientBackground intensity="app" />
+      <Navbar />
+      <div className="min-h-screen flex flex-col pt-28">
         <main className="flex-1 p-4 md:p-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="max-w-7xl mx-auto"
           >
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                My Calendar
-              </h1>
-              <Button
-                onClick={handleNavigateToPlanner}
-                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                New Meetup
-              </Button>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
+              <div>
+                <h1 className="text-3xl md:text-5xl font-bold text-white">
+                  My <span className="text-gradient">calendar</span>
+                </h1>
+                <p className="text-muted-foreground mt-2">
+                  Every plan, mapped to its moment
+                </p>
+              </div>
+              <GlowButton onClick={handleNavigateToPlanner}>
+                <Plus className="w-4.5 h-4.5" />
+                New meetup
+              </GlowButton>
             </div>
 
-            <Card className="bg-white/5 backdrop-blur-md border border-white/10">
-              <CardHeader>
-                <CardTitle className="text-xl text-white/90">
-                  Upcoming Meetups
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <GlassCard variant="strong" className="p-6 md:p-8">
                 <div className="h-[700px]">
                   <Calendar
                     localizer={localizer}
@@ -203,8 +179,7 @@ const CalendarPage = () => {
                     className="text-white/90"
                   />
                 </div>
-              </CardContent>
-            </Card>
+            </GlassCard>
           </motion.div>
         </main>
       </div>
@@ -212,7 +187,7 @@ const CalendarPage = () => {
       {/* Event Details Modal */}
       <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
         <DialogContent
-          className="bg-gray-900 border-gray-800 max-w-md"
+          className="glass-strong border-white/10 max-w-md"
           aria-labelledby="event-details-title"
           aria-describedby="event-details-description"
         >
@@ -282,9 +257,9 @@ const CalendarPage = () => {
               )}
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  className="bg-white/5 border-white/10 hover:bg-white/10 text-white"
+                <GlowButton
+                  variant="ghost"
+                  size="sm"
                   onClick={() => {
                     setShowEventModal(false);
                     navigate('/planner', {
@@ -295,15 +270,12 @@ const CalendarPage = () => {
                     });
                   }}
                 >
-                  <Edit2 className="w-4 h-4 mr-2" />
+                  <Edit2 className="w-4 h-4" />
                   Edit
-                </Button>
-                <Button
-                  onClick={handleNavigateToPlanner}
-                  className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                >
-                  View Details
-                </Button>
+                </GlowButton>
+                <GlowButton size="sm" onClick={handleNavigateToPlanner}>
+                  View details
+                </GlowButton>
               </div>
             </div>
           )}

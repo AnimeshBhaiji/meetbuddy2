@@ -1,45 +1,154 @@
 // src/pages/Planner.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  MapPin,
+  LocateFixed,
+  Rocket,
+  ArrowLeft,
+  ArrowRight,
+  X,
+  Star,
+  ExternalLink,
+  Check,
+  RotateCcw,
+  Printer,
+  PartyPopper,
+  AlertTriangle,
+} from "lucide-react";
 import Navbar from "../components/Navbar";
 import MapPlanner from "../components/MapPlanner";
+import AmbientBackground from "@/components/AmbientBackground";
+import GlassCard from "@/components/ui/GlassCard";
+import GlowButton from "@/components/ui/GlowButton";
+
+const PREF_META = [
+  { key: "mood", label: "Mood", emoji: "🎭" },
+  { key: "planningStyle", label: "Planning Style", emoji: "🗺️" },
+  { key: "adventureLevel", label: "Adventure Level", emoji: "🧭" },
+  { key: "addOnMagic", label: "Add-On Magic", emoji: "✨" },
+  { key: "memorableFactor", label: "Memorable Factor", emoji: "💫" },
+];
+
+const STEP_EMOJI = { restaurant: "🍽️", activity: "🎯", stay: "🏨" };
+
+// Full-control filter chips: best-effort matchers over the venue data we have
+const FILTER_MATCHERS = {
+  "price": (o) => !o.price || String(o.price).length <= 2,
+  "private seating": (o) => /private|lounge|rooftop|fine din/i.test(`${o.title || ""} ${o.type || ""}`),
+  "dietary options": (o) => /veg|vegan|salad|health/i.test(`${o.title || ""} ${o.type || ""}`),
+  "live music": (o) => /live|music|bar|club|lounge|brew/i.test(`${o.title || ""} ${o.type || ""}`),
+};
+
+// Service-flavored questionnaire answers become visible reminders on the
+// itinerary — honest notes instead of pretending unavailable services exist.
+const deriveServiceNotes = (prefs) => {
+  if (!prefs) return [];
+  const notes = [];
+  const sub = (cat) => (typeof prefs[`${cat}_sub`] === "object" && prefs[`${cat}_sub`]) || {};
+  const val = (cat, key) => {
+    const v = sub(cat)[key];
+    return Array.isArray(v) ? v.join(", ") : v ? String(v) : "";
+  };
+  const addon = String(prefs.addOnMagic || "");
+
+  if (addon.includes("Easy rides")) {
+    const scope = val("addOnMagic", "ea_scope");
+    notes.push(`🚕 Arrange rides${scope ? ` — ${scope.toLowerCase()}` : ""}`);
+  }
+  const transport = val("adventureLevel", "sc_transport");
+  if (/rides/i.test(transport)) notes.push("🚕 Arrange rides for the group");
+  else if (/parking/i.test(transport)) notes.push("🅿️ Check parking availability at each stop");
+
+  if (addon.includes("Surprise gift") || addon.includes("Insta")) {
+    const picks = val("addOnMagic", "sg_type");
+    notes.push(`🎁 Prepare: ${picks || "surprise gift / photo setup"}`);
+  }
+  if (/table reservation/i.test(val("addOnMagic", "lm_seating"))) {
+    notes.push("📅 Reserve a table in advance for the live music spot");
+  }
+  if (/yes/i.test(val("mood", "ro_surprise"))) {
+    notes.push("🌹 Plan the surprise element — gifts or music");
+  }
+  const memAddons = val("memorableFactor", "dc_addons");
+  if (/photo session/i.test(memAddons)) notes.push("📸 Book or plan a photo session");
+  if (/guestbook|keepsake/i.test(memAddons)) notes.push("📖 Bring a guestbook / keepsake");
+
+  const confirm = val("planningStyle", "sc_confirm");
+  if (/auto-book/i.test(confirm)) {
+    notes.push("⚠️ Auto-booking isn't available yet — please confirm bookings yourself");
+  } else if (/^yes/i.test(confirm)) {
+    notes.push("📞 Confirm your bookings before heading out");
+  }
+  return notes;
+};
+
+const applyFiltersAndSort = (options, filters, sortBy) => {
+  let out = options;
+  for (const f of filters) {
+    const matcher = FILTER_MATCHERS[f];
+    if (matcher) out = out.filter(matcher);
+  }
+  if (sortBy === "rating") {
+    out = [...out].sort((a, b) => (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0));
+  } else if (sortBy === "distance") {
+    out = [...out].sort(
+      (a, b) => (a.distance_meters ?? Infinity) - (b.distance_meters ?? Infinity)
+    );
+  }
+  return out;
+};
+
+// Inline error banner (dark destructive style)
+function ErrorBanner({ message }) {
+  if (!message) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="mb-6 p-4 bg-destructive/10 border border-destructive/30 text-red-300 rounded-xl text-sm flex items-center gap-3"
+    >
+      <AlertTriangle className="w-4.5 h-4.5 shrink-0 text-red-400" />
+      {message}
+    </motion.div>
+  );
+}
 
 // UI: grid of cards for the step
-function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBack }) {
+function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBack, pickBadge = false }) {
   if (!options || options.length === 0) {
     return (
-      <div className="bg-white/70 backdrop-blur-md rounded-3xl p-12 text-center shadow-xl border-0">
+      <GlassCard variant="strong" className="p-12 text-center">
         <div className="mb-6">
-          <p className="text-lg text-gray-600 mb-2">😅 No options available for this step.</p>
-          <p className="text-gray-500">Try adjusting your location or preferences.</p>
+          <p className="text-lg text-foreground/85 mb-2">😅 No options available for this step.</p>
+          <p className="text-muted-foreground">Try adjusting your location or preferences.</p>
         </div>
         <div className="flex flex-col sm:flex-row justify-center gap-3">
           {onRetry && (
-            <button
-              onClick={onRetry}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-medium"
-            >
-              🔄 Retry
-            </button>
+            <GlowButton onClick={onRetry}>
+              <RotateCcw className="w-4.5 h-4.5" /> Retry
+            </GlowButton>
           )}
           {onBack && (
-            <button
-              onClick={onBack}
-              className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-800 rounded-xl hover:bg-gray-50 transition font-medium"
-            >
-              ← Go Back
-            </button>
+            <GlowButton variant="ghost" onClick={onBack}>
+              <ArrowLeft className="w-4.5 h-4.5" /> Go back
+            </GlowButton>
           )}
         </div>
-      </div>
+      </GlassCard>
     );
   }
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       {options.map((o, idx) => (
-        <div
+        <motion.div
           key={o.place_id || `${o.title ?? ""}::${o.address ?? ""}::${idx}`}
-          className="bg-white/70 backdrop-blur-md rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition cursor-pointer border border-white/20 hover:border-blue-400 group"
+          initial={{ opacity: 0, y: 22 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: Math.min(idx * 0.06, 0.5), duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          whileHover={{ y: -6 }}
+          className="relative glass-strong rounded-2xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand/50 hover:glow-sm transition-all duration-300 group"
           onMouseEnter={() => {
             if (onHighlight) onHighlight(o);
           }}
@@ -47,10 +156,24 @@ function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBac
             if (onHighlight) onHighlight(null);
           }}
         >
+          {pickBadge && idx === 0 && (
+            <span className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-brand to-brand-2 glow-sm">
+              ⭐ MeetBuddy's pick
+            </span>
+          )}
           {/* Thumbnail */}
           {o.thumbnail && (
-            <div className="w-full h-40 bg-gradient-to-br from-blue-100 to-purple-100 overflow-hidden">
-              <img src={o.thumbnail} alt={o.title} className="w-full h-full object-cover group-hover:scale-110 transition" />
+            <div className="w-full h-40 bg-gradient-to-br from-brand/15 to-brand-2/15 overflow-hidden relative">
+              <img
+                src={o.thumbnail}
+                alt={o.title}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              {o.rating && (
+                <span className="absolute top-3 right-3 glass-strong px-2.5 py-1 rounded-lg text-sm font-semibold text-yellow-400 flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 fill-yellow-400" /> {o.rating}
+                </span>
+              )}
             </div>
           )}
 
@@ -58,45 +181,54 @@ function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBac
           <div className="p-5">
             <div className="flex justify-between items-start gap-2 mb-3">
               <div className="flex-1">
-                <h4 className="font-semibold text-lg text-gray-800 line-clamp-2">{o.title || o.name || "Unnamed Place"}</h4>
-                <p className="text-sm text-gray-600 mt-1 line-clamp-1">{o.address}</p>
+                <h4 className="font-semibold text-lg text-white line-clamp-2">
+                  {o.title || o.name || "Unnamed Place"}
+                </h4>
+                <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{o.address}</p>
                 {o.distance_meters != null && (
-                  <p className="text-xs text-blue-500 mt-1">
-                    📏 {o.distance_meters < 1000
+                  <p className="text-xs text-brand-3 mt-1.5 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {o.distance_meters < 1000
                       ? `${Math.round(o.distance_meters)} m away`
                       : `${(o.distance_meters / 1000).toFixed(1)} km away`}
                   </p>
                 )}
               </div>
-              {o.rating && <div className="text-lg font-semibold text-yellow-500 flex-shrink-0">⭐ {o.rating}</div>}
+              {!o.thumbnail && o.rating && (
+                <div className="text-base font-semibold text-yellow-400 flex-shrink-0 flex items-center gap-1">
+                  <Star className="w-4 h-4 fill-yellow-400" /> {o.rating}
+                </div>
+              )}
             </div>
 
             {/* Buttons */}
-            <div className="flex gap-2 pt-3 border-t border-gray-100">
-              <button
+            <div className="flex gap-2 pt-3 border-t border-white/10">
+              <motion.button
+                whileTap={{ scale: 0.96 }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect(o);
                 }}
-                className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition font-medium text-sm disabled:opacity-50"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-gradient-to-r from-brand to-brand-2 text-white rounded-lg font-medium text-sm glow-sm hover:glow-md transition-shadow duration-300 cursor-pointer disabled:opacity-50"
                 disabled={loading}
               >
-                ✓ Select
-              </button>
+                <Check className="w-4 h-4" /> Select
+              </motion.button>
               {o.link && (
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     window.open(o.link, "_blank", "noopener,noreferrer");
                   }}
-                  className="flex-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium text-sm"
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 glass text-foreground/85 rounded-lg hover:bg-white/10 hover:text-white transition font-medium text-sm cursor-pointer"
                 >
-                  🔗 Open
-                </button>
+                  <ExternalLink className="w-4 h-4" /> Open
+                </motion.button>
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -104,16 +236,60 @@ function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBac
 
 // Full-screen overlay with spinner & message
 function FullOverlay({ show, text = "Loading next step..." }) {
-  if (!show) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl p-6 flex flex-col items-center gap-4 shadow">
-        <svg className="animate-spin h-12 w-12" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-        </svg>
-        <div className="text-gray-700 font-medium">{text}</div>
-      </div>
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="glass-strong rounded-2xl p-8 flex flex-col items-center gap-5 glow-sm"
+          >
+            <div className="relative w-14 h-14">
+              <div className="absolute inset-0 rounded-full border-4 border-white/10" />
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand border-r-brand-2 animate-spin" />
+            </div>
+            <div className="text-foreground font-medium">{text}</div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Flow stepper pills shown on the step page
+function FlowStepper({ flow, currentStep, humanStepName }) {
+  if (!flow || flow.length === 0) return null;
+  const currentIdx = flow.indexOf(currentStep);
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-8">
+      {flow.map((step, i) => {
+        const isDone = currentIdx > i;
+        const isCurrent = currentIdx === i;
+        return (
+          <React.Fragment key={step}>
+            {i > 0 && <span className="text-muted-foreground/50 text-sm">→</span>}
+            <span
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                isCurrent
+                  ? "bg-gradient-to-r from-brand/35 to-brand-2/30 text-white border border-brand/50 glow-sm"
+                  : isDone
+                  ? "glass text-brand-3 border border-brand/25"
+                  : "glass text-muted-foreground"
+              }`}
+            >
+              {isDone ? <Check className="w-3.5 h-3.5" /> : <span>{STEP_EMOJI[step] ?? "📍"}</span>}
+              {humanStepName(step)}
+            </span>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -147,6 +323,19 @@ export default function Planner() {
   // Inline error state
   const [plannerError, setPlannerError] = useState(null);
 
+  // Questionnaire-driven planning behavior
+  const [planMode, setPlanMode] = useState("semi"); // "surprise" | "semi" | "full"
+  const [directives, setDirectives] = useState(null); // shortlist size, filters, ...
+  const [optionsByStep, setOptionsByStep] = useState({}); // step -> options[] (powers swaps)
+  const [overlayText, setOverlayText] = useState("Loading next step...");
+  const [swapIndex, setSwapIndex] = useState(null); // itinerary stop being swapped
+  const [showAllOptions, setShowAllOptions] = useState(false); // shortlist escape hatch
+
+  // Full-control mode: option filters, sorting, and step management
+  const [activeFilters, setActiveFilters] = useState([]);
+  const [sortBy, setSortBy] = useState("match"); // "match" | "rating" | "distance"
+  const [showStepEditor, setShowStepEditor] = useState(false);
+
   useEffect(() => {
     try {
       const storedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -170,7 +359,7 @@ export default function Planner() {
     setUserPrefs(merged);
     try {
       localStorage.setItem("userPreferences", JSON.stringify(merged));
-    } catch (e) {}
+    } catch { /* localStorage unavailable */ }
   };
 
   // GPS helper
@@ -204,32 +393,11 @@ export default function Planner() {
     }
   };
 
-  const normalizePrefForSend = (val) => {
-    if (val == null) return [];
-    if (Array.isArray(val)) return val.map((x) => (x == null ? "" : String(x))).filter(Boolean);
-    if (typeof val === "string" || typeof val === "number") {
-      const s = String(val).trim();
-      return s === "" ? [] : [s];
-    }
-    if (typeof val === "object") {
-      const keys = Object.keys(val || {});
-      const booleanFlags = keys.filter((k) => val[k] === true || val[k] === "true" || val[k] === 1);
-      if (booleanFlags.length > 0) return booleanFlags.map((k) => String(k));
-      const stringValues = keys
-        .map((k) => (typeof val[k] === "string" && val[k].trim() ? val[k].trim() : null))
-        .filter(Boolean);
-      if (stringValues.length > 0) return stringValues;
-      return keys.map((k) => String(k));
-    }
-    return [];
-  };
-
-  // ---------------- New stepper/session flow (all options visible per step) ----------------
+  // ---------------- Stepper/session flow (all options visible per step) ----------------
 
   // derive flow from backend provided place types (basic) - fallback only
   const deriveFlowFromPlaceTypes = (place_types = []) => {
     const flow = [];
-    // Don't default to all steps - just restaurant if no place types
     if (!place_types || place_types.length === 0) {
       return ["restaurant"]; // Minimal default - just restaurant
     }
@@ -297,7 +465,6 @@ export default function Planner() {
 
       let flow = recommendedFlow;
       if (!flow || !Array.isArray(flow) || flow.length === 0) {
-        // Fallback to deriving from place types if backend didn't provide flow
         flow = deriveFlowFromPlaceTypes(place_types);
       }
 
@@ -313,16 +480,36 @@ export default function Planner() {
         flow = flow.filter((step) => step !== "stay");
       }
 
-      console.log("📋 Determined flow from preferences:", flow, { hasNoStay, advSubs });
       setInitialFlow(flow);
       setFlowText(flow.map((f) => humanStepName(f)).join(" → "));
       setCurrentStep(flow[0] || "restaurant");
 
       // Use server-sent options (empty array if none returned — StepGrid handles empty state)
       const initialOptions = res.data.initial?.options || [];
-      setStepOptions(initialOptions);
+      const searchError = res.data.initial?.search_error;
+      if (initialOptions.length === 0 && searchError) {
+        // Every search attempt failed server-side (e.g. invalid SerpAPI key) —
+        // stay on the home page and show the real reason instead of an empty grid
+        setPlannerError(`Venue search failed: ${searchError}`);
+        return;
+      }
+
+      // Planning mode comes from the questionnaire (Surprise me / Semi-custom / Full control)
+      const mode = res.data.initial?.plan_mode || "semi";
+      setPlanMode(mode);
+      setDirectives(res.data.initial?.directives || null);
+      setShowAllOptions(false);
       setAnchorText(res.data.initial?.location_hint || payload.location || "");
       setSelectedChain([]);
+
+      if (mode === "surprise" && initialOptions.length > 0) {
+        // Surprise me: auto-build the whole itinerary, no step pages
+        await autoPlan(sid, flow, initialOptions);
+        return;
+      }
+
+      setOptionsByStep({ [flow[0] || "restaurant"]: initialOptions });
+      setStepOptions(initialOptions);
       setPage("step");
     } catch (err) {
       console.error("Failed to start session", err);
@@ -332,14 +519,183 @@ export default function Planner() {
     }
   };
 
+  // Surprise mode: chain server selections automatically, picking the
+  // top-scored option for every step, then land straight on the itinerary.
+  const autoPlan = async (sid, flow, firstOptions) => {
+    setOverlayText(`Picking your ${humanStepName(flow[0] || "restaurant").toLowerCase()}...`);
+    setShowOverlay(true);
+    const chain = [];
+    const optsMap = {};
+    let options = firstOptions;
+    try {
+      for (let i = 0; i < flow.length; i++) {
+        const step = flow[i];
+        optsMap[step] = options;
+        if (!options || options.length === 0) {
+          setPlannerError(`No options found for the ${humanStepName(step).toLowerCase()} step.`);
+          break;
+        }
+        const pick = options[0];
+        chain.push({ step, place: pick });
+        const nextStep = i + 1 < flow.length ? flow[i + 1] : "done";
+        if (nextStep !== "done") {
+          setOverlayText(`Finding your ${humanStepName(nextStep).toLowerCase()}...`);
+        }
+        const res = await axios.post(
+          `http://localhost:8000/planner/session/${sid}/select`,
+          { step, place: pick, next_step: nextStep, selected_tokens: [] },
+          { timeout: 120000 }
+        );
+        if (nextStep === "done") break;
+        options = res.data.options || [];
+        if (options.length === 0 && res.data.search_error) {
+          setPlannerError(`Venue search failed: ${res.data.search_error}`);
+          break;
+        }
+      }
+      setOptionsByStep(optsMap);
+      setSelectedChain(chain);
+      setCurrentStep(null);
+      setStepOptions([]);
+      setPage("summary");
+    } catch (err) {
+      console.error("Auto-plan failed", err);
+      setPlannerError("Auto-planning failed partway. Please try again.");
+      if (chain.length > 0) {
+        setOptionsByStep(optsMap);
+        setSelectedChain(chain);
+        setPage("summary");
+      }
+    } finally {
+      setShowOverlay(false);
+    }
+  };
+
+  // Swap one itinerary stop for an alternative. Earlier stops are kept;
+  // stops after the swapped one are re-picked because they anchor to it.
+  const swapStop = async (index, newPlace) => {
+    setSwapIndex(null);
+    if (!sessionId || !selectedChain[index]) return;
+    setOverlayText(`Swapping your ${humanStepName(selectedChain[index].step).toLowerCase()}...`);
+    setShowOverlay(true);
+    const flowSteps = selectedChain.map((s) => s.step);
+    const newChain = selectedChain.slice(0, index);
+    let place = newPlace;
+    try {
+      for (let i = index; i < flowSteps.length; i++) {
+        const step = flowSteps[i];
+        newChain.push({ step, place });
+        const nextStep = i + 1 < flowSteps.length ? flowSteps[i + 1] : "done";
+        const res = await axios.post(
+          `http://localhost:8000/planner/session/${sessionId}/select`,
+          { step, place, next_step: nextStep, selected_tokens: [] },
+          { timeout: 120000 }
+        );
+        if (nextStep === "done") break;
+        const opts = res.data.options || [];
+        if (opts.length > 0) {
+          setOptionsByStep((m) => ({ ...m, [nextStep]: opts }));
+          setOverlayText(`Refreshing your ${humanStepName(nextStep).toLowerCase()}...`);
+          place = opts[0];
+        } else {
+          // Search came back empty — keep the previous pick for this stop
+          const old = selectedChain[i + 1];
+          if (!old) break;
+          place = old.place;
+        }
+      }
+      // If the re-chain broke early, keep the old picks for remaining stops
+      while (newChain.length < selectedChain.length) {
+        newChain.push(selectedChain[newChain.length]);
+      }
+      setSelectedChain(newChain);
+    } catch (err) {
+      console.error("Swap failed", err);
+      setPlannerError("Swap failed. Please try again.");
+    } finally {
+      setShowOverlay(false);
+    }
+  };
+
+  // Full control: skip the current step without picking a venue.
+  // Followups keep anchoring to the last real selection (or the origin).
+  const skipStep = async () => {
+    if (!sessionId || !currentStep) return;
+    const idx = initialFlow.indexOf(currentStep);
+    const nextStep = idx + 1 < initialFlow.length ? initialFlow[idx + 1] : "done";
+    const newFlow = initialFlow.filter((s) => s !== currentStep);
+    setPlannerError(null);
+
+    if (nextStep === "done") {
+      setInitialFlow(newFlow);
+      setCurrentStep(null);
+      setStepOptions([]);
+      setPage(selectedChain.length > 0 ? "summary" : "home");
+      return;
+    }
+
+    setOverlayText(`Skipping to ${humanStepName(nextStep).toLowerCase()}...`);
+    setShowOverlay(true);
+    try {
+      const res = await axios.post(
+        `http://localhost:8000/planner/session/${sessionId}/skip`,
+        { next_step: nextStep },
+        { timeout: 120000 }
+      );
+      const opts = res.data.options || [];
+      setInitialFlow(newFlow);
+      setCurrentStep(nextStep);
+      setStepOptions(opts);
+      setShowAllOptions(false);
+      setActiveFilters([]);
+      if (opts.length > 0) {
+        setOptionsByStep((m) => ({ ...m, [nextStep]: opts }));
+      } else if (res.data.search_error) {
+        setPlannerError(`Venue search failed: ${res.data.search_error}`);
+      }
+      setAnchorText(res.data.anchor_text || anchorText);
+    } catch (err) {
+      console.error("Skip failed", err);
+      setPlannerError("Couldn't skip this step. Please try again.");
+    } finally {
+      setShowOverlay(false);
+    }
+  };
+
+  // Full control: edit upcoming steps (the current step stays as the anchor)
+  const upcomingSteps = currentStep
+    ? initialFlow.slice(initialFlow.indexOf(currentStep) + 1)
+    : [];
+
+  const setUpcoming = (newUpcoming) => {
+    const currentIdx = initialFlow.indexOf(currentStep);
+    setInitialFlow([...initialFlow.slice(0, currentIdx + 1), ...newUpcoming]);
+  };
+
+  const removeUpcomingStep = (step) => setUpcoming(upcomingSteps.filter((s) => s !== step));
+
+  const addUpcomingStep = (step) => {
+    if (initialFlow.includes(step)) return;
+    setUpcoming([...upcomingSteps, step]);
+  };
+
+  const moveUpcomingStep = (step, dir) => {
+    const idx = upcomingSteps.indexOf(step);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= upcomingSteps.length) return;
+    const next = [...upcomingSteps];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setUpcoming(next);
+  };
+
   // Select an option from the grid of options for the current step
-  // show full-page intermediary overlay while server processes selection and next options load
   const selectOption = async (opt) => {
     setPlannerError(null);
     if (!sessionId) {
       setPlannerError("Session missing. Start again.");
       return;
     }
+    setOverlayText("Preparing next options...");
     setShowOverlay(true);
     setSessionLoading(true);
 
@@ -347,7 +703,6 @@ export default function Planner() {
       const payload = {
         step: currentStep || "restaurant",
         place: opt,
-        // let server infer next_step if it wants; we pass expected next
         next_step: undefined,
         selected_tokens: [],
       };
@@ -368,22 +723,27 @@ export default function Planner() {
       // if server returned next options, switch to them
       const nextStep = res.data.next_step;
       if (!nextStep || nextStep === "done") {
-        // done -> show summary page
         setCurrentStep(null);
         setStepOptions([]);
         setShowOverlay(false);
         setPage("summary");
       } else {
         setCurrentStep(nextStep);
-        // if server provided next options use them, otherwise fallback to empty array and message
         const nextOpts = res.data.options || [];
+        setShowAllOptions(false);
+        setActiveFilters([]);
+        setSortBy("match");
         if (nextOpts.length > 0) {
           setStepOptions(nextOpts);
+          setOptionsByStep((m) => ({ ...m, [nextStep]: nextOpts }));
         } else {
-          // graceful fallback: inform user and keep session open (they can retry)
           console.warn("No options returned for next step from server:", res.data);
           setStepOptions([]);
-          setPlannerError("No nearby options found for the next step. You can try again or go back.");
+          setPlannerError(
+            res.data.search_error
+              ? `Venue search failed: ${res.data.search_error}`
+              : "No nearby options found for the next step. You can try again or go back."
+          );
         }
         setAnchorText(res.data.anchor_text || "");
         setShowOverlay(false);
@@ -400,12 +760,10 @@ export default function Planner() {
   // Back button: go back one step locally and attempt to restore server options for that step
   const goBackOneStep = async () => {
     if (!sessionId) {
-      // just go to home
       setPage("home");
       return;
     }
     if (selectedChain.length === 0) {
-      // no selection yet: go home
       setPage("home");
       setSessionId(null);
       setStepOptions([]);
@@ -421,17 +779,15 @@ export default function Planner() {
     const stepToRestore = newChain.length ? newChain[newChain.length - 1].step : (initialFlow[0] || "restaurant");
     setCurrentStep(stepToRestore);
 
-    // try to get session state from server and restore last_options (server stores last options via set_last_options)
+    // try to get session state from server and restore last_options
     try {
       setSessionLoading(true);
       const res = await axios.get(`http://localhost:8000/planner/session/${sessionId}`, { timeout: 30000 });
       const s = res.data || {};
-      // server-side state shape may vary; we try common keys
       const last_opts = (s.last_options && s.last_options[stepToRestore]) || (s.last_options && s.last_options.initial) || s.options || [];
       if (last_opts && last_opts.length) {
         setStepOptions(last_opts);
       } else {
-        // If server can't restore options, show error and let user restart
         setPlannerError("Couldn't restore previous step options. Please start over.");
         setPage("home");
         setSessionId(null);
@@ -451,141 +807,298 @@ export default function Planner() {
   };
 
   return (
-    <>
+    <div className="relative min-h-screen overflow-x-clip">
+      <AmbientBackground intensity="app" />
       <Navbar />
 
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-purple-50 to-pink-50 pb-16">
+      <div className="min-h-screen pt-28 pb-16">
         {/* HOME / preferences panel */}
         {page === "home" && (
-          <div className="max-w-4xl mx-auto px-6 py-10">
-            <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                Plan Your Perfect Meetup ✨
+          <div className="max-w-4xl mx-auto px-6 py-6">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="text-center mb-12"
+            >
+              <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
+                Plan your perfect <span className="text-gradient">meetup</span>
               </h1>
-              <p className="text-gray-600 text-lg">Personalized recommendations based on your preferences</p>
-            </div>
+              <p className="text-muted-foreground text-lg">
+                Personalized recommendations based on your preferences
+              </p>
+            </motion.div>
 
-            <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl p-8 mb-8 border-0">
-              <div className="grid md:grid-cols-2 gap-8 mb-8">
-                {/* Preferences display */}
-                <div>
-                  <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Preferences</h2>
-                  <div className="space-y-3">
-                    <div className="bg-gradient-to-r from-blue-100 to-blue-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Mood</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.mood)}</p>
-                    </div>
-                    <div className="bg-gradient-to-r from-purple-100 to-purple-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Planning Style</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.planningStyle)}</p>
-                    </div>
-                    <div className="bg-gradient-to-r from-pink-100 to-pink-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Adventure Level</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.adventureLevel)}</p>
-                    </div>
-                    <div className="bg-gradient-to-r from-yellow-100 to-yellow-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Add-On Magic</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.addOnMagic)}</p>
-                    </div>
-                    <div className="bg-gradient-to-r from-green-100 to-green-50 p-3 rounded-xl">
-                      <p className="text-sm text-gray-600">Memorable Factor</p>
-                      <p className="font-medium text-gray-800">{displayPref(userPrefs?.memorableFactor)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Location & flow */}
-                <div className="flex flex-col gap-6">
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <GlassCard variant="gradient" className="p-8 mb-8">
+                <div className="grid md:grid-cols-2 gap-10 mb-8">
+                  {/* Preferences display */}
                   <div>
-                    <label className="block text-lg font-semibold text-gray-800 mb-3">Select Location</label>
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        value={placeText}
-                        onChange={(e) => setPlaceText(e.target.value)}
-                        onBlur={handlePlaceTextBlur}
-                        placeholder="Enter city or area..."
-                        className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-blue-500 transition"
-                      />
-                      <button
-                        onClick={useMyLocation}
-                        className="px-5 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition shadow-lg"
-                        disabled={locLoading}
-                      >
-                        📍 {locLoading ? "..." : "GPS"}
-                      </button>
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {coords ? `📌 ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : placeText ? `📍 ${placeText}` : "No location set"}
+                    <h2 className="text-xl font-semibold text-white mb-5">Your preferences</h2>
+                    <div className="space-y-3">
+                      {PREF_META.map(({ key, label, emoji }) => (
+                        <div
+                          key={key}
+                          className="flex items-center gap-3.5 glass rounded-xl p-3.5"
+                        >
+                          <span className="text-xl">{emoji}</span>
+                          <div className="min-w-0">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+                            <p className="font-medium text-white truncate">{displayPref(userPrefs?.[key])}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-lg font-semibold text-gray-800 mb-3">Your Planned Flow</label>
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-xl font-medium text-center">
-                      {flowText || "Restaurant → Activity → Stay"}
+                  {/* Location & flow */}
+                  <div className="flex flex-col gap-7">
+                    <div>
+                      <label className="block text-xl font-semibold text-white mb-4">Select location</label>
+                      <div className="flex gap-2 mb-3">
+                        <div className="relative flex-1">
+                          <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground pointer-events-none" />
+                          <input
+                            value={placeText}
+                            onChange={(e) => setPlaceText(e.target.value)}
+                            onBlur={handlePlaceTextBlur}
+                            placeholder="Enter city or area..."
+                            className="w-full rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 py-3 text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-brand/60 focus:ring-2 focus:ring-brand/30 focus:bg-white/[0.07]"
+                          />
+                        </div>
+                        <GlowButton onClick={useMyLocation} disabled={locLoading} aria-label="Use GPS location">
+                          <LocateFixed className={`w-4.5 h-4.5 ${locLoading ? "animate-spin" : ""}`} />
+                          GPS
+                        </GlowButton>
+                      </div>
+                      <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-brand-3" />
+                        {coords
+                          ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
+                          : placeText
+                          ? placeText
+                          : "No location set"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xl font-semibold text-white mb-4">Your planned flow</label>
+                      <div className="glass rounded-xl p-4 font-medium text-center border border-brand/25">
+                        <span className="text-gradient">{flowText || "Restaurant → Activity → Stay"}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Error banner */}
-              {plannerError && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-                  {plannerError}
-                </div>
-              )}
+                <ErrorBanner message={plannerError} />
 
-              {/* Action buttons */}
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
+                {/* Action buttons */}
+                <GlowButton
                   onClick={startSession}
                   disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
-                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  size="lg"
+                  className="w-full"
                 >
-                  {sessionLoading ? "Starting..." : "🚀 Generate Itinerary"}
-                </button>
-              </div>
-            </div>
+                  {sessionLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="w-5 h-5" /> Generate itinerary
+                    </>
+                  )}
+                </GlowButton>
+              </GlassCard>
+            </motion.div>
           </div>
         )}
 
         {/* STEP PAGE: show all options for current step */}
-        {page === "step" && (
-          <div className="max-w-6xl mx-auto px-6 py-10">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  {currentStep ? humanStepName(currentStep) : "Done"}
-                </h1>
-                <p className="text-gray-600 mt-2">{anchorText}</p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={goBackOneStep}
-                  className="px-5 py-3 bg-white/70 backdrop-blur-md text-gray-800 rounded-xl hover:bg-white/90 transition shadow-lg font-medium"
+        {page === "step" && (() => {
+          // Semi-custom "shortlist 3–5": trim to the top picks unless expanded
+          const shortlist = planMode === "semi" ? directives?.shortlist : null;
+          let displayedOptions =
+            shortlist && !showAllOptions ? stepOptions.slice(0, shortlist) : stepOptions;
+          // Full control: apply filter chips + sort
+          if (planMode === "full") {
+            displayedOptions = applyFiltersAndSort(displayedOptions, activeFilters, sortBy);
+          }
+          const filterChips = planMode === "full" ? directives?.filters || [] : [];
+          return (
+          <div className="max-w-6xl mx-auto px-6 py-6">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+              <motion.div initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-4xl md:text-5xl font-bold text-gradient">
+                    {currentStep ? humanStepName(currentStep) : "Done"}
+                  </h1>
+                  <span className="glass px-3 py-1 rounded-full text-xs font-medium text-brand-3 border border-brand/25">
+                    {planMode === "full" ? "🎛️ Full control" : "🎨 Guided"} mode
+                  </span>
+                </div>
+                {anchorText && (
+                  <p className="text-muted-foreground mt-2 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-brand-3" /> {anchorText}
+                  </p>
+                )}
+              </motion.div>
+              <div className="flex gap-3 shrink-0 flex-wrap">
+                <GlowButton variant="ghost" onClick={goBackOneStep}>
+                  <ArrowLeft className="w-4.5 h-4.5" /> Back
+                </GlowButton>
+                {planMode === "full" && (
+                  <GlowButton variant="ghost" onClick={skipStep}>
+                    Skip step <ArrowRight className="w-4.5 h-4.5" />
+                  </GlowButton>
+                )}
+                <GlowButton
+                  variant="danger"
+                  onClick={() => {
+                    setPage("home");
+                    setSessionId(null);
+                    setSelectedChain([]);
+                  }}
                 >
-                  ← Back
-                </button>
-                <button
-                  onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                  className="px-5 py-3 bg-red-500/10 text-red-600 rounded-xl hover:bg-red-500/20 transition font-medium"
-                >
-                  Cancel
-                </button>
+                  <X className="w-4.5 h-4.5" /> Cancel
+                </GlowButton>
               </div>
             </div>
 
-            {/* Error banner */}
-            {plannerError && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-                {plannerError}
+            <div className="flex items-center gap-3 flex-wrap">
+              <FlowStepper flow={initialFlow} currentStep={currentStep} humanStepName={humanStepName} />
+              {planMode === "full" && upcomingSteps.length >= 0 && (
+                <button
+                  onClick={() => setShowStepEditor((s) => !s)}
+                  className="mb-8 inline-flex items-center gap-1.5 px-3 py-1.5 glass rounded-full text-xs font-medium text-brand-3 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                >
+                  ⚙️ Edit steps
+                </button>
+              )}
+            </div>
+
+            {/* Full-control step editor: manage upcoming steps */}
+            {planMode === "full" && showStepEditor && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="mb-8 glass rounded-2xl p-5 border border-brand/20"
+              >
+                <p className="text-sm font-semibold text-white mb-3">
+                  Upcoming steps <span className="text-muted-foreground font-normal">(current step anchors your plan)</span>
+                </p>
+                {upcomingSteps.length === 0 && (
+                  <p className="text-sm text-muted-foreground mb-3">No steps after this one.</p>
+                )}
+                <div className="space-y-2 mb-4">
+                  {upcomingSteps.map((s, i) => (
+                    <div key={s} className="flex items-center gap-3 glass rounded-xl px-4 py-2.5">
+                      <span className="flex-1 text-sm text-white">
+                        {STEP_EMOJI[s]} {humanStepName(s)}
+                      </span>
+                      <button
+                        onClick={() => moveUpcomingStep(s, -1)}
+                        disabled={i === 0}
+                        aria-label="Move up"
+                        className="p-1 text-muted-foreground hover:text-white disabled:opacity-30 cursor-pointer"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => moveUpcomingStep(s, 1)}
+                        disabled={i === upcomingSteps.length - 1}
+                        aria-label="Move down"
+                        className="p-1 text-muted-foreground hover:text-white disabled:opacity-30 cursor-pointer"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        onClick={() => removeUpcomingStep(s)}
+                        aria-label={`Remove ${s}`}
+                        className="p-1 text-red-400 hover:text-red-300 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {["restaurant", "activity", "stay"]
+                    .filter((s) => !initialFlow.includes(s))
+                    .map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => addUpcomingStep(s)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 glass rounded-lg text-xs font-medium text-brand-3 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                      >
+                        + {STEP_EMOJI[s]} {humanStepName(s)}
+                      </button>
+                    ))}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Full-control filter chips + sort */}
+            {planMode === "full" && stepOptions.length > 0 && (
+              <div className="mb-6 flex items-center gap-2 flex-wrap">
+                {filterChips.map((f) => {
+                  const active = activeFilters.includes(f);
+                  return (
+                    <button
+                      key={f}
+                      onClick={() =>
+                        setActiveFilters((cur) =>
+                          cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]
+                        )
+                      }
+                      className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium cursor-pointer transition-all duration-200 ${
+                        active
+                          ? "bg-gradient-to-r from-brand/35 to-brand-2/30 text-white border border-brand/50 glow-sm"
+                          : "glass text-foreground/75 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {active && <Check className="w-3.5 h-3.5 text-brand-3" />}
+                      {f}
+                    </button>
+                  );
+                })}
+                <span className="mx-1 h-5 w-px bg-white/15" />
+                {[
+                  ["match", "Best match"],
+                  ["rating", "Top rated"],
+                  ["distance", "Nearest"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setSortBy(key)}
+                    className={`px-3.5 py-2 rounded-full text-sm font-medium cursor-pointer transition-all duration-200 ${
+                      sortBy === key
+                        ? "glass text-white border border-white/25"
+                        : "text-muted-foreground hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             )}
 
+            <ErrorBanner message={plannerError} />
+
             {/* Map display */}
-            <div className="mb-8 bg-white/70 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl border-0">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-8 glass-strong rounded-3xl overflow-hidden border border-white/10"
+            >
               <MapPlanner
-                options={stepOptions}
+                options={displayedOptions}
                 selectedChain={selectedChain}
                 onSelect={selectOption}
                 onPreview={(place) => {
@@ -593,65 +1106,163 @@ export default function Planner() {
                 }}
                 highlightedPlace={highlightedPlace}
               />
-            </div>
+            </motion.div>
 
-            <StepGrid
-              options={stepOptions}
-              onSelect={selectOption}
-              loading={sessionLoading}
-              onHighlight={setHighlightedPlace}
-              onRetry={startSession}
-              onBack={() => { setPage("home"); setSessionId(null); }}
-            />
+            {/* Shortlist banner + escape hatch */}
+            {shortlist && stepOptions.length > shortlist && (
+              <div className="mb-6 flex items-center justify-between gap-4 glass rounded-2xl px-5 py-3.5 border border-brand/20">
+                <p className="text-sm text-muted-foreground">
+                  {showAllOptions
+                    ? `Showing all ${stepOptions.length} options`
+                    : `✨ Shortlisted the top ${Math.min(shortlist, stepOptions.length)} picks for you`}
+                </p>
+                <button
+                  onClick={() => setShowAllOptions((s) => !s)}
+                  className="shrink-0 text-sm font-medium text-brand-3 hover:text-white transition-colors cursor-pointer"
+                >
+                  {showAllOptions ? "Back to shortlist" : `Show all ${stepOptions.length}`}
+                </button>
+              </div>
+            )}
+
+            {planMode === "full" && displayedOptions.length === 0 && stepOptions.length > 0 ? (
+              <GlassCard variant="strong" className="p-10 text-center">
+                <p className="text-foreground/85 mb-5">No venues match your active filters.</p>
+                <GlowButton variant="ghost" onClick={() => setActiveFilters([])}>
+                  Clear filters
+                </GlowButton>
+              </GlassCard>
+            ) : (
+              <StepGrid
+                options={displayedOptions}
+                pickBadge={planMode === "semi" && !showAllOptions}
+                onSelect={selectOption}
+                loading={sessionLoading}
+                onHighlight={setHighlightedPlace}
+                onRetry={startSession}
+                onBack={() => {
+                  setPage("home");
+                  setSessionId(null);
+                }}
+              />
+            )}
           </div>
-        )}
+          );
+        })()}
 
         {/* SUMMARY PAGE */}
         {page === "summary" && (
-          <div className="max-w-6xl mx-auto px-6 py-10">
-            <div className="text-center mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-2">
-                Your Perfect Itinerary 🎉
+          <div className="max-w-6xl mx-auto px-6 py-6">
+            <motion.div
+              initial={{ opacity: 0, y: -14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="text-center mb-12"
+            >
+              <motion.div
+                initial={{ scale: 0, rotate: -25 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ type: "spring", stiffness: 240, damping: 16, delay: 0.15 }}
+                className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-brand to-brand-2 flex items-center justify-center glow-md"
+              >
+                <PartyPopper className="w-8 h-8 text-white" />
+              </motion.div>
+              <h1 className="text-4xl md:text-6xl font-bold text-white mb-3">
+                Your perfect <span className="text-gradient">itinerary</span>
               </h1>
-              <p className="text-gray-600 text-lg">Ready to explore!</p>
-            </div>
+              <p className="text-muted-foreground text-lg">Ready to explore!</p>
+            </motion.div>
 
             <div className="grid md:grid-cols-2 gap-8">
-              {/* Itinerary list */}
-              <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl p-8 border-0">
-                <h2 className="text-2xl font-semibold text-gray-800 mb-6">Your Plan</h2>
-                <ol className="space-y-4">
-                  {selectedChain.map((s, i) => (
-                    <li key={`${s.step}::${s.place?.title ?? i}`} className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full flex items-center justify-center font-bold">
-                        {i + 1}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{humanStepName(s.step)}</p>
-                        <p className="text-gray-600">{s.place.title || s.place.name || s.place.address}</p>
-                        {s.place.address && <p className="text-sm text-gray-500 mt-1">📍 {s.place.address}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-                <div className="flex flex-col gap-3 mt-8">
-                  <button
-                    onClick={() => { setPage("home"); setSessionId(null); setSelectedChain([]); }}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition shadow-lg font-semibold"
-                  >
-                    🚀 Plan Another Meetup
-                  </button>
-                  <button
-                    onClick={() => window.print()}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 text-gray-800 rounded-xl hover:bg-gray-50 transition font-semibold"
-                  >
-                    🖨️ Print / Save
-                  </button>
-                </div>
-              </div>
+              {/* Itinerary timeline */}
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+              >
+                <GlassCard variant="gradient" className="p-8 h-full">
+                  <h2 className="text-2xl font-semibold text-white mb-8">Your plan</h2>
+                  <ol className="relative space-y-8 pl-2">
+                    {selectedChain.map((s, i) => (
+                      <motion.li
+                        key={`${s.step}::${s.place?.title ?? i}`}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 + i * 0.15 }}
+                        className="flex gap-5 relative"
+                      >
+                        {/* connector line */}
+                        {i < selectedChain.length - 1 && (
+                          <span className="absolute left-[19px] top-11 bottom-[-32px] w-px bg-gradient-to-b from-brand/60 to-brand-2/30" />
+                        )}
+                        <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-brand to-brand-2 text-white rounded-full flex items-center justify-center font-bold glow-sm z-10">
+                          {i + 1}
+                        </div>
+                        <div className="pt-0.5 flex-1">
+                          <p className="font-semibold text-brand-3 text-sm uppercase tracking-wider mb-0.5 flex items-center gap-1.5">
+                            {STEP_EMOJI[s.step] ?? "📍"} {humanStepName(s.step)}
+                          </p>
+                          <p className="text-white font-medium text-lg">
+                            {s.place.title || s.place.name || s.place.address}
+                          </p>
+                          {s.place.address && (
+                            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5" /> {s.place.address}
+                            </p>
+                          )}
+                          {sessionId && (optionsByStep[s.step] || []).length > 1 && (
+                            <motion.button
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => setSwapIndex(i)}
+                              className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 glass rounded-lg text-xs font-medium text-brand-3 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" /> Swap
+                            </motion.button>
+                          )}
+                        </div>
+                      </motion.li>
+                    ))}
+                  </ol>
+                  {/* Service reminders from the questionnaire */}
+                  {deriveServiceNotes(userPrefs).length > 0 && (
+                    <div className="mt-8 glass rounded-2xl p-5 border border-brand/20">
+                      <p className="text-sm font-semibold text-white mb-3">Don't forget</p>
+                      <ul className="space-y-2">
+                        {deriveServiceNotes(userPrefs).map((note) => (
+                          <li key={note} className="text-sm text-foreground/85">
+                            {note}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-3 mt-10">
+                    <GlowButton
+                      onClick={() => {
+                        setPage("home");
+                        setSessionId(null);
+                        setSelectedChain([]);
+                      }}
+                      size="lg"
+                      className="w-full"
+                    >
+                      <Rocket className="w-5 h-5" /> Plan another meetup
+                    </GlowButton>
+                    <GlowButton variant="ghost" onClick={() => window.print()} size="lg" className="w-full">
+                      <Printer className="w-5 h-5" /> Print / Save
+                    </GlowButton>
+                  </div>
+                </GlassCard>
+              </motion.div>
 
               {/* Map display */}
-              <div className="bg-white/70 backdrop-blur-md shadow-xl rounded-3xl overflow-hidden border-0">
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="glass-strong rounded-3xl overflow-hidden border border-white/10"
+              >
                 <MapPlanner
                   options={[]}
                   selectedChain={selectedChain}
@@ -661,14 +1272,91 @@ export default function Planner() {
                   }}
                   highlightedPlace={highlightedPlace}
                 />
-              </div>
+              </motion.div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Full-page overlay shown while switching steps */}
-      <FullOverlay show={showOverlay} text="Preparing next options..." />
-    </>
+      {/* Swap-a-stop modal: pick an alternative for one itinerary stop */}
+      <AnimatePresence>
+        {swapIndex != null && selectedChain[swapIndex] && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm p-4"
+            onClick={() => setSwapIndex(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 16 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 16 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-strong rounded-3xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden border border-white/10"
+            >
+              <div className="p-6 pb-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white">
+                    Swap {humanStepName(selectedChain[swapIndex].step).toLowerCase()}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Currently: {selectedChain[swapIndex].place.title}
+                    {swapIndex < selectedChain.length - 1 && " · later stops will refresh"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSwapIndex(null)}
+                  aria-label="Close"
+                  className="p-2 rounded-full text-muted-foreground hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto space-y-2">
+                {(optionsByStep[selectedChain[swapIndex].step] || [])
+                  .filter(
+                    (o) =>
+                      (o.place_id || o.title) !==
+                      (selectedChain[swapIndex].place.place_id || selectedChain[swapIndex].place.title)
+                  )
+                  .slice(0, 8)
+                  .map((o, i) => (
+                    <motion.button
+                      key={o.place_id || `${o.title}-${i}`}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => swapStop(swapIndex, o)}
+                      className="w-full text-left glass rounded-xl p-4 hover:bg-white/10 hover:border-brand/40 border border-transparent transition-all cursor-pointer flex items-center gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium truncate">{o.title || o.name}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{o.address}</p>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 text-sm">
+                        {o.rating && (
+                          <span className="text-yellow-400 flex items-center gap-1">
+                            <Star className="w-3.5 h-3.5 fill-yellow-400" /> {o.rating}
+                          </span>
+                        )}
+                        {o.distance_meters != null && (
+                          <span className="text-brand-3 text-xs">
+                            {o.distance_meters < 1000
+                              ? `${Math.round(o.distance_meters)} m`
+                              : `${(o.distance_meters / 1000).toFixed(1)} km`}
+                          </span>
+                        )}
+                      </div>
+                    </motion.button>
+                  ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Full-page overlay shown while switching steps / auto-planning */}
+      <FullOverlay show={showOverlay} text={overlayText} />
+    </div>
   );
 }

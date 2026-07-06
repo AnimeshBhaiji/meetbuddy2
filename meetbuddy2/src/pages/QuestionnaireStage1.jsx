@@ -2,15 +2,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { useQuestionnaire } from "@/context/QuestionnaireContext";
 import Navbar from "@/components/Navbar";
-import Aurora from "@/components/Aurora";
-import { Button } from "@/components/ui/button";
+import AmbientBackground from "@/components/AmbientBackground";
+import GlowButton from "@/components/ui/GlowButton";
 
 const questionnaireData = [
   {
     key: "mood",
-    question: "What’s the vibe you’re going for this time?",
+    question: "What's the vibe you're going for this time?",
     options: ["Fun & Energetic", "Chill & Relaxed", "Business-y", "Romantic"],
   },
   {
@@ -39,125 +40,170 @@ const questionnaireData = [
   },
 ];
 
+const OPTION_EMOJI = {
+  "Fun & Energetic": "🎉",
+  "Chill & Relaxed": "😌",
+  "Business-y": "💼",
+  "Romantic": "🌹",
+  "Surprise me": "🎲",
+  "Semi-custom": "🎨",
+  "Full control": "🎛️",
+  "Stick to the city": "🏙️",
+  "Short drive to hidden gem": "🚗",
+  "Weekend escape": "🏕️",
+  "Easy rides arranged": "🚕",
+  "Live music spots": "🎶",
+  "Surprise gift delivery / Insta-corners": "🎁",
+  "A unique place": "✨",
+  "Amazing food": "🍜",
+  "Deep conversations / Capture moments": "📸",
+};
+
 const QuestionnaireStage1 = () => {
   const { answers, updateAnswers } = useQuestionnaire();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [direction, setDirection] = useState(1); // 1 forward, -1 back
   const navigate = useNavigate();
   const currentQuestion = questionnaireData[currentIndex];
-
-  // Calculate progress percentage
-  const progress = ((currentIndex + 1) / questionnaireData.length) * 100;
 
   const handleMainSelect = (key, label) => {
     updateAnswers({ [key]: label });
   };
 
   const handleNext = () => {
+    setDirection(1);
     if (currentIndex < questionnaireData.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
-      // Move to stage 2 instead of summary
       navigate("/questionnaire-stage2");
     }
   };
 
   const handleBack = () => {
+    setDirection(-1);
     if (currentIndex > 0) setCurrentIndex((prev) => prev - 1);
   };
 
-  // Validation: require main option selection
   const selectedOption = answers[currentQuestion.key];
   const canContinue = Boolean(selectedOption);
 
+  const slideVariants = {
+    enter: (dir) => ({ opacity: 0, x: dir * 60, filter: "blur(4px)" }),
+    center: {
+      opacity: 1,
+      x: 0,
+      filter: "blur(0px)",
+      transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
+    },
+    exit: (dir) => ({
+      opacity: 0,
+      x: dir * -60,
+      filter: "blur(4px)",
+      transition: { duration: 0.25, ease: "easeIn" },
+    }),
+  };
+
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
-      <Aurora colorStops={['#5227FF', '#bf4bfd', '#5227FF']} />
-      <div className="relative z-10 min-h-screen flex flex-col">
-        <Navbar />
+    <div className="relative min-h-screen overflow-x-clip">
+      <AmbientBackground intensity="app" />
+      <Navbar />
 
-        {/* Question Number Label + Progress bar */}
-        <div className="w-full flex flex-col items-center px-4 pt-12">
-          <motion.div
-            key={currentIndex}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-sm font-medium text-gray-400 mb-4 text-center mt-4"
-          >
-            Question {currentIndex + 1} of {questionnaireData.length}
-          </motion.div>
-
-          <div className="w-full max-w-2xl h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <motion.div
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.5, type: 'spring' }}
-            />
+      <div className="min-h-screen flex flex-col pt-28 pb-12 px-4">
+        {/* Header: step label + segmented progress */}
+        <div className="w-full max-w-2xl mx-auto mb-10">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-muted-foreground">
+              Stage 1 · <span className="text-brand-3">Set the vibe</span>
+            </p>
+            <p className="text-sm font-medium text-muted-foreground">
+              {currentIndex + 1} / {questionnaireData.length}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            {questionnaireData.map((q, i) => (
+              <div key={q.key} className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-brand to-brand-2"
+                  initial={false}
+                  animate={{ width: i <= currentIndex ? "100%" : "0%" }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Question Card */}
-        <div className="flex-1 flex items-center justify-center py-8 px-4">
-          <AnimatePresence mode="wait">
+        {/* Question */}
+        <div className="flex-1 flex items-start justify-center">
+          <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={currentQuestion.key}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.4 }}
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
               className="w-full max-w-2xl"
             >
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl overflow-hidden my-4">
-                <div className="p-8">
-                  <h2 className="text-2xl md:text-3xl font-bold text-center text-white mb-8">
-                    {currentQuestion.question}
-                  </h2>
+              <h2 className="text-3xl md:text-4xl font-bold text-center text-white mb-10 leading-tight">
+                {currentQuestion.question}
+              </h2>
 
-                  <div className="space-y-4">
-                    {currentQuestion.options.map((opt) => (
-                      <motion.button
-                        key={opt}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className={`w-full text-left p-5 rounded-xl text-lg font-medium transition-all duration-200 ${
-                          answers[currentQuestion.key] === opt
-                            ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-2 border-blue-400/30 text-white'
-                            : 'bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10'
+              <div
+                className={`grid gap-4 ${
+                  currentQuestion.options.length === 4
+                    ? "grid-cols-1 sm:grid-cols-2"
+                    : "grid-cols-1"
+                }`}
+              >
+                {currentQuestion.options.map((opt, i) => {
+                  const selected = selectedOption === opt;
+                  return (
+                    <motion.button
+                      key={opt}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.08 * i, duration: 0.4 }}
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleMainSelect(currentQuestion.key, opt)}
+                      className={`relative flex items-center gap-4 w-full text-left p-5 rounded-2xl text-lg font-medium cursor-pointer transition-all duration-200 ${
+                        selected
+                          ? "glass-strong border-gradient text-white glow-sm"
+                          : "glass text-foreground/80 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      <span className="text-2xl">{OPTION_EMOJI[opt] ?? "✨"}</span>
+                      <span className="flex-1">{opt}</span>
+                      <span
+                        className={`flex items-center justify-center w-6 h-6 rounded-full border transition-all duration-200 ${
+                          selected
+                            ? "bg-gradient-to-br from-brand to-brand-2 border-transparent"
+                            : "border-white/25"
                         }`}
-                        onClick={() => handleMainSelect(currentQuestion.key, opt)}
                       >
-                        {opt}
-                      </motion.button>
-                    ))}
-                  </div>
+                        {selected && <Check className="w-3.5 h-3.5 text-white" />}
+                      </span>
+                    </motion.button>
+                  );
+                })}
+              </div>
 
-                  <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-10 pt-6 border-t border-white/10">
-                    <Button
-                      variant="outline"
-                      disabled={currentIndex === 0}
-                      onClick={handleBack}
-                      className="w-full sm:w-auto flex items-center gap-2 text-blue-400 border-blue-400/30 hover:bg-white/5 px-6 py-3"
-                    >
-                      ← Back
-                    </Button>
+              {/* Nav buttons */}
+              <div className="flex justify-between items-center gap-4 mt-10">
+                <GlowButton
+                  variant="ghost"
+                  onClick={handleBack}
+                  disabled={currentIndex === 0}
+                  className={currentIndex === 0 ? "invisible" : ""}
+                >
+                  <ArrowLeft className="w-4.5 h-4.5" /> Back
+                </GlowButton>
 
-                    <Button
-                      onClick={handleNext}
-                      disabled={!canContinue}
-                      className={`w-full sm:w-auto py-6 text-base ${
-                        canContinue
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700'
-                          : 'bg-gray-700 cursor-not-allowed opacity-70'
-                      } text-white rounded-xl transition-all duration-300 transform hover:-translate-y-0.5 hover:shadow-lg`}
-                    >
-                      {currentIndex === questionnaireData.length - 1
-                        ? 'Proceed to Next Stage →'
-                        : 'Continue →'}
-                    </Button>
-                  </div>
-                </div>
+                <GlowButton onClick={handleNext} disabled={!canContinue} size="lg">
+                  {currentIndex === questionnaireData.length - 1 ? "Next stage" : "Continue"}
+                  <ArrowRight className="w-4.5 h-4.5" />
+                </GlowButton>
               </div>
             </motion.div>
           </AnimatePresence>

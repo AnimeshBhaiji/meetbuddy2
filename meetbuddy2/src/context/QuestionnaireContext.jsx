@@ -39,11 +39,12 @@ export const QuestionnaireProvider = ({ children }) => {
       const userId = user.user_id || user.id;
 
       if (user && userId) {
+        // Backend expects a flat payload: { user_id, mood, ..., mood_sub, ... }
         await axios.post(
-          getApiUrl('/update-preferences'),
+          getApiUrl('/save_preferences'),
           {
             user_id: userId,
-            preferences: updatedAnswers
+            ...updatedAnswers
           },
           {
             headers: {

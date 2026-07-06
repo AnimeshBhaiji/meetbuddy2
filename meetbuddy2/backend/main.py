@@ -46,10 +46,10 @@ try:
     with open(PREFERENCES_FILE, "r", encoding="utf-8") as f:
         PREFERENCES = json.load(f)
         if not isinstance(PREFERENCES, dict):
-            print("⚠️ preferences.json invalid, resetting.")
+            print("WARNING: preferences.json invalid, resetting.")
             PREFERENCES = {}
 except Exception as e:
-    print(f"⚠️ Error loading preferences.json: {e}")
+    print(f"WARNING: Error loading preferences.json: {e}")
     PREFERENCES = {}
 
 # -------- SCHEMAS --------
@@ -182,7 +182,7 @@ async def save_preferences(request: Request):
         raise HTTPException(status_code=400, detail="Missing user_id in payload")
 
     user_id_str = str(user_id)
-    print("🔔 Received save_preferences payload:", data)
+    print("Received save_preferences payload:", data)
 
     # Overwrite behavior: do not preserve other users' saved preferences.
     # We'll build merged_for_user and write a file that contains only this user's prefs.
@@ -245,10 +245,10 @@ async def save_preferences(request: Request):
         with open(USER_PREFS_FILE, "w", encoding="utf-8") as f:
             json.dump(to_write, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        print("❌ Error writing prefs file:", e)
+        print("ERROR writing prefs file:", e)
         raise HTTPException(status_code=500, detail="Failed to save preferences")
 
-    print(f"✅ Saved preferences for user {user_id}: {merged_for_user}")
+    print(f"Saved preferences for user {user_id}: {merged_for_user}")
     return {"message": "Preferences saved successfully", "prefs": merged_for_user}
 
 # -------- READ SAVED PREFS --------
@@ -287,18 +287,10 @@ async def planner_session_start(request: Request):
 
     initial = generate_initial_suggestions(payload, num_results=15)
 
-    # If no options returned from new session flow, fall back to legacy generate_plan
+    # If no options were found, return the session anyway with an empty list —
+    # the frontend renders a retry/empty state for this case.
     if not initial.get("options"):
-        print("⚠️ No options from generate_initial_suggestions, falling back to legacy generate_plan")
-        legacy_result = generate_plan(payload)
-        initial = {
-            "display_query": legacy_result.get("query"),
-            "short_query": legacy_result.get("query"),
-            "options": legacy_result.get("recommendations", []),
-            "place_types": [],
-            "location_hint": legacy_result.get("query"),
-            "selected_tokens": legacy_result.get("selected_for_query", []),
-        }
+        print(f"WARNING: no options from generate_initial_suggestions for user {user_id}")
 
     # include selected_tokens into session state for downstream
     session_id = create_session(user_id, payload, initial_state={"selected_tokens": initial.get("selected_tokens", [])})
@@ -316,6 +308,11 @@ async def planner_session_start(request: Request):
             "location_hint": initial.get("location_hint"),
             # include backend-computed flow so frontend does not guess steps
             "recommended_flow": initial.get("recommended_flow"),
+            # questionnaire-derived planning behavior
+            "plan_mode": initial.get("plan_mode"),
+            "directives": initial.get("directives"),
+            # present only when every search attempt failed (e.g. bad API key)
+            "search_error": initial.get("search_error"),
         }
     }
 
@@ -360,6 +357,35 @@ async def planner_session_select(sid: str, request: Request):
         "next_step": next_step,
         "options": follow.get("options", []),
         "anchor_text": follow.get("anchor_text"),
+        "search_error": follow.get("search_error"),
+    }
+
+# Skip the current step without selecting a place (full-control mode).
+# Followup options anchor to the last actual selection (or the origin).
+@app.post("/planner/session/{sid}/skip")
+async def planner_session_skip(sid: str, request: Request):
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    session = get_session(sid)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+
+    next_step = raw.get("next_step")
+    if not next_step or next_step == "done":
+        return {"session_id": sid, "next_step": "done", "options": []}
+
+    follow = generate_followup_suggestions(session, next_step, num_results=15)
+    set_last_options(sid, next_step, follow.get("options", []))
+
+    return {
+        "session_id": sid,
+        "next_step": next_step,
+        "options": follow.get("options", []),
+        "anchor_text": follow.get("anchor_text"),
+        "search_error": follow.get("search_error"),
     }
 
 # Read session state

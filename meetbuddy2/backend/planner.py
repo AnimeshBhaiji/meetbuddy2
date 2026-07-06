@@ -1,6 +1,7 @@
 # planner.py
 import json
 import os
+import re
 import traceback
 import urllib.parse
 import requests
@@ -357,6 +358,218 @@ def _distance_boost(base_score: float, distance_m: float, is_weekend_escape: boo
     return base_score
 
 
+def _sub_answers(prefs_data: Dict[str, Any], cat: str) -> Dict[str, Any]:
+    raw = prefs_data.get(f"{cat}_sub") or prefs_data.get(f"{cat}Sub") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _sub_text(subs: Dict[str, Any], key: str) -> str:
+    v = subs.get(key)
+    if isinstance(v, list):
+        return ", ".join(str(x) for x in v)
+    return str(v).strip() if v not in (None, "") else ""
+
+
+def _sub_list(subs: Dict[str, Any], key: str) -> List[str]:
+    v = subs.get(key)
+    if isinstance(v, list):
+        return [str(x).strip() for x in v if str(x).strip()]
+    if v in (None, ""):
+        return []
+    return [str(v).strip()]
+
+
+def _build_search_directives(prefs_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate every questionnaire answer (main + stage-2 subs) into concrete
+    search behavior: plan mode, radius, per-step query flavor terms, scoring
+    priorities and exclusions. This is what makes the questionnaire functional
+    rather than decorative."""
+    d: Dict[str, Any] = {
+        "plan_mode": "semi",        # surprise | semi | full
+        "shortlist": None,           # int → cap options shown per step (semi mode)
+        "priorities": [],            # food quality / ambience / budget / distance
+        "avoid_terms": [],           # tokens from the surprise-mode avoid list
+        "filters": [],               # full-control filter chips
+        "radius_m": 2500,
+        "restaurant_terms": [],      # query flavor for the restaurant step
+        "activity_terms": [],        # query flavor for the activity step
+        "stay_terms": [],
+    }
+
+    planning = " ".join(normalize_to_labels("planningStyle", prefs_data.get("planningStyle")) or []).lower()
+    adventure = " ".join(normalize_to_labels("adventureLevel", prefs_data.get("adventureLevel")) or []).lower()
+    addon = " ".join(normalize_to_labels("addOnMagic", prefs_data.get("addOnMagic")) or []).lower()
+
+    mood_sub = _sub_answers(prefs_data, "mood")
+    plan_sub = _sub_answers(prefs_data, "planningStyle")
+    adv_sub = _sub_answers(prefs_data, "adventureLevel")
+    addon_sub = _sub_answers(prefs_data, "addOnMagic")
+    mem_sub = _sub_answers(prefs_data, "memorableFactor")
+
+    # ---- planning mode ----
+    if "surprise" in planning:
+        d["plan_mode"] = "surprise"
+        d["priorities"] = [p.lower() for p in _sub_list(plan_sub, "sm_prior")]
+        block = _sub_text(plan_sub, "sm_block")
+        if block:
+            d["avoid_terms"] = [t.strip().lower() for t in re.split(r"[,;/]+", block) if t.strip()]
+    elif "full control" in planning:
+        wants_help = _sub_text(plan_sub, "fc_itinerary").lower().startswith("no")
+        d["plan_mode"] = "semi" if wants_help else "full"
+        d["filters"] = [f.lower() for f in _sub_list(plan_sub, "fc_filters")]
+    else:  # Semi-custom (also the default when unanswered)
+        d["plan_mode"] = "semi"
+        if _sub_text(plan_sub, "sc_shortlist").lower().startswith("yes"):
+            d["shortlist"] = 5
+
+    # ---- search radius from adventure level ----
+    if "weekend escape" in adventure:
+        d["radius_m"] = 25000
+    elif "short drive" in adventure:
+        dur = _sub_text(adv_sub, "sd_duration")
+        d["radius_m"] = 10000 if "<30" in dur else 50000 if ">60" in dur else 25000
+    else:  # stick to the city
+        area = _sub_text(adv_sub, "sc_area").lower()
+        d["radius_m"] = 6000 if "suburb" in area else 2500
+
+    # getaway type flavors (short drive)
+    sd_type = _sub_text(adv_sub, "sd_type").lower()
+    if "nature" in sd_type:
+        d["activity_terms"] += ["nature spots", "scenic parks"]
+    elif "heritage" in sd_type:
+        d["activity_terms"] += ["heritage sites", "landmarks"]
+    elif "food" in sd_type:
+        d["restaurant_terms"].append("famous local food")
+        d["activity_terms"].append("food streets")
+
+    # ---- mood flavors ----
+    fe_activity = _sub_text(mood_sub, "fe_activity").lower()
+    if "dance" in fe_activity or "club" in fe_activity:
+        d["activity_terms"] += ["night clubs", "dance clubs"]
+    elif "games" in fe_activity:
+        d["activity_terms"] += ["arcades", "gaming lounges"]
+    elif "live" in fe_activity:
+        d["activity_terms"].append("live event venues")
+    fe_outdoor = _sub_text(mood_sub, "fe_outdoor").lower()
+    if fe_outdoor == "outdoor":
+        d["activity_terms"].insert(0, "outdoor activities")
+    elif fe_outdoor == "indoor":
+        d["activity_terms"].insert(0, "indoor activities")
+
+    cr_setting = _sub_text(mood_sub, "cr_setting").lower()
+    if "caf" in cr_setting:  # matches café / cafe
+        d["restaurant_terms"].append("cozy cafes")
+    elif "nature" in cr_setting or "park" in cr_setting:
+        d["activity_terms"] += ["parks", "gardens"]
+    for a in _sub_list(mood_sub, "cr_addons"):
+        al = a.lower()
+        if "board games" in al:
+            d["activity_terms"].append("board game cafes")
+        elif "quiet" in al:
+            d["activity_terms"].append("art galleries")
+
+    if "private" in _sub_text(mood_sub, "by_seating").lower():
+        d["restaurant_terms"].append("private dining")
+    if _sub_text(mood_sub, "by_formality").lower().startswith("formal"):
+        d["restaurant_terms"].append("business friendly")
+
+    ro_setting = _sub_text(mood_sub, "ro_setting").lower()
+    if "candlelit" in ro_setting or "intimate" in ro_setting:
+        d["restaurant_terms"].append("candlelight dinner")
+    elif "scenic" in ro_setting or "view" in ro_setting:
+        d["restaurant_terms"].append("restaurants with a view")
+    elif "rooftop" in ro_setting or "alfresco" in ro_setting:
+        d["restaurant_terms"].append("rooftop restaurants")
+
+    # ---- add-on magic ----
+    if "live music" in addon:
+        style = _sub_text(addon_sub, "lm_style").lower()
+        term = {"acoustic": "live acoustic music", "band": "live band", "dj": "DJ nights"}.get(style, "live music")
+        d["restaurant_terms"].append(term)
+
+    # ---- memorable factor ----
+    cuisine = _sub_text(mem_sub, "af_cuisine")
+    diet = _sub_text(mem_sub, "af_diet")
+    if cuisine:
+        d["restaurant_terms"].insert(0, cuisine)
+    if diet:
+        d["restaurant_terms"].append(f"{diet} friendly")
+    for u in _sub_list(mem_sub, "up_type"):
+        ul = u.lower()
+        if "themed" in ul:
+            d["restaurant_terms"].append("themed")
+        elif "hidden" in ul:
+            d["restaurant_terms"].append("hidden gem")
+        elif "artistic" in ul:
+            d["restaurant_terms"].append("aesthetic")
+    dc_setting = _sub_text(mem_sub, "dc_setting").lower()
+    if "quiet" in dc_setting:
+        d["restaurant_terms"].append("quiet intimate")
+    elif "scenic" in dc_setting or "photogenic" in dc_setting:
+        d["restaurant_terms"].append("instagrammable")
+
+    # Compact flavor lists — too many words dilute a maps search
+    d["restaurant_terms"] = d["restaurant_terms"][:3]
+    d["activity_terms"] = d["activity_terms"][:3]
+    return d
+
+
+AMBIENCE_KEYWORDS = ("rooftop", "garden", "lounge", "aesthetic", "cozy", "scenic", "terrace", "courtyard")
+
+
+def _apply_priority_weights(place: Dict[str, Any], base_score: float, priorities: List[str]) -> float:
+    """Re-weight a place's score by the user's surprise-mode priorities."""
+    if not priorities:
+        return base_score
+    joined = " ".join(priorities)
+    if "food quality" in joined:
+        try:
+            rating = float(place.get("rating") or 0)
+            if rating:
+                base_score += (rating - 4.0) * 1.5
+        except Exception:
+            pass
+    if "distance" in joined:
+        dist = place.get("distance_meters")
+        if dist is not None:
+            base_score += 1.0 if dist <= 1000 else 0.5 if dist <= 2500 else -0.3
+    if "budget" in joined:
+        price = str(place.get("price") or "")
+        if price:
+            base_score += 0.4 if len(price) <= 2 else -0.8
+    if "ambience" in joined:
+        title = str(place.get("title") or "").lower()
+        if any(k in title for k in AMBIENCE_KEYWORDS):
+            base_score += 0.5
+    return base_score
+
+
+def _filter_avoided(options: List[Dict[str, Any]], avoid_terms: List[str]) -> List[Dict[str, Any]]:
+    """Drop venues whose title/type matches any avoid-list token."""
+    if not avoid_terms:
+        return options
+    kept = []
+    for p in options:
+        haystack = f"{p.get('title', '')} {p.get('type', '')}".lower()
+        if any(term in haystack for term in avoid_terms):
+            continue
+        kept.append(p)
+    return kept
+
+
+def _step_flavor(directives: Dict[str, Any], place_type: Optional[str]) -> str:
+    """Pick the flavor terms matching a step's place type."""
+    food_types = ("restaurant", "cafe", "bar", "club")
+    stay_types = ("hotel", "resort", "lodging")
+    if place_type in stay_types:
+        terms = directives.get("stay_terms") or []
+    elif place_type in food_types or place_type is None:
+        terms = directives.get("restaurant_terms") or []
+    else:
+        terms = directives.get("activity_terms") or []
+    return " ".join(terms[:2])
+
+
 def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15):
     prefs_data = payload.get("preferences", {}) or {}
     coords = payload.get("coords")
@@ -429,6 +642,9 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         "memorableFactor": memorable_labels,
     }
 
+    # Translate every questionnaire answer into concrete search behavior
+    directives = _build_search_directives(prefs_data)
+
     # Build top tokens (max 3)
     tokens = []
     for cat in ("mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor"):
@@ -468,11 +684,15 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     top_type = primary_types[0] if primary_types else "restaurant"
     top_name = place_type_names.get(top_type, top_type)
 
-    # Attempt 1: preference-driven query with location
+    # Attempt 1: preference-driven query with location.
+    # Directive flavor terms (cuisine, rooftop, live music, ...) take
+    # precedence over the generic token query when present.
+    flavor = _step_flavor(directives, top_type)
+    lead_q = f"{flavor} {top_name}".strip() if flavor else f"{short_q} {top_name}".strip()
     if loc_text_for_query:
-        attempts.append((f"{short_q} {top_name} near {loc_text_for_query}".strip(), top_type, coords_tuple))
+        attempts.append((f"{lead_q} near {loc_text_for_query}".strip(), top_type, coords_tuple))
     else:
-        attempts.append((f"{short_q} {top_name}".strip(), top_type, coords_tuple))
+        attempts.append((lead_q, top_type, coords_tuple))
 
     # Attempt 2: plain place type + location (broader, better coverage)
     if loc_text_for_query:
@@ -485,8 +705,13 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         q3 = f"{pt2_name} in {loc_text_for_query}".strip() if loc_text_for_query else f"{pt2_name}".strip()
         attempts.append((q3, pt2, coords_tuple))
 
-    # Compute max distance once before the loop
-    max_base_dist = 10000 if is_weekend_escape else 2500
+    # Max search distance comes from adventure-level answers (city 2.5km,
+    # suburbs 6km, short drive 10-50km by accepted drive time, weekend 25km)
+    max_base_dist = directives["radius_m"]
+
+    # Track search failures so a config error (e.g. invalid SerpAPI key)
+    # can be reported instead of silently producing an empty result.
+    search_errors: List[str] = []
 
     # Run attempts, stop early when we have enough results
     for idx, (q, pt, ctuple) in enumerate(attempts):
@@ -506,7 +731,8 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
                 if len(options) >= max(num_results, 15):
                     break
         except Exception as e:
-            pass
+            print(f"WARNING: place search failed for {q!r}: {e}")
+            search_errors.append(str(e))
 
     # Only try generic fallback if we still don't have enough results
     if len(options) < num_results:
@@ -517,7 +743,8 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
             if fetched:
                 options.extend(fetched)
         except Exception as e:
-            pass
+            print(f"WARNING: fallback place search failed for {short_q!r}: {e}")
+            search_errors.append(str(e))
 
     # Last resort: if still no results, try just location-based search (no preferences)
     if len(options) < num_results and loc_text_for_query:
@@ -528,10 +755,12 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
             if fetched:
                 options.extend(fetched)
         except Exception as e:
-            pass
+            print(f"WARNING: location-only place search failed for {loc_text_for_query!r}: {e}")
+            search_errors.append(str(e))
 
-    # Deduplicate & score
+    # Deduplicate, drop avoided venues, & score
     options = dedupe_places(options)
+    options = _filter_avoided(options, directives["avoid_terms"])
 
     # Add distance-based scoring boost (closer places get higher score)
     coords_tuple = _prepare_coords_tuple(coords)
@@ -547,6 +776,9 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
                 base_score = _distance_boost(base_score, distance_m, is_weekend_escape=is_weekend_escape)
             except Exception:
                 pass
+
+        # Surprise-mode priorities (food quality / distance / budget / ambience)
+        base_score = _apply_priority_weights(p, base_score, directives["priorities"])
 
         p["score"] = base_score
 
@@ -617,7 +849,7 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     if explicit_no_stay and "stay" in recommended_flow:
         recommended_flow = [step for step in recommended_flow if step != "stay"]
 
-    return {
+    result = {
         "display_query": display_q,
         "short_query": short_q,
         "labels_used": labels_used,
@@ -626,7 +858,14 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         "options": options_sorted[:max(num_results, 20)],  # Return up to 20 results for better selection
         "location_hint": loc_text_for_display or "",
         "recommended_flow": recommended_flow,  # Add recommended flow steps
+        "plan_mode": directives["plan_mode"],
+        "directives": directives,
     }
+    # Every search attempt failed and produced nothing — report why so the
+    # frontend can show an actionable message instead of a generic empty state.
+    if not result["options"] and search_errors:
+        result["search_error"] = search_errors[-1]
+    return result
 
 
 def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str, num_results: int = 15):
@@ -671,6 +910,13 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
         "memorableFactor": normalize_to_labels("memorableFactor", prefs.get("memorableFactor")),
     }
 
+    # Followup steps inherit the same questionnaire-driven search behavior
+    directives = _build_search_directives(prefs)
+    # Steps after the anchor stay close to it regardless of adventure level,
+    # but never tighter than 2.5km
+    followup_radius = min(directives["radius_m"], 10000) if anchor_coords else None
+    followup_radius = max(followup_radius, 2500) if followup_radius else None
+
     mapping = {
         "restaurant": ["restaurant", "cafe", "bar"],
         "activity": [
@@ -692,17 +938,31 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
     short_q = short_query_from_selected(tokens) if tokens else "things to do"
 
     fetched = []
+    search_errors: List[str] = []
 
-    # For activity step, use a single broad search to reduce API calls
+    # For activity step, lead with the questionnaire-flavored query
+    # (e.g. "night clubs", "board game cafes"), falling back to a broad search
     if next_step == "activity":
+        activity_flavor = " ".join((directives.get("activity_terms") or [])[:2])
+        lead_query = activity_flavor if activity_flavor else "things to do"
         try:
             fetch_count = max(num_results * 2, 20)
-            max_dist = 2500 if anchor_coords else None
-            res = get_places("things to do", num_results=fetch_count, coords=anchor_coords, place_type=None, max_distance_meters=max_dist)
+            max_dist = followup_radius
+            res = get_places(lead_query, num_results=fetch_count, coords=anchor_coords, place_type=None, max_distance_meters=max_dist)
             if res:
                 fetched.extend(res)
         except Exception as e:
-            pass
+            print(f"WARNING: activity search failed: {e}")
+            search_errors.append(str(e))
+        # Flavored query came back thin — broaden
+        if activity_flavor and len(fetched) < max(num_results, 8):
+            try:
+                res = get_places("things to do", num_results=max(num_results * 2, 20), coords=anchor_coords, place_type=None, max_distance_meters=followup_radius)
+                if res:
+                    fetched.extend(res)
+            except Exception as e:
+                print(f"WARNING: broad activity search failed: {e}")
+                search_errors.append(str(e))
 
     # Try a short clean query per desired type, prefer using anchor_coords if available.
     # Limit to top 2 types to reduce API calls
@@ -741,13 +1001,14 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
 
         # If we have an anchor_text (address) but also anchor_coords, do not append long address to q; prefer coords
         try:
-            # Fetch more results and filter by distance (2.5km max from anchor)
+            # Fetch more results and filter by distance from the anchor
             fetch_count = max(num_results * 2, 20)
-            max_dist = 2500 if anchor_coords else None  # 2.5km max distance from anchor
+            max_dist = followup_radius
             res = get_places(q, num_results=fetch_count, coords=anchor_coords, place_type=pt, max_distance_meters=max_dist)
             fetched.extend(res)
         except Exception as e:
-            pass
+            print(f"WARNING: place search failed for {q!r}: {e}")
+            search_errors.append(str(e))
 
     fetched = dedupe_places(fetched)
 
@@ -766,6 +1027,9 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
             kw in (p.get("title", "") + " " + p.get("address", "")).lower()
             for kw in stay_keywords
         )]
+
+    # Drop venues matching the user's avoid list
+    fetched = _filter_avoided(fetched, directives["avoid_terms"])
 
     # Add distance-based scoring boost for followup suggestions
     for p in fetched:
@@ -801,6 +1065,9 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
             except Exception:
                 pass
 
+        # Surprise-mode priorities apply to followup steps too
+        base_score = _apply_priority_weights(p, base_score, directives["priorities"])
+
         p["score"] = base_score
 
     # Sort by score (which includes distance boost), then by distance
@@ -808,9 +1075,12 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
         -x.get("score", 0),  # Higher score first
         x.get("distance_meters") if x.get("distance_meters") is not None else float('inf')  # Closer first
     ))
-    return {
+    result = {
         "anchor_text": anchor_text,
         "next_step": next_step,
         "options": fetched_sorted[:num_results],
         "desired_types": desired_types,
     }
+    if not result["options"] and search_errors:
+        result["search_error"] = search_errors[-1]
+    return result

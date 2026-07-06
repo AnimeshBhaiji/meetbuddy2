@@ -94,7 +94,7 @@ def _get_cached_result(cache_key: str) -> Optional[List[Dict]]:
     if cache_key in _API_CACHE:
         result, timestamp = _API_CACHE[cache_key]
         if time.time() - timestamp < _CACHE_TTL:
-            print(f"💾 Cache hit for query")
+            print("Cache hit for query")
             return result
         else:
             # Expired, remove from cache

@@ -159,6 +159,14 @@
 }
 .animate-aurora-drift { animation: aurora-drift 30s ease-in-out infinite; }
 
+/* Hero scroll cue dot */
+@keyframes scroll-cue {
+  0% { transform: translateY(0); opacity: 0.4; }
+  60% { transform: translateY(18px); opacity: 1; }
+  100% { transform: translateY(18px); opacity: 0; }
+}
+.animate-scroll-cue { animation: scroll-cue 1.6s ease-out infinite; }
+
 /* Ambient float for decorative elements */
 @keyframes float-slow {
   0%, 100% { transform: translateY(0) rotate(0deg); }

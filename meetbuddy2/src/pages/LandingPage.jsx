@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import {
   Calendar,
   MapPin,
@@ -18,6 +18,7 @@ import Footer from "@/components/Footer";
 import AmbientBackground from "@/components/AmbientBackground";
 import ScrollFloat from "@/components/ScrollFloat";
 import GlassCard from "@/components/ui/GlassCard";
+import { EASE } from "@/lib/motion";
 
 /* ---------- helpers ---------- */
 
@@ -55,7 +56,7 @@ const MagneticButton = ({ children, className = "", onClick }) => {
 
 const fadeUp = {
   hidden: { opacity: 0, y: 28 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
 };
 
 const stagger = {
@@ -65,16 +66,35 @@ const stagger = {
 
 /* ---------- hero floating itinerary cards ---------- */
 
-const FloatCard = ({ className = "", delay = 0, children }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 30, scale: 0.9 }}
-    animate={{ opacity: 1, y: 0, scale: 1 }}
-    transition={{ duration: 0.8, delay, ease: [0.22, 1, 0.36, 1] }}
-    className={`absolute hidden lg:flex items-center gap-3 glass-strong rounded-2xl px-4 py-3 shadow-xl animate-float-slow ${className}`}
-  >
-    {children}
+// Outer layer takes the scroll parallax (style.y); inner layer owns the
+// entrance + idle float so the two transforms never fight.
+const FloatCard = ({ className = "", delay = 0, parallaxY, children }) => (
+  <motion.div style={{ y: parallaxY }} className={`absolute hidden lg:block ${className}`}>
+    <motion.div
+      initial={{ opacity: 0, y: 30, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.8, delay, ease: EASE }}
+      className="flex items-center gap-3 glass-strong rounded-2xl px-4 py-3 shadow-xl animate-float-slow"
+    >
+      {children}
+    </motion.div>
   </motion.div>
 );
+
+// Word-by-word headline reveal (one-time, transform/opacity only)
+const HeadlineWords = ({ text, delayStart = 0 }) =>
+  text.split(" ").map((word, i) => (
+    <motion.span
+      key={i}
+      className="inline-block whitespace-pre"
+      initial={{ opacity: 0, y: 26 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: EASE, delay: delayStart + i * 0.08 }}
+    >
+      {word}
+      {" "}
+    </motion.span>
+  ));
 
 /* ---------- data ---------- */
 
@@ -152,6 +172,11 @@ const STATS = [
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  const { scrollY } = useScroll();
+  // Floating cards drift up at different rates as the hero scrolls away
+  const parallaxSlow = useTransform(scrollY, [0, 700], [0, -60]);
+  const parallaxMed = useTransform(scrollY, [0, 700], [0, -110]);
+  const parallaxFast = useTransform(scrollY, [0, 700], [0, -160]);
 
   const handlePlanMeetup = () => {
     const storedUser = localStorage.getItem("user");
@@ -170,21 +195,21 @@ const LandingPage = () => {
       {/* ---------- HERO ---------- */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-28 pb-20">
         {/* Floating itinerary cards */}
-        <FloatCard className="top-[24%] left-[8%]" delay={0.9}>
+        <FloatCard className="top-[24%] left-[8%]" delay={0.9} parallaxY={parallaxMed}>
           <span className="text-2xl">🍜</span>
           <div className="text-left">
             <p className="text-sm font-semibold text-white">Izakaya Ten</p>
             <p className="text-xs text-muted-foreground">Dinner · 4.8 <Star className="inline w-3 h-3 -mt-0.5 text-yellow-400 fill-current" /></p>
           </div>
         </FloatCard>
-        <FloatCard className="top-[38%] right-[7%]" delay={1.1}>
+        <FloatCard className="top-[38%] right-[7%]" delay={1.1} parallaxY={parallaxFast}>
           <span className="text-2xl">🎳</span>
           <div className="text-left">
             <p className="text-sm font-semibold text-white">Neon Bowl</p>
             <p className="text-xs text-muted-foreground">Activity · 350 m away</p>
           </div>
         </FloatCard>
-        <FloatCard className="bottom-[22%] left-[13%]" delay={1.3}>
+        <FloatCard className="bottom-[22%] left-[13%]" delay={1.3} parallaxY={parallaxSlow}>
           <Hotel className="w-6 h-6 text-brand-3" />
           <div className="text-left">
             <p className="text-sm font-semibold text-white">The Foundry Hotel</p>
@@ -206,14 +231,18 @@ const LandingPage = () => {
             <p className="text-sm font-medium text-brand-3">Meet. Plan. Enjoy.</p>
           </motion.div>
 
-          <motion.h1
-            variants={fadeUp}
-            className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-8 leading-[1.05]"
-          >
-            Great meetups,
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-8 leading-[1.05]">
+            <HeadlineWords text="Great meetups," delayStart={0.15} />
             <br />
-            <span className="text-gradient">planned in minutes.</span>
-          </motion.h1>
+            <motion.span
+              className="text-gradient inline-block"
+              initial={{ opacity: 0, y: 26 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, ease: EASE, delay: 0.45 }}
+            >
+              planned in minutes.
+            </motion.span>
+          </h1>
 
           <motion.p
             variants={fadeUp}
@@ -245,20 +274,12 @@ const LandingPage = () => {
           </motion.div>
         </motion.div>
 
-        {/* Scroll cue */}
-        <motion.div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
-          animate={{ y: [0, 10, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-        >
+        {/* Scroll cue — CSS keyframes, zero main-thread cost */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
           <div className="w-9 h-14 border-2 border-white/25 rounded-full flex justify-center p-1.5">
-            <motion.div
-              className="w-1 h-3.5 bg-gradient-to-b from-brand to-brand-2 rounded-full"
-              animate={{ y: [0, 18], opacity: [0.4, 1, 0.2] }}
-              transition={{ duration: 1.6, repeat: Infinity }}
-            />
+            <div className="w-1 h-3.5 bg-gradient-to-b from-brand to-brand-2 rounded-full animate-scroll-cue" />
           </div>
-        </motion.div>
+        </div>
       </section>
 
       {/* ---------- MARQUEE ---------- */}

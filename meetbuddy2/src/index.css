@@ -33,10 +33,18 @@
 
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-sans: "Inter", system-ui, sans-serif;
+
+  /* Motion system: one curve, three speeds (overrides Tailwind's ease-out) */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
   --radius: 1rem;
+
+  /* Motion durations: micro / component / page-level */
+  --dur-fast: 150ms;
+  --dur-med: 250ms;
+  --dur-slow: 400ms;
 
   /* Single dark theme — deep space blue-black */
   --background: oklch(0.13 0.02 275);
@@ -50,7 +58,7 @@
   --secondary: oklch(0.22 0.03 275);
   --secondary-foreground: oklch(0.96 0.005 270);
   --muted: oklch(0.22 0.03 275);
-  --muted-foreground: oklch(0.65 0.02 270);
+  --muted-foreground: oklch(0.75 0.02 270);
   --accent: oklch(0.24 0.04 285);
   --accent-foreground: oklch(0.96 0.005 270);
   --destructive: oklch(0.65 0.21 20);
@@ -185,7 +193,7 @@
 }
 .rbc-header {
   border-bottom: 1px solid oklch(1 0 0 / 10%);
-  color: oklch(0.65 0.02 270);
+  color: oklch(0.75 0.02 270);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 11px;
@@ -232,7 +240,7 @@
 }
 .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
   border-bottom: 1px solid oklch(1 0 0 / 10%);
-  color: oklch(0.65 0.02 270);
+  color: oklch(0.75 0.02 270);
 }
 .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
   border-top: 1px solid oklch(1 0 0 / 8%);
@@ -247,7 +255,7 @@
   border-color: oklch(1 0 0 / 8%);
 }
 .rbc-time-slot .rbc-label {
-  color: oklch(0.6 0.02 270);
+  color: oklch(0.72 0.02 270);
   font-size: 11px;
 }
 .rbc-day-slot .rbc-time-slot {
@@ -291,7 +299,7 @@
 }
 
 .leaflet-popup-close-button {
-  color: oklch(0.65 0.02 270) !important;
+  color: oklch(0.75 0.02 270) !important;
 }
 
 /* Dark zoom controls */
@@ -307,7 +315,7 @@
 /* Dark attribution bar */
 .leaflet-control-attribution {
   background: oklch(0.15 0.02 275 / 80%) !important;
-  color: oklch(0.65 0.02 270) !important;
+  color: oklch(0.75 0.02 270) !important;
 }
 .leaflet-control-attribution a {
   color: oklch(0.75 0.14 200) !important;
@@ -315,4 +323,16 @@
 
 .leaflet-container {
   z-index: 1;
+}
+
+/* Accessibility: kill decorative motion for users who ask for less */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

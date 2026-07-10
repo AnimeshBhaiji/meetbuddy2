@@ -1,77 +1,28 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import './ScrollFloat.css';
+// Word-level scroll reveal — one-time, transform/opacity only.
+// Replaces the per-character GSAP ScrollTrigger scrub (heavy) with a cheap
+// framer-motion whileInView stagger. Same API as before.
+import { motion } from "framer-motion";
+import { EASE, DUR, STAGGER } from "@/lib/motion";
 
-gsap.registerPlugin(ScrollTrigger);
-
-const ScrollFloat = ({
-  children,
-  scrollContainerRef,
-  containerClassName = '',
-  textClassName = '',
-  animationDuration = 1,
-  ease = 'back.inOut(2)',
-  scrollStart = 'center bottom+=50%',
-  scrollEnd = 'bottom bottom-=40%',
-  stagger = 0.03
-}) => {
-  const containerRef = useRef(null);
-
-  const splitText = useMemo(() => {
-    const text = typeof children === 'string' ? children : '';
-    // Group chars by word so lines can only break between words
-    return text.split(' ').map((word, wi) => (
-      <span className="word" key={wi} style={{ display: 'inline-block', whiteSpace: 'pre' }}>
-        {word.split('').map((char, ci) => (
-          <span className="char" key={ci}>
-            {char}
-          </span>
-        ))}
-        {'\u00A0'}
-      </span>
-    ));
-  }, [children]);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const scroller = scrollContainerRef && scrollContainerRef.current ? scrollContainerRef.current : window;
-    const charElements = el.querySelectorAll('.char');
-
-    gsap.fromTo(
-      charElements,
-      {
-        willChange: 'opacity, transform',
-        opacity: 0,
-        yPercent: 120,
-        scaleY: 2.3,
-        scaleX: 0.7,
-        transformOrigin: '50% 0%'
-      },
-      {
-        duration: animationDuration,
-        ease: ease,
-        opacity: 1,
-        yPercent: 0,
-        scaleY: 1,
-        scaleX: 1,
-        stagger: stagger,
-        scrollTrigger: {
-          trigger: el,
-          scroller: scroller === window ? undefined : scroller,
-          start: scrollStart,
-          end: scrollEnd,
-          scrub: true
-        }
-      }
-    );
-  }, [scrollContainerRef, animationDuration, ease, scrollStart, scrollEnd, stagger]);
-
+const ScrollFloat = ({ children, containerClassName = "", textClassName = "" }) => {
+  const words = (typeof children === "string" ? children : "").split(" ");
   return (
-    <h2 ref={containerRef} className={`scroll-float ${containerClassName}`}>
-      <span className={`scroll-float-text ${textClassName}`}>{splitText}</span>
+    <h2 className={containerClassName}>
+      <span className={textClassName}>
+        {words.map((word, i) => (
+          <motion.span
+            key={i}
+            className="inline-block whitespace-pre"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: DUR.slow, ease: EASE, delay: i * STAGGER }}
+          >
+            {word}
+            {" "}
+          </motion.span>
+        ))}
+      </span>
     </h2>
   );
 };

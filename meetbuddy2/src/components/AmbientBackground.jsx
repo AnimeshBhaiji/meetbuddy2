@@ -1,9 +1,26 @@
-// Fixed full-viewport ambient backdrop: brand Aurora + drifting gradient orbs.
+// Fixed full-viewport ambient backdrop — pure CSS, no WebGL.
+// Three drifting gradient sheets fake the aurora; two orbs add depth.
+// All animation is transform-only (GPU-composited, ~zero main-thread cost).
 // intensity: "hero" (bright, for landing/marketing) | "app" (dimmer, for functional pages)
 import React from "react";
-import Aurora from "./Aurora";
 
-const BRAND_STOPS = ["#6d5cff", "#c44cff", "#3ec6ff"];
+const SHEETS = [
+  {
+    background: "radial-gradient(ellipse 60% 70% at 25% 40%, #6d5cff59, transparent 70%)",
+    animationDuration: "26s",
+    animationDelay: "0s",
+  },
+  {
+    background: "radial-gradient(ellipse 55% 65% at 60% 30%, #c44cff4d, transparent 70%)",
+    animationDuration: "32s",
+    animationDelay: "-9s",
+  },
+  {
+    background: "radial-gradient(ellipse 50% 60% at 80% 50%, #3ec6ff40, transparent 70%)",
+    animationDuration: "38s",
+    animationDelay: "-18s",
+  },
+];
 
 export default function AmbientBackground({ intensity = "app" }) {
   const isHero = intensity === "hero";
@@ -13,12 +30,23 @@ export default function AmbientBackground({ intensity = "app" }) {
         className="absolute inset-x-0 top-0"
         style={{
           height: "60vh",
-          opacity: isHero ? 0.65 : 0.3,
-          maskImage: "linear-gradient(to bottom, black 55%, transparent)",
-          WebkitMaskImage: "linear-gradient(to bottom, black 55%, transparent)",
+          opacity: isHero ? 0.6 : 0.28,
+          maskImage: "linear-gradient(to bottom, black 45%, transparent)",
+          WebkitMaskImage: "linear-gradient(to bottom, black 45%, transparent)",
         }}
       >
-        <Aurora colorStops={BRAND_STOPS} amplitude={isHero ? 1.2 : 0.8} blend={0.6} />
+        {SHEETS.map((sheet, i) => (
+          <div
+            key={i}
+            className="absolute animate-aurora-drift"
+            style={{
+              inset: "-30% -20%",
+              filter: "blur(60px)",
+              willChange: "transform",
+              ...sheet,
+            }}
+          />
+        ))}
       </div>
       <div
         className="absolute rounded-full blur-[120px] animate-float-slow"

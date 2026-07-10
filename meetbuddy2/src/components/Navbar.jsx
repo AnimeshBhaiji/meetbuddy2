@@ -16,6 +16,11 @@ const Navbar = () => {
 
   const [showAccessModal, setShowAccessModal] = useState(false);
 
+  // Close the mobile menu whenever the route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [currentPath]);
+
   // Check login status and handle scroll
   useEffect(() => {
     const checkUser = () => {
@@ -106,14 +111,12 @@ const Navbar = () => {
 
               return (
                 <Link key={link.path} to={link.path} onClick={handleClick}>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  <div
                     className={cn(
                       "px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 flex items-center gap-2 relative",
                       isActive(link.path)
                         ? "text-white"
-                        : "text-muted-foreground hover:text-white",
+                        : "text-foreground/70 hover:text-white hover:bg-white/5",
                       requiresPrefs &&
                         !localStorage.getItem("userPreferences") &&
                         !localStorage.getItem("questionnaireAnswers") &&
@@ -131,7 +134,7 @@ const Navbar = () => {
                       <link.icon className="w-4 h-4" />
                       {link.label}
                     </span>
-                  </motion.div>
+                  </div>
                 </Link>
               );
             })}
@@ -179,6 +182,18 @@ const Navbar = () => {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
+            key="scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 z-30 bg-black/55 md:hidden"
+          />
+        )}
+        {isMobileMenuOpen && (
+          <motion.div
+            key="sheet"
             initial={{ opacity: 0, y: -20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.98 }}

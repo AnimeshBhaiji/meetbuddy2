@@ -1,7 +1,7 @@
 // src/App.jsx
 import React from "react";
 import { Routes, Route, useLocation } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, MotionConfig } from "framer-motion";
 import LandingPage from "./pages/LandingPage";
 import AboutUs from "./pages/AboutUs";
 import Planner from "./pages/Planner";
@@ -21,8 +21,9 @@ const wrap = (el) => <PageTransition>{el}</PageTransition>;
 function App() {
   const location = useLocation();
   return (
-    <div className="min-h-screen">
-      <AnimatePresence mode="wait">
+    <MotionConfig reducedMotion="user">
+      <div className="min-h-screen">
+        <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={wrap(<LandingPage />)} />
           <Route path="/about" element={wrap(<AboutUs />)} />
@@ -56,9 +57,10 @@ function App() {
               </ProtectedRoute>
             )}
           />
-        </Routes>
-      </AnimatePresence>
-    </div>
+          </Routes>
+        </AnimatePresence>
+      </div>
+    </MotionConfig>
   );
 }
 

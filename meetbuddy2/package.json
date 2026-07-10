@@ -27,7 +27,6 @@
     "gsap": "^3.13.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.525.0",
-    "ogl": "^1.0.0",
     "react": "^19.1.0",
     "react-big-calendar": "^1.19.4",
     "react-day-picker": "^9.13.0",

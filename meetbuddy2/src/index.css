@@ -152,6 +152,13 @@
   background-clip: padding-box;
 }
 
+/* Aurora sheets: slow transform-only drift (GPU-composited) */
+@keyframes aurora-drift {
+  0%, 100% { transform: translate3d(-5%, 0, 0) scale(1); }
+  50% { transform: translate3d(5%, 4%, 0) scale(1.1); }
+}
+.animate-aurora-drift { animation: aurora-drift 30s ease-in-out infinite; }
+
 /* Ambient float for decorative elements */
 @keyframes float-slow {
   0%, 100% { transform: translateY(0) rotate(0deg); }

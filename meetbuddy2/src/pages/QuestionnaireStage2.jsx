@@ -334,7 +334,7 @@ export default function QuestionnaireStage2() {
                           <h2 className="text-xl md:text-2xl font-bold text-white">{blockTitle}</h2>
                           <p className="text-sm text-muted-foreground">
                             Your pick:{" "}
-                            <span className="font-semibold text-gradient">{block.mainLabel}</span>
+                            <span className="font-semibold text-brand-3">{block.mainLabel}</span>
                           </p>
                         </div>
                       </div>

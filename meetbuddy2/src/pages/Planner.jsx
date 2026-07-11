@@ -888,7 +888,7 @@ export default function Planner() {
                     <div>
                       <label className="block text-xl font-semibold text-white mb-4">Your planned flow</label>
                       <div className="glass rounded-xl p-4 font-medium text-center border border-brand/25">
-                        <span className="text-gradient">{flowText || "Restaurant → Activity → Stay"}</span>
+                        <span className="text-brand-3 font-semibold">{flowText || "Restaurant → Activity → Stay"}</span>
                       </div>
                     </div>
                   </div>
@@ -985,8 +985,8 @@ export default function Planner() {
             {/* Full-control step editor: manage upcoming steps */}
             {planMode === "full" && showStepEditor && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
                 className="mb-8 glass rounded-2xl p-5 border border-brand/20"
               >
                 <p className="text-sm font-semibold text-white mb-3">

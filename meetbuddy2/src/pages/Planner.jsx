@@ -146,7 +146,7 @@ function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBac
           key={o.place_id || `${o.title ?? ""}::${o.address ?? ""}::${idx}`}
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: Math.min(idx * 0.06, 0.5), duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ delay: Math.min(idx * 0.06, 0.5), duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           whileHover={{ y: -6 }}
           className="relative glass-strong rounded-2xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand/50 hover:glow-sm transition-all duration-300 group"
           onMouseEnter={() => {
@@ -818,7 +818,7 @@ export default function Planner() {
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="text-center mb-12"
             >
               <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
@@ -832,7 +832,7 @@ export default function Planner() {
             <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             >
               <GlassCard variant="gradient" className="p-8 mb-8">
                 <div className="grid md:grid-cols-2 gap-10 mb-8">
@@ -1094,7 +1094,7 @@ export default function Planner() {
             <motion.div
               initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
               className="mb-8 glass-strong rounded-3xl overflow-hidden border border-white/10"
             >
               <MapPlanner
@@ -1156,7 +1156,7 @@ export default function Planner() {
             <motion.div
               initial={{ opacity: 0, y: -14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="text-center mb-12"
             >
               <motion.div

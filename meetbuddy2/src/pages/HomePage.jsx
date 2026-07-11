@@ -129,7 +129,7 @@ const HomePage = () => {
           <motion.div
             initial={{ opacity: 0, y: 36 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-24"
           >
             {/* Plan card — hero action, spans 2 cols */}

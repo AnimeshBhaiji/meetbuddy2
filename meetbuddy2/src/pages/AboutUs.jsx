@@ -55,7 +55,7 @@ const TEAM = [
 
 const fadeUp = {
   hidden: { opacity: 0, y: 26 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
 };
 
 const stagger = {
@@ -162,7 +162,7 @@ const AboutUs = () => {
                   initial={{ opacity: 0, x: i % 2 === 0 ? -36 : 36 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true, amount: 0.4 }}
-                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <GlassCard
                     variant="strong"
@@ -241,7 +241,7 @@ const AboutUs = () => {
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-4xl mx-auto"
           >
             <GlassCard variant="gradient" className="p-10 md:p-14 text-center glow-sm">

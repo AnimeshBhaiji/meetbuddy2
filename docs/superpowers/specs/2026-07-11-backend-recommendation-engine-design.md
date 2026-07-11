@@ -16,7 +16,7 @@ without changing any API response shape the frontend depends on.
 | Decision | Choice |
 |---|---|
 | Cache store | PostgreSQL table in the existing `meetbuddy` DB, behind a small interface so Redis can replace it later |
-| Dead code | Wire `place_analyzer.py` into scoring; delete `classifier.py`, `itinerary_manager.py`, `cab_service.py` |
+| Dead code | Wire `place_analyzer.py` into scoring; keep `classifier.py`, `itinerary_manager.py`, `cab_service.py` for now, only absolutely delete them in there is no future scope, or cannot be integrated |
 | API budget | Aggressive: ~1 SerpAPI call per step, fallback only on truly-thin results |
 | Cleanup depth | Restructure `planner.py` into focused modules |
 
@@ -54,7 +54,8 @@ backend/
 ├── cache.py            Postgres-backed cache interface: get(key) / set(key, value, ttl)
 ├── scraper.py          Pure SerpAPI fetch + response parsing (no caching inside)
 ├── place_analyzer.py   Unchanged; consumed by scoring.py
-└── deleted: classifier.py, itinerary_manager.py, cab_service.py
+└── kept for now (unused): classifier.py, itinerary_manager.py, cab_service.py —
+    evaluate for future integration; delete only if no future scope
 ```
 
 `main.py` endpoints and every response shape stay identical. Zero frontend changes.

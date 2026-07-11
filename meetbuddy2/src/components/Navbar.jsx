@@ -16,6 +16,11 @@ const Navbar = () => {
 
   const [showAccessModal, setShowAccessModal] = useState(false);
 
+  // Close the mobile menu whenever the route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [currentPath]);
+
   // Check login status and handle scroll
   useEffect(() => {
     const checkUser = () => {
@@ -61,7 +66,7 @@ const Navbar = () => {
       <motion.nav
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         className={cn(
           "fixed top-0 left-0 right-0 z-50 flex justify-center px-4 transition-all duration-300 pointer-events-none",
           scrolled ? "pt-3" : "pt-6"
@@ -106,14 +111,12 @@ const Navbar = () => {
 
               return (
                 <Link key={link.path} to={link.path} onClick={handleClick}>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                  <div
                     className={cn(
                       "px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200 flex items-center gap-2 relative",
                       isActive(link.path)
                         ? "text-white"
-                        : "text-muted-foreground hover:text-white",
+                        : "text-foreground/70 hover:text-white hover:bg-white/5",
                       requiresPrefs &&
                         !localStorage.getItem("userPreferences") &&
                         !localStorage.getItem("questionnaireAnswers") &&
@@ -131,7 +134,7 @@ const Navbar = () => {
                       <link.icon className="w-4 h-4" />
                       {link.label}
                     </span>
-                  </motion.div>
+                  </div>
                 </Link>
               );
             })}
@@ -179,10 +182,22 @@ const Navbar = () => {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
+            key="scrim"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 z-30 bg-black/55 md:hidden"
+          />
+        )}
+        {isMobileMenuOpen && (
+          <motion.div
+            key="sheet"
             initial={{ opacity: 0, y: -20, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.98 }}
-            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             className="fixed top-24 left-4 right-4 z-40 glass-strong rounded-3xl p-6 shadow-2xl md:hidden flex flex-col gap-2"
           >
             {navLinks.map((link, i) => (

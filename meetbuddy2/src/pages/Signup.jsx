@@ -190,7 +190,7 @@ const Signup = () => {
           <motion.div
             initial={{ opacity: 0, x: -32 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="hidden lg:block"
           >
             <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.08] mb-6">
@@ -225,7 +225,7 @@ const Signup = () => {
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           >
             <GlassCard variant="gradient" className="p-8 md:p-10 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-40 h-40 bg-brand/15 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -256,7 +256,7 @@ const Signup = () => {
                           className="h-full rounded-full bg-gradient-to-r from-brand to-brand-2"
                           initial={false}
                           animate={{ width: stage >= s ? '100%' : '0%' }}
-                          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
                         />
                       </div>
                       <p
@@ -393,8 +393,8 @@ const Signup = () => {
 
                 {error && (
                   <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
                     className="text-red-400 text-sm text-center p-3 mt-4 bg-destructive/10 border border-destructive/25 rounded-xl"
                   >
                     {error}
@@ -443,7 +443,7 @@ const Signup = () => {
                     Already have an account?{' '}
                     <Link
                       to="/login"
-                      className="text-gradient font-bold hover:opacity-80 transition-opacity"
+                      className="text-brand-3 font-bold hover:opacity-80 transition-opacity"
                     >
                       Sign in
                     </Link>

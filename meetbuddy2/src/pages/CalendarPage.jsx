@@ -125,7 +125,7 @@ const CalendarPage = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             className="max-w-7xl mx-auto"
           >
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">

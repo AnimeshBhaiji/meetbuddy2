@@ -26,7 +26,7 @@ const containerVariants = {
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1], staggerChildren: 0.09 },
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1], staggerChildren: 0.09 },
   },
 };
 
@@ -73,7 +73,13 @@ const Login = () => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || 'Login failed. Please check your credentials.');
+        let message = errorText;
+        try {
+          message = JSON.parse(errorText).detail || errorText;
+        } catch {
+          /* not JSON — show as-is */
+        }
+        throw new Error(message || 'Login failed. Please check your credentials.');
       }
 
       const data = await response.json();
@@ -100,7 +106,7 @@ const Login = () => {
           <motion.div
             initial={{ opacity: 0, x: -32 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="hidden lg:block"
           >
             <h1 className="text-5xl xl:text-6xl font-bold text-white leading-[1.08] mb-6">
@@ -209,8 +215,8 @@ const Login = () => {
 
                   {error && (
                     <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
                       className="text-red-400 text-sm text-center p-3 bg-destructive/10 border border-destructive/25 rounded-xl"
                     >
                       {error}
@@ -247,7 +253,7 @@ const Login = () => {
                     Don't have an account?{' '}
                     <Link
                       to="/signup"
-                      className="text-gradient font-bold hover:opacity-80 transition-opacity"
+                      className="text-brand-3 font-bold hover:opacity-80 transition-opacity"
                     >
                       Create one now
                     </Link>
@@ -258,7 +264,7 @@ const Login = () => {
 
             <motion.p
               variants={itemVariants}
-              className="text-center text-muted-foreground/60 text-sm mt-6"
+              className="text-center text-muted-foreground/80 text-sm mt-6"
             >
               Protected by MeetBuddy Secure Auth
             </motion.p>

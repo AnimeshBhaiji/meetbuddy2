@@ -147,7 +147,7 @@ const QuestionnaireSummary = () => {
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className="text-center mb-14"
         >
           <motion.div
@@ -192,7 +192,7 @@ const QuestionnaireSummary = () => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{
                       duration: 0.55,
-                      ease: [0.22, 1, 0.36, 1],
+                      ease: [0.16, 1, 0.3, 1],
                       delay: 0.25 + cardIndex * 0.12,
                     }}
                     className="h-full"

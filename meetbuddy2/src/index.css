@@ -167,6 +167,12 @@
 }
 .animate-scroll-cue { animation: scroll-cue 1.6s ease-out infinite; }
 
+/* Skip rendering below-fold sections until they approach the viewport */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
+}
+
 /* Ambient float for decorative elements */
 @keyframes float-slow {
   0%, 100% { transform: translateY(0) rotate(0deg); }

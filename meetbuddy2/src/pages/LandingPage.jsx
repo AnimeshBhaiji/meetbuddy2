@@ -96,6 +96,47 @@ const HeadlineWords = ({ text, delayStart = 0 }) =>
     </motion.span>
   ));
 
+// Animated mini-itinerary inside the Smart Planner bento tile.
+// One-time whileInView reveal: line draws, stops slide in. No idle cost.
+const MOCK_STOPS = [
+  { icon: Utensils, label: "Dinner", place: "Izakaya Ten", time: "7:30 pm" },
+  { icon: Sparkles, label: "Activity", place: "Neon Bowl", time: "9:15 pm" },
+  { icon: Hotel, label: "Stay", place: "The Foundry Hotel", time: "11:30 pm" },
+];
+
+const ItineraryMock = () => (
+  <div className="mt-6 relative">
+    <motion.div
+      className="absolute left-[17px] top-4 bottom-4 w-px bg-gradient-to-b from-brand via-brand-2 to-brand-3 origin-top"
+      initial={{ scaleY: 0 }}
+      whileInView={{ scaleY: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.9, ease: EASE, delay: 0.3 }}
+    />
+    {MOCK_STOPS.map((s, i) => (
+      <motion.div
+        key={s.label}
+        className="relative flex items-center gap-4 py-2"
+        initial={{ opacity: 0, x: -16 }}
+        whileInView={{ opacity: 1, x: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, ease: EASE, delay: 0.35 + i * 0.22 }}
+      >
+        <span className="relative z-10 w-9 h-9 shrink-0 rounded-full glass-strong border border-white/15 flex items-center justify-center">
+          <s.icon className="w-4 h-4 text-brand-3" />
+        </span>
+        <div className="flex-1 flex items-center justify-between rounded-xl bg-white/5 border border-white/10 px-4 py-2.5">
+          <div>
+            <p className="text-sm font-semibold text-white">{s.place}</p>
+            <p className="text-xs text-muted-foreground">{s.label}</p>
+          </div>
+          <span className="text-xs text-brand-3 font-medium">{s.time}</span>
+        </div>
+      </motion.div>
+    ))}
+  </div>
+);
+
 /* ---------- data ---------- */
 
 const MARQUEE_ITEMS = [
@@ -128,6 +169,7 @@ const FEATURES = [
     title: "Smart Planner",
     desc: "A guided flow that builds your whole evening step by step — dinner, activity, and a place to crash if the night runs long.",
     span: "md:col-span-2",
+    showcase: true,
   },
   {
     icon: Map,
@@ -297,10 +339,10 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ---------- HOW IT WORKS ---------- */}
+      {/* ---------- HOW IT WORKS (sticky left, steps scroll past) ---------- */}
       <section id="how-it-works" className="relative py-28 px-4">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
+          <div className="lg:sticky lg:top-40 self-start text-center lg:text-left">
             <ScrollFloat
               containerClassName="text-4xl md:text-5xl lg:text-6xl font-bold text-white"
               textClassName="font-display"
@@ -312,23 +354,23 @@ const LandingPage = () => {
               initial="hidden"
               whileInView="visible"
               viewport={{ once: true }}
-              className="text-muted-foreground max-w-xl mx-auto text-lg mt-4"
+              className="text-muted-foreground max-w-xl mx-auto lg:mx-0 text-lg mt-4"
             >
               From "where should we go?" to a full itinerary — faster than the
               group chat can argue about it.
             </motion.p>
           </div>
 
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.3 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
-          >
-            {STEPS.map((step) => (
-              <motion.div key={step.num} variants={fadeUp}>
-                <GlassCard hover variant="gradient" className="p-8 h-full">
+          <div className="flex flex-col gap-8">
+            {STEPS.map((step, i) => (
+              <motion.div
+                key={step.num}
+                initial={{ opacity: 0, y: 32 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-80px" }}
+                transition={{ duration: 0.55, ease: EASE, delay: i * 0.05 }}
+              >
+                <GlassCard hover variant="gradient" className="p-10">
                   <span className="text-6xl font-display font-bold text-gradient opacity-90">
                     {step.num}
                   </span>
@@ -337,12 +379,12 @@ const LandingPage = () => {
                 </GlassCard>
               </motion.div>
             ))}
-          </motion.div>
+          </div>
         </div>
       </section>
 
       {/* ---------- FEATURES BENTO ---------- */}
-      <section id="features" className="relative py-28 px-4">
+      <section id="features" className="relative py-28 px-4 cv-auto">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <ScrollFloat
@@ -377,6 +419,7 @@ const LandingPage = () => {
                   </div>
                   <h3 className="text-xl font-semibold text-white mb-2.5">{f.title}</h3>
                   <p className="text-muted-foreground leading-relaxed">{f.desc}</p>
+                  {f.showcase && <ItineraryMock />}
                 </GlassCard>
               </motion.div>
             ))}
@@ -385,7 +428,7 @@ const LandingPage = () => {
       </section>
 
       {/* ---------- STATS ---------- */}
-      <section className="relative py-20 px-4">
+      <section className="relative py-20 px-4 cv-auto">
         <div className="max-w-5xl mx-auto">
           <motion.div
             variants={stagger}
@@ -407,13 +450,13 @@ const LandingPage = () => {
       </section>
 
       {/* ---------- FINAL CTA ---------- */}
-      <section className="relative py-24 px-4">
+      <section className="relative py-24 px-4 cv-auto">
         <div className="max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.7, ease: EASE }}
           >
             <GlassCard variant="gradient" className="p-12 glow-sm">
               <h2 className="text-4xl md:text-5xl font-bold text-white mb-5">

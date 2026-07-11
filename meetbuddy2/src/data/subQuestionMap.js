@@ -1,4 +1,6 @@
 // src/data/subQuestionMap.js
+// Every question here changes the backend search (queries, radius, ranking,
+// filters). Decorative questions with no effect on results were removed.
 const subQuestionMap = {
     mood: {
       "Fun & Energetic": [
@@ -49,16 +51,10 @@ const subQuestionMap = {
           question: "Preferred romantic setting",
           type: "single",
           options: ["Candlelit / intimate", "Scenic / view", "Rooftop / alfresco"]
-        },
-        {
-          id: "ro_surprise",
-          question: "Want a surprise element?",
-          type: "single",
-          options: ["Yes — gifts/music", "No — keep it simple"]
         }
       ]
     },
-  
+
     planningStyle: {
       "Surprise me": [
         {
@@ -80,12 +76,6 @@ const subQuestionMap = {
           question: "Do you want MeetBuddy to shortlist options?",
           type: "single",
           options: ["Yes — shortlist 3–5", "No — show more options"]
-        },
-        {
-          id: "sc_confirm",
-          question: "Would you like to confirm bookings yourself?",
-          type: "single",
-          options: ["Yes", "No — auto-book"]
         }
       ],
       "Full control": [
@@ -103,7 +93,7 @@ const subQuestionMap = {
         }
       ]
     },
-  
+
     adventureLevel: {
       "Stick to the city": [
         {
@@ -135,12 +125,6 @@ const subQuestionMap = {
       ],
       "Weekend escape": [
         {
-          id: "we_party",
-          question: "Trip party size",
-          type: "single",
-          options: ["Solo", "Couple", "Group"]
-        },
-        {
           id: "we_accom",
           question: "Accommodation needed?",
           type: "single",
@@ -148,40 +132,18 @@ const subQuestionMap = {
         }
       ]
     },
-  
+
     addOnMagic: {
-      "Easy rides arranged": [
-        {
-          id: "ea_scope",
-          question: "Pickup/drop or whole-day transport?",
-          type: "single",
-          options: ["Pickup & drop", "Full-day", "Only one-way"]
-        }
-      ],
       "Live music spots": [
         {
           id: "lm_style",
           question: "Music preference",
           type: "single",
           options: ["Acoustic", "Band", "DJ", "No preference"]
-        },
-        {
-          id: "lm_seating",
-          question: "Seating preference",
-          type: "single",
-          options: ["Table reservation", "Walk-in", "Bar seating"]
-        }
-      ],
-      "Surprise gift delivery / Insta-corners": [
-        {
-          id: "sg_type",
-          question: "Gift/photo add-ons",
-          type: "multi",
-          options: ["Personalized gift", "Photo props", "On-spot photographer"]
         }
       ]
     },
-  
+
     memorableFactor: {
       "A unique place": [
         {
@@ -211,16 +173,9 @@ const subQuestionMap = {
           question: "Preferred setting",
           type: "single",
           options: ["Quiet & intimate", "Scenic & photogenic", "Balanced"]
-        },
-        {
-          id: "dc_addons",
-          question: "Memory add-ons",
-          type: "multi",
-          options: ["Photo session", "Guestbook / keepsake", "Post-meet follow-up"]
         }
       ]
     }
   };
-  
+
   export default subQuestionMap;
-  

@@ -32,7 +32,7 @@ const child = {
 
 const sectionFadeIn = {
   hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
 };
 
 const RECENT_ACTIVITY = [
@@ -94,26 +94,23 @@ const HomePage = () => {
           {/* ---------- Greeting ---------- */}
           <motion.div variants={container} initial="hidden" animate="visible" className="mb-14">
             <div className="flex flex-wrap overflow-hidden">
-              {welcomeText.split("").map((letter, index) => (
+              {welcomeText.split(" ").map((word, index) => (
                 <motion.span
                   variants={child}
                   key={index}
-                  className="text-5xl md:text-7xl font-bold font-display text-white mr-[2px]"
+                  className="text-5xl md:text-7xl font-bold font-display text-white mr-3"
                 >
-                  {letter === " " ? " " : letter}
+                  {word}
                 </motion.span>
               ))}
             </div>
             <div className="flex flex-wrap overflow-hidden mt-2">
-              {nameText.split("").map((letter, index) => (
-                <motion.span
-                  variants={child}
-                  key={index}
-                  className="text-5xl md:text-7xl font-bold font-display text-gradient mr-[2px]"
-                >
-                  {letter === " " ? " " : letter}
-                </motion.span>
-              ))}
+              <motion.span
+                variants={child}
+                className="text-5xl md:text-7xl font-bold font-display text-gradient"
+              >
+                {nameText}
+              </motion.span>
             </div>
             <motion.p
               initial={{ opacity: 0 }}
@@ -229,7 +226,7 @@ const HomePage = () => {
                     <div className="p-3 bg-gradient-to-br from-brand/25 to-brand-2/20 border border-white/10 rounded-xl text-brand-3 group-hover:scale-110 transition-transform">
                       <activity.icon className="w-6 h-6" />
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground glass px-2.5 py-1 rounded-lg">
+                    <span className="text-xs font-medium text-muted-foreground bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
                       {activity.date}
                     </span>
                   </div>
@@ -269,6 +266,7 @@ const HomePage = () => {
                   <img
                     src={spot.image}
                     alt={spot.name}
+                    loading="lazy"
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-background/95 via-background/40 to-transparent" />
@@ -317,7 +315,7 @@ const HomePage = () => {
                   whileHover={{ scale: 1.04 }}
                   whileTap={{ scale: 0.96 }}
                   onClick={openPlanner}
-                  className="px-6 py-3 glass hover:bg-white/10 text-white rounded-xl font-medium transition-colors whitespace-nowrap cursor-pointer"
+                  className="px-6 py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl font-medium transition-colors whitespace-nowrap cursor-pointer"
                 >
                   Try it now
                 </motion.button>

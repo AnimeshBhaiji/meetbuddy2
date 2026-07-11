@@ -290,7 +290,7 @@ export default function QuestionnaireStage2() {
                 className="h-full bg-gradient-to-r from-brand to-brand-2 rounded-full"
                 initial={{ width: 0 }}
                 animate={{ width: `${pct}%` }}
-                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                 aria-valuenow={pct}
               />
             </div>

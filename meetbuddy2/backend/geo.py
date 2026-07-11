@@ -7,11 +7,13 @@ from math import atan2, cos, radians, sin, sqrt
 from typing import Optional, Tuple
 
 import requests
+from dotenv import load_dotenv
 
 import cache
 
 logger = logging.getLogger(__name__)
 
+load_dotenv()
 # Nominatim policy requires a real contact; set NOMINATIM_CONTACT in .env
 NOMINATIM_CONTACT = os.getenv("NOMINATIM_CONTACT", "meetbuddy@example.com")
 NOMINATIM_USER_AGENT = f"MeetBuddyPlanner/1.0 ({NOMINATIM_CONTACT})"

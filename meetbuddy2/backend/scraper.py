@@ -8,7 +8,7 @@ import requests
 from dotenv import load_dotenv
 
 import cache
-from geo import geocode_address, haversine_meters, normalize_coords
+from geo import geocode_address, normalize_coords
 
 load_dotenv()
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
@@ -167,40 +167,9 @@ def search_places(query: str, coords: Optional[Tuple[float, float]] = None,
         logger.info("search cache hit: %s", key)
         return hit
     places = fetch_places_page(query, coords, radius_m)
-    if places:
-        cache.set(key, places, SEARCH_TTL)
+    # empty pages cached briefly too, so a no-result area doesn't re-bill a
+    # credit on every request
+    cache.set(key, places, SEARCH_TTL if places else 24 * 3600)
     return places
 
 
-def get_places(query: str, num_results: int = 20, coords=None, place_type: Optional[str] = None,
-               location_hint: Optional[str] = None, max_distance_meters: Optional[float] = 3000) -> List[Dict]:
-    """Compatibility shim for the pre-restructure planner: cached search +
-    distance annotation/filter/sort. planner.py moves to search_places directly."""
-    q = (query or "").strip()
-    if place_type:
-        q = f"{q} {place_type}".strip()
-    if location_hint:
-        q = f"{q} near {location_hint}".strip()
-
-    coords_tuple = normalize_coords(coords)
-    places = [dict(p) for p in search_places(q, coords_tuple, max_distance_meters)]
-
-    if coords_tuple and max_distance_meters:
-        anchor_lat, anchor_lng = coords_tuple
-        kept = []
-        for p in places:
-            if p.get("lat") is not None and p.get("lng") is not None:
-                d = haversine_meters(anchor_lat, anchor_lng, float(p["lat"]), float(p["lng"]))
-                if d > max_distance_meters:
-                    continue
-                p["distance_meters"] = d
-            else:
-                p["distance_meters"] = None
-            kept.append(p)
-        kept.sort(key=lambda x: (
-            x["distance_meters"] if x["distance_meters"] is not None else float("inf"),
-            -float(x.get("rating") or 0),
-        ))
-        places = kept
-
-    return places[:num_results]

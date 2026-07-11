@@ -146,7 +146,8 @@ def _analyzer_score(place: Dict[str, Any], prefs_data: Dict[str, Any],
     stage-2 compatibility. All free — the data is already in the result."""
     score = 0.0
 
-    mood_sub = prefs_data.get("mood_sub") if isinstance(prefs_data.get("mood_sub"), dict) else {}
+    raw_sub = prefs_data.get("mood_sub") or prefs_data.get("moodSub")
+    mood_sub = raw_sub if isinstance(raw_sub, dict) else {}
     for mood in labels_used.get("mood", []):
         fit = analyze_mood_fit(place, mood, mood_sub)
         score += min(fit["mood_match_score"], 4) * 0.5

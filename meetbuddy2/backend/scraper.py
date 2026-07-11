@@ -6,6 +6,8 @@ from typing import List, Dict, Optional, Tuple
 import time
 import hashlib
 
+from geo import normalize_coords, haversine_meters, geocode_address
+
 load_dotenv()
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
 
@@ -20,63 +22,6 @@ _MAX_CACHE_SIZE = 100  # Limit cache size to prevent memory issues
 def _ensure_key():
     if not SERPAPI_KEY:
         raise ValueError("SerpAPI key not found. Please set SERPAPI_KEY in your .env file.")
-
-
-def _normalize_coords(coords) -> Optional[Tuple[float, float]]:
-    """Normalize various coord shapes into (lat, lng) tuple or None."""
-    if not coords:
-        return None
-    try:
-        if isinstance(coords, (list, tuple)) and len(coords) >= 2:
-            return float(coords[0]), float(coords[1])
-        if isinstance(coords, dict):
-            lat = coords.get("lat") or coords.get("latitude")
-            lng = coords.get("lng") or coords.get("lon") or coords.get("longitude")
-            if lat is not None and lng is not None:
-                return float(lat), float(lng)
-    except Exception:
-        return None
-    return None
-
-
-def _geocode_address_nominatim(address: str) -> Optional[Tuple[float, float]]:
-    """
-    Best-effort geocode using Nominatim if SerpAPI didn't return coordinates.
-    Respect rate limits (light use).
-    """
-    if not address or not address.strip():
-        return None
-    try:
-        url = "https://nominatim.openstreetmap.org/search"
-        params = {"q": address, "format": "jsonv2", "limit": 1}
-        headers = {"User-Agent": NOMINATIM_USER_AGENT}
-        resp = requests.get(url, params=params, headers=headers, timeout=8)
-        if resp.status_code != 200:
-            return None
-        j = resp.json()
-        if not j:
-            return None
-        first = j[0]
-        return float(first.get("lat")), float(first.get("lon"))
-    except Exception:
-        return None
-
-
-def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """
-    Calculate the great circle distance between two points on Earth (in meters).
-    Uses the Haversine formula.
-    """
-    from math import radians, sin, cos, sqrt, atan2
-    R = 6371000  # Earth radius in meters
-    lat1_rad = radians(lat1)
-    lat2_rad = radians(lat2)
-    delta_lat = radians(lat2 - lat1)
-    delta_lon = radians(lon2 - lon1)
-    
-    a = sin(delta_lat / 2) ** 2 + cos(lat1_rad) * cos(lat2_rad) * sin(delta_lon / 2) ** 2
-    c = 2 * atan2(sqrt(a), sqrt(1 - a))
-    return R * c
 
 
 def _make_cache_key(query: str, coords: Optional[Tuple[float, float]], place_type: Optional[str], location_hint: Optional[str]) -> str:
@@ -136,7 +81,7 @@ def get_places(
     if cached is not None:
         # Return cached results, but still filter by distance if needed
         if max_distance_meters and coords:
-            coords_tuple = _normalize_coords(coords)
+            coords_tuple = normalize_coords(coords)
             if coords_tuple:
                 anchor_lat, anchor_lng = coords_tuple
                 valid_places = []
@@ -145,7 +90,7 @@ def get_places(
                     p_lng = p.get("lng")
                     if p_lat is not None and p_lng is not None:
                         try:
-                            distance = _haversine_distance(anchor_lat, anchor_lng, float(p_lat), float(p_lng))
+                            distance = haversine_meters(anchor_lat, anchor_lng, float(p_lat), float(p_lng))
                             if distance <= max_distance_meters:
                                 p["distance_meters"] = distance
                                 valid_places.append(p)
@@ -175,7 +120,7 @@ def get_places(
     }
 
     # Add spatial bias params (center/ll & radius)
-    coords_tuple = _normalize_coords(coords)
+    coords_tuple = normalize_coords(coords)
     if coords_tuple:
         lat, lng = coords_tuple
         # SerpAPI expects ll like "@lat,lng,zoomz" (zoom optional) and center "lat,lng"
@@ -308,15 +253,14 @@ def get_places(
         # Nominatim has usage policy; do rapid but limited geocoding with sleep
         for p in need_geocode:
             try:
-                geoc = _geocode_address_nominatim(p.get("address"))
-                time.sleep(1.0)  # polite pause
+                geoc = geocode_address(p.get("address"))
                 if geoc:
                     p["lat"], p["lng"] = geoc[0], geoc[1]
             except Exception:
                 continue
 
     # Filter by distance if coords provided and max_distance specified
-    coords_tuple = _normalize_coords(coords)
+    coords_tuple = normalize_coords(coords)
     if coords_tuple and max_distance_meters:
         anchor_lat, anchor_lng = coords_tuple
         valid_places = []
@@ -325,7 +269,7 @@ def get_places(
             p_lng = p.get("lng")
             if p_lat is not None and p_lng is not None:
                 try:
-                    distance = _haversine_distance(anchor_lat, anchor_lng, float(p_lat), float(p_lng))
+                    distance = haversine_meters(anchor_lat, anchor_lng, float(p_lat), float(p_lng))
                     if distance <= max_distance_meters:
                         p["distance_meters"] = distance
                         valid_places.append(p)

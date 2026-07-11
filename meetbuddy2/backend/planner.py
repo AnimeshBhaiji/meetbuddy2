@@ -10,6 +10,7 @@ from math import radians, sin, cos, sqrt, atan2
 from typing import Any, Dict, List, Optional, Tuple
 
 from scraper import get_places
+from geo import normalize_coords, haversine_meters as _haversine_meters, geocode_address, reverse_geocode_to_text
 from planner_sessions import create_session, get_session, push_selection, set_last_options
 
 _ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -92,48 +93,6 @@ def normalize_to_labels(category: str, items) -> List[str]:
             seen.add(x)
             out.append(x)
     return out
-
-
-# ----------------- Geocoding helper -----------------
-def reverse_geocode_to_text(coords: Dict[str, float]) -> Optional[str]:
-    try:
-        if isinstance(coords, dict):
-            lat = float(coords.get("lat"))
-            lon = float(coords.get("lng") or coords.get("lon") or coords.get("longitude"))
-        elif isinstance(coords, (list, tuple)):
-            lat, lon = float(coords[0]), float(coords[1])
-        else:
-            return None
-    except Exception:
-        return None
-    try:
-        url = "https://nominatim.openstreetmap.org/reverse"
-        params = {"format": "jsonv2", "lat": lat, "lon": lon, "addressdetails": 1}
-        headers = {"User-Agent": "MeetBuddyPlanner/1.0 (meetbuddy@example.com)"}
-        resp = requests.get(url, params=params, headers=headers, timeout=8)
-        if resp.status_code != 200:
-            return None
-        data = resp.json()
-        addr = data.get("address", {}) or {}
-        parts = []
-        for k in ("suburb", "neighbourhood", "neighborhood", "quarter", "village", "hamlet", "locality"):
-            v = addr.get(k)
-            if v:
-                parts.append(v)
-                break
-        for k in ("city", "town", "village", "county", "state"):
-            v = addr.get(k)
-            if v and (not parts or v not in parts):
-                parts.append(v)
-                break
-        if parts:
-            return ", ".join(parts)
-        display = data.get("display_name")
-        if display:
-            return display.split(",")[0].strip()
-    except Exception:
-        return None
-    return None
 
 
 # ----------------- Place-type selection & short query -----------------
@@ -312,32 +271,6 @@ def _is_coord_string(s: Optional[str]) -> bool:
     if not s or not isinstance(s, str):
         return False
     return s.strip().lower().startswith("lat ") or ("lat " in s.lower() and "lng" in s.lower())
-
-
-def _prepare_coords_tuple(coords) -> Optional[Tuple[float, float]]:
-    if not coords:
-        return None
-    try:
-        if isinstance(coords, dict):
-            lat = coords.get("lat") or coords.get("latitude")
-            lng = coords.get("lng") or coords.get("lon") or coords.get("longitude")
-            if lat is None or lng is None:
-                return None
-            return float(lat), float(lng)
-        if isinstance(coords, (list, tuple)) and len(coords) >= 2:
-            return float(coords[0]), float(coords[1])
-    except Exception:
-        return None
-    return None
-
-
-def _haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    R = 6371000
-    lat1, lng1, lat2, lng2 = map(radians, [lat1, lng1, lat2, lng2])
-    dlat = lat2 - lat1
-    dlng = lng2 - lng1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
-    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 
 
 def _distance_boost(base_score: float, distance_m: float, is_weekend_escape: bool = False) -> float:
@@ -575,13 +508,12 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     coords = payload.get("coords")
     location_hint = payload.get("location")
 
-    coords_tuple = _prepare_coords_tuple(coords)
+    coords_tuple = normalize_coords(coords)
 
     # If we have a textual location but no coords, try to geocode it
     if location_hint and not coords_tuple and not _is_coord_string(location_hint):
-        from scraper import _geocode_address_nominatim
         try:
-            geocoded_coords = _geocode_address_nominatim(location_hint)
+            geocoded_coords = geocode_address(location_hint)
             if geocoded_coords:
                 coords_tuple = geocoded_coords
         except Exception:
@@ -763,7 +695,7 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     options = _filter_avoided(options, directives["avoid_terms"])
 
     # Add distance-based scoring boost (closer places get higher score)
-    coords_tuple = _prepare_coords_tuple(coords)
+    coords_tuple = normalize_coords(coords)
     for p in options:
         p["tags"] = tag_place_minimal(p)
         base_score = score_place_minimal(p, labels_used)

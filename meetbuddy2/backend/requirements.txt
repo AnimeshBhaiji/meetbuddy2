@@ -2,3 +2,8 @@ fastapi
 uvicorn
 python-dotenv
 serpapi
+requests
+sqlalchemy
+psycopg2-binary
+passlib[bcrypt]
+pydantic[email]

@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from database import Base
 
 class User(Base):
@@ -11,3 +12,11 @@ class User(Base):
     phone = Column(String(20), unique=True)
     username = Column(String(50), unique=True, index=True)
     password = Column(String(200))
+
+
+class ApiCache(Base):
+    __tablename__ = "api_cache"
+
+    key = Column(Text, primary_key=True)
+    value = Column(JSONB, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)

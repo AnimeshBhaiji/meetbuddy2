@@ -1,6 +1,6 @@
 from database import Base, engine
-from models import User
+import models  # noqa: F401 — registers all tables (users, api_cache) on Base
 
 print("Creating tables...")
 Base.metadata.create_all(bind=engine)
-print("✅ Tables created successfully!")
+print("Tables created successfully!")

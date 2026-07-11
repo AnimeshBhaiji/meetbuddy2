@@ -10,11 +10,7 @@ const AccessDeniedModal = ({ isOpen, onClose }) => {
 
     const handleAction = () => {
         onClose();
-        navigate('/home');
-        // Optional: adding a small delay to allow navigation to happen before scrolling
-        setTimeout(() => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 100);
+        navigate('/questionnaire-stage1');
     };
 
     return (
@@ -40,7 +36,7 @@ const AccessDeniedModal = ({ isOpen, onClose }) => {
                                 One Small Step! 📝
                             </DialogTitle>
                             <DialogDescription className="text-gray-400 text-base mt-2 text-center">
-                                To create your perfect plan, we need to know what you're into. Please check your preferences on the Dashboard first.
+                                To create your perfect plan, we need to know what you're into. Answer a few quick questions — it takes about two minutes.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -49,7 +45,7 @@ const AccessDeniedModal = ({ isOpen, onClose }) => {
                                 onClick={handleAction}
                                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold py-6 rounded-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-blue-500/20"
                             >
-                                Go to Dashboard <ArrowRight className="ml-2 w-4 h-4" />
+                                Take the questionnaire <ArrowRight className="ml-2 w-4 h-4" />
                             </Button>
                         </DialogFooter>
                     </div>

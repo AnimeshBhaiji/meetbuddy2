@@ -12,6 +12,7 @@ from pathlib import Path
 from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import create_session, get_session, push_selection, set_last_options
 from itineraries import router as itineraries_router
+from geo import geocode_address
 
 
 # -------- DATABASE SETUP --------
@@ -419,6 +420,16 @@ async def planner_options(request: Request):
         "anchor_text": follow.get("anchor_text"),
         "search_error": follow.get("search_error"),
     }
+
+# Free-text -> coords for custom itinerary stops (cache-first Nominatim).
+@app.get("/geocode")
+def geocode(q: str = ""):
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Missing query")
+    coords = geocode_address(q.strip())
+    if not coords:
+        raise HTTPException(status_code=404, detail="Address not found")
+    return {"lat": coords[0], "lng": coords[1]}
 
 # Read session state
 @app.get("/planner/session/{sid}")

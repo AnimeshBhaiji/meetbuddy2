@@ -42,7 +42,7 @@ const USER_ID = Number(process.env.USER_ID || 1);
   // reopen from My Plans
   await page.goto("http://localhost:5173/itineraries");
   await page.waitForSelector("text=E2E plan", { timeout: 15000 });
-  await page.click("text=Open");
+  await page.locator("div.p-5", { hasText: "E2E plan" }).getByText("Open").click();
   await page.waitForSelector("text=Save changes", { timeout: 15000 });
   const noteThere = (await page.locator("text=e2e note").count()) > 0;
   const stopsAfter = await page.locator('[aria-label="Remove stop"]').count();

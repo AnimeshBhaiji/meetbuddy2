@@ -13,6 +13,7 @@ import QuestionnaireStage2 from "./pages/QuestionnaireStage2";
 import QuestionnaireSummary from "./pages/QuestionnaireSummary";
 import CalendarPage from "./pages/CalendarPage";
 import HomePage from "./pages/HomePage";
+import MyItineraries from "./pages/MyItineraries";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PageTransition from "./components/PageTransition";
 
@@ -54,6 +55,14 @@ function App() {
             element={wrap(
               <ProtectedRoute>
                 <HomePage />
+              </ProtectedRoute>
+            )}
+          />
+          <Route
+            path="/itineraries"
+            element={wrap(
+              <ProtectedRoute>
+                <MyItineraries />
               </ProtectedRoute>
             )}
           />

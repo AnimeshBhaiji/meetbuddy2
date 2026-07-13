@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { User, Calendar as CalendarIcon, Menu, X, Home, Map, Info, Sparkles } from "lucide-react";
+import { User, Calendar as CalendarIcon, Menu, X, Home, Map, Info, Sparkles, Bookmark } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +49,7 @@ const Navbar = () => {
     ...(isLoggedIn
       ? [
           { path: "/planner", label: "Planner", icon: Map },
+          { path: "/itineraries", label: "My Plans", icon: Bookmark },
           { path: "/calendar", label: "Calendar", icon: CalendarIcon },
         ]
       : []),

@@ -1,4 +1,7 @@
 // src/pages/Planner.jsx
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "../components/Navbar";
 import AmbientBackground from "@/components/AmbientBackground";
@@ -38,6 +41,19 @@ function FullOverlay({ show, text = "Loading next step..." }) {
 
 export default function Planner() {
   const P = usePlannerSession();
+  const location = useLocation();
+  const [reopened, setReopened] = useState(null);
+
+  useEffect(() => {
+    const id = location.state?.itineraryId;
+    if (!id) return;
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    if (!user) return;
+    axios.get(`http://localhost:8000/itineraries/${id}`,
+      { params: { user_id: user.user_id }, timeout: 30000 })
+      .then((res) => { setReopened(res.data); P.setPage("summary"); })
+      .catch(() => P.setPlannerError("Couldn't open that itinerary."));
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
@@ -52,7 +68,9 @@ export default function Planner() {
         {P.page === "step" && <StepExplorer P={P} />}
 
         {/* SUMMARY PAGE: editable route canvas */}
-        {P.page === "summary" && <ItineraryCanvas P={P} />}
+        {P.page === "summary" && (
+          <ItineraryCanvas key={reopened?.id ?? "live"} P={P} initialItinerary={reopened} />
+        )}
       </div>
 
       {/* Full-page overlay shown while switching steps / auto-planning */}

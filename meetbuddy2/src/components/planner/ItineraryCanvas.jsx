@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import axios from "axios";
 import { motion, Reorder } from "framer-motion";
 import { GripVertical, RefreshCw, X, Plus, StickyNote, Rocket, Printer,
-         Save, PartyPopper, MapPin, Check } from "lucide-react";
+         Save, PartyPopper, Check } from "lucide-react";
 import MapPlanner from "@/components/MapPlanner";
 import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
@@ -66,6 +66,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
     });
     setPicker(null);
     setSaveState("idle");
+    setNoteOpen(null);
   };
 
   const save = async () => {
@@ -142,7 +143,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
           />
 
           <AddBetween index={0} />
-          <Reorder.Group axis="y" values={stops} onReorder={(v) => { setStops(v); setSaveState("idle"); }} className="space-y-1">
+          <Reorder.Group axis="y" values={stops} onReorder={(v) => { setStops(v); setSaveState("idle"); setNoteOpen(null); }} className="space-y-1">
             {stops.map((s, i) => (
               <div key={stopKey(s) + i}>
                 <Reorder.Item value={s} className="glass rounded-xl px-3 py-2.5 flex items-center gap-2.5 cursor-grab active:cursor-grabbing">
@@ -167,7 +168,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10 cursor-pointer">
                       <RefreshCw className="w-3.5 h-3.5" />
                     </button>
-                    <button onClick={() => { setStops((cur) => cur.filter((_, j) => j !== i)); setSaveState("idle"); }}
+                    <button onClick={() => { setStops((cur) => cur.filter((_, j) => j !== i)); setSaveState("idle"); setNoteOpen(null); }}
                             aria-label="Remove stop"
                             className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-white/10 cursor-pointer">
                       <X className="w-3.5 h-3.5" />

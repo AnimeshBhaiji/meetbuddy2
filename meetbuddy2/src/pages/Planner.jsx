@@ -46,7 +46,7 @@ export default function Planner() {
 
   useEffect(() => {
     const id = location.state?.itineraryId;
-    if (!id) return;
+    if (!id) { setReopened(null); return; }
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user) return;
     axios.get(`http://localhost:8000/itineraries/${id}`,
@@ -54,6 +54,10 @@ export default function Planner() {
       .then((res) => { setReopened(res.data); P.setPage("summary"); })
       .catch(() => P.setPlannerError("Couldn't open that itinerary."));
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (P.page !== "summary") setReopened(null);
+  }, [P.page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative min-h-screen overflow-x-clip">

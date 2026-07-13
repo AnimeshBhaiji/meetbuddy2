@@ -33,6 +33,7 @@ PLACE_TYPE_NAMES = {
 
 STEP_TYPES = {
     "restaurant": ["restaurant", "cafe", "bar"],
+    "cafe": ["cafe", "bakery"],
     "activity": [
         "tourist_attraction", "park", "amusement_park", "play_area", "scenic",
         "escape_room", "bowling", "go_karting", "arcade", "laser_tag",
@@ -244,6 +245,10 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
     elif next_step == "stay":
         flavor = " ".join((directives.get("stay_terms") or [])[:2])
         primary_q, fallback_q = (f"{flavor} hotels".strip() if flavor else "hotels"), "hotels and resorts"
+    elif next_step == "cafe":
+        flavor = " ".join((directives.get("restaurant_terms") or [])[:2])
+        primary_q = f"{flavor} cafes".strip() if flavor else "cafes"
+        fallback_q = "cafes and bakeries"
     else:
         flavor = " ".join((directives.get("restaurant_terms") or [])[:2])
         if flavor:

@@ -391,6 +391,35 @@ async def planner_session_skip(sid: str, request: Request):
         "search_error": follow.get("search_error"),
     }
 
+# Stateless options search — powers add/swap on saved itineraries where no
+# planner session exists. Reuses the followup pipeline with a synthetic state.
+@app.post("/planner/options")
+async def planner_options(request: Request):
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    anchor = raw.get("anchor") or {}
+    if anchor.get("lat") is None or anchor.get("lng") is None:
+        raise HTTPException(status_code=400, detail="Missing anchor coordinates")
+
+    category = raw.get("category") or "restaurant"
+    synthetic_state = {
+        "payload": {
+            "preferences": raw.get("preferences") or {},
+            "coords": {"lat": anchor["lat"], "lng": anchor["lng"]},
+            "location": raw.get("location"),
+        },
+        "steps": [],
+    }
+    follow = generate_followup_suggestions(synthetic_state, category, num_results=15)
+    return {
+        "options": follow.get("options", []),
+        "anchor_text": follow.get("anchor_text"),
+        "search_error": follow.get("search_error"),
+    }
+
 # Read session state
 @app.get("/planner/session/{sid}")
 def read_planner_session(sid: str):

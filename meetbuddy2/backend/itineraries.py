@@ -80,7 +80,7 @@ def get_itinerary(itinerary_id: int, user_id: int, db: Session = Depends(get_db)
 @router.put("/{itinerary_id}")
 def update_itinerary(itinerary_id: int, payload: ItineraryUpdate, db: Session = Depends(get_db)):
     it = _get_owned(itinerary_id, payload.user_id, db)
-    data = payload.dict(exclude_unset=True)
+    data = payload.model_dump(exclude_unset=True)
     for field in ("title", "planned_date", "stops"):
         if field in data:
             setattr(it, field, data[field])

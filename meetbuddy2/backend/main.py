@@ -11,6 +11,7 @@ import json, os
 from pathlib import Path
 from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import create_session, get_session, push_selection, set_last_options
+from itineraries import router as itineraries_router
 
 
 # -------- DATABASE SETUP --------
@@ -25,6 +26,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(itineraries_router)
 
 # -------- FILE PATHS (UNIFIED) --------
 ROOT_DIR = os.path.dirname(__file__)

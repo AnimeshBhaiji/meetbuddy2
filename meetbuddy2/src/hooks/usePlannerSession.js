@@ -119,13 +119,11 @@ export default function usePlannerSession() {
   const [directives, setDirectives] = useState(null); // shortlist size, filters, ...
   const [optionsByStep, setOptionsByStep] = useState({}); // step -> options[] (powers swaps)
   const [overlayText, setOverlayText] = useState("Loading next step...");
-  const [swapIndex, setSwapIndex] = useState(null); // itinerary stop being swapped
   const [showAllOptions, setShowAllOptions] = useState(false); // shortlist escape hatch
 
   // Full-control mode: option filters, sorting, and step management
   const [activeFilters, setActiveFilters] = useState([]);
   const [sortBy, setSortBy] = useState("match"); // "match" | "rating" | "distance"
-  const [showStepEditor, setShowStepEditor] = useState(false);
 
   useEffect(() => {
     try {
@@ -357,52 +355,6 @@ export default function usePlannerSession() {
     }
   };
 
-  // Swap one itinerary stop for an alternative. Earlier stops are kept;
-  // stops after the swapped one are re-picked because they anchor to it.
-  const swapStop = async (index, newPlace) => {
-    setSwapIndex(null);
-    if (!sessionId || !selectedChain[index]) return;
-    setOverlayText(`Swapping your ${humanStepName(selectedChain[index].step).toLowerCase()}...`);
-    setShowOverlay(true);
-    const flowSteps = selectedChain.map((s) => s.step);
-    const newChain = selectedChain.slice(0, index);
-    let place = newPlace;
-    try {
-      for (let i = index; i < flowSteps.length; i++) {
-        const step = flowSteps[i];
-        newChain.push({ step, place });
-        const nextStep = i + 1 < flowSteps.length ? flowSteps[i + 1] : "done";
-        const res = await axios.post(
-          `http://localhost:8000/planner/session/${sessionId}/select`,
-          { step, place, next_step: nextStep, selected_tokens: [] },
-          { timeout: 120000 }
-        );
-        if (nextStep === "done") break;
-        const opts = res.data.options || [];
-        if (opts.length > 0) {
-          setOptionsByStep((m) => ({ ...m, [nextStep]: opts }));
-          setOverlayText(`Refreshing your ${humanStepName(nextStep).toLowerCase()}...`);
-          place = opts[0];
-        } else {
-          // Search came back empty — keep the previous pick for this stop
-          const old = selectedChain[i + 1];
-          if (!old) break;
-          place = old.place;
-        }
-      }
-      // If the re-chain broke early, keep the old picks for remaining stops
-      while (newChain.length < selectedChain.length) {
-        newChain.push(selectedChain[newChain.length]);
-      }
-      setSelectedChain(newChain);
-    } catch (err) {
-      console.error("Swap failed", err);
-      setPlannerError("Swap failed. Please try again.");
-    } finally {
-      setShowOverlay(false);
-    }
-  };
-
   // Full control: skip the current step without picking a venue.
   // Followups keep anchoring to the last real selection (or the origin).
   const skipStep = async () => {
@@ -593,11 +545,11 @@ export default function usePlannerSession() {
     flowText, initialFlow, showOverlay, overlayText,
     highlightedPlace, setHighlightedPlace, plannerError, setPlannerError,
     planMode, directives, optionsByStep, setOptionsByStep,
-    swapIndex, setSwapIndex, showAllOptions, setShowAllOptions,
+    showAllOptions, setShowAllOptions,
     activeFilters, setActiveFilters, sortBy, setSortBy,
-    showStepEditor, setShowStepEditor, upcomingSteps,
+    upcomingSteps,
     useMyLocation, handlePlaceTextBlur, startSession, autoPlan,
-    swapStop, skipStep, removeUpcomingStep, addUpcomingStep,
+    skipStep, removeUpcomingStep, addUpcomingStep,
     moveUpcomingStep, selectOption, goBackOneStep,
   };
 }

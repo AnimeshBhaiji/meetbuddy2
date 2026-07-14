@@ -50,14 +50,17 @@ export default function StopPicker({ open, category, anchor, prefs, cachedOption
   const [customText, setCustomText] = useState("");
   const [customCoords, setCustomCoords] = useState(null);
 
+  const suggestions = (cachedOptions[category] || []).filter((o) => !excludeKeys.includes(placeKey(o)));
+
   useEffect(() => {
     if (open) {
-      setTab("suggestions"); setSearchCat(category || "restaurant");
+      // Reopened (sessionless) pickers have no cached suggestions to lead with — go straight to search.
+      setTab(suggestions.length === 0 && anchor ? "search" : "suggestions");
+      setSearchCat(category || "restaurant");
       setResults(null); setError(null); setCustomText(""); setCustomCoords(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset tab when the picker opens/target changes
   }, [open, category]);
-
-  const suggestions = (cachedOptions[category] || []).filter((o) => !excludeKeys.includes(placeKey(o)));
 
   const runSearch = async () => {
     if (!anchor) { setError("No location to search around."); return; }

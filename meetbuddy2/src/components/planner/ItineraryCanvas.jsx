@@ -26,14 +26,14 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
 
   const [stops, setStops] = useState(() =>
     initialItinerary
-      ? initialItinerary.stops
-      : selectedChain.map((s) => ({ step: s.step, place: s.place, note: "" }))
+      ? initialItinerary.stops.map((s) => (s._uid ? s : { ...s, _uid: crypto.randomUUID() }))
+      : selectedChain.map((s) => ({ step: s.step, place: s.place, note: "", _uid: crypto.randomUUID() }))
   );
   const [title, setTitle] = useState(initialItinerary?.title || `${userPrefs?.mood || "My"} meetup plan`);
   const [plannedDate, setPlannedDate] = useState(initialItinerary?.planned_date || "");
   const [savedId, setSavedId] = useState(initialItinerary?.id || null);
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
-  const [noteOpen, setNoteOpen] = useState(null);     // stop key with the note field open
+  const [noteOpen, setNoteOpen] = useState(null);     // stop _uid with the note field open
   // picker: {mode: "swap"|"add", index, category}
   const [picker, setPicker] = useState(null);
 
@@ -61,7 +61,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
     setStops((cur) => {
       const next = [...cur];
       if (picker.mode === "swap") next[picker.index] = { ...next[picker.index], step, place };
-      else next.splice(picker.index, 0, { step, place, note: "" });
+      else next.splice(picker.index, 0, { step, place, note: "", _uid: crypto.randomUUID() });
       return next;
     });
     setPicker(null);
@@ -145,7 +145,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
           <AddBetween index={0} />
           <Reorder.Group axis="y" values={stops} onReorder={(v) => { setStops(v); setSaveState("idle"); setNoteOpen(null); }} className="space-y-1">
             {stops.map((s, i) => (
-              <div key={stopKey(s) + i}>
+              <div key={s._uid}>
                 <Reorder.Item value={s} className="glass rounded-xl px-3 py-2.5 flex items-center gap-2.5 cursor-grab active:cursor-grabbing">
                   <GripVertical className="w-4 h-4 text-muted-foreground shrink-0 print:hidden" />
                   <span className="w-6 h-6 shrink-0 bg-gradient-to-br from-brand to-brand-2 text-white rounded-full flex items-center justify-center text-xs font-bold">
@@ -159,7 +159,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
                     {s.note && <p className="text-xs text-muted-foreground truncate">📝 {s.note}</p>}
                   </div>
                   <div className="flex gap-1 shrink-0 print:hidden">
-                    <button onClick={() => setNoteOpen(noteOpen === i ? null : i)} aria-label="Edit note"
+                    <button onClick={() => setNoteOpen(noteOpen === s._uid ? null : s._uid)} aria-label="Edit note"
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10 cursor-pointer">
                       <StickyNote className="w-3.5 h-3.5" />
                     </button>
@@ -175,7 +175,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
                     </button>
                   </div>
                 </Reorder.Item>
-                {noteOpen === i && (
+                {noteOpen === s._uid && (
                   <input
                     autoFocus
                     value={s.note || ""}

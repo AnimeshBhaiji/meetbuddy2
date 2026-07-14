@@ -1,5 +1,5 @@
 // meetbuddy2/e2e/itinerary-edit.cjs
-// Requires playwright (not a repo dependency): npm i -D playwright && npx playwright install chromium — or set NODE_PATH to a directory containing it.
+// Requires the playwright devDependency (npm install) plus browsers: npx playwright install chromium
 // Plan -> summary -> edit (note + cached add + reorder + remove) -> save -> reopen from My Plans.
 // Needs backend :8000 + vite :5173 and a real logged-in user id (env USER_ID).
 const { chromium } = require("playwright");

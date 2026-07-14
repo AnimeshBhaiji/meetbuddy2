@@ -57,7 +57,7 @@ Old markup is deleted, not kept behind flags.
 
 Three tabs in one panel:
 
-1. **Suggestions** — unused options from `optionsByStep` for the chosen category (instant, zero API). For reopened itineraries (no session), this tab is fed by the options endpoint instead.
+1. **Suggestions** — unused options from `optionsByStep` for the chosen category (instant, zero API). For reopened itineraries (no session, so no cached options), the picker opens on the **Find more** tab with the category preselected — one Search click runs the anchored options-endpoint lookup (not auto-fired, to respect the API budget).
 2. **Find something else** — category picker (restaurant / activity / café / stay / …) → `POST /planner/options` → ranked results, cache-first.
 3. **Custom place** — free-text name/address → backend geocode (existing Nominatim path) → confirm pin → added as a stop with `step: "custom"`.
 
@@ -79,7 +79,7 @@ class Itinerary(Base):
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
     title = Column(Text, nullable=False)
     planned_date = Column(Date, nullable=True)
-    stops = Column(JSONB, nullable=False)  # [{step, place, note}]
+    stops = Column(JSONB, nullable=False)  # [{step, place, note, _uid}] — _uid is a client-side stable key, stored opaquely
     created_at / updated_at (server defaults)
 ```
 

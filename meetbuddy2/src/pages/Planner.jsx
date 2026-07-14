@@ -57,7 +57,7 @@ export default function Planner() {
 
   useEffect(() => {
     if (P.page !== "summary") setReopened(null);
-  }, [P.page]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [P.page]);
 
   return (
     <div className="relative min-h-screen overflow-x-clip">

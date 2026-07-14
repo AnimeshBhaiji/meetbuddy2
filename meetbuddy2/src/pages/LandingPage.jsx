@@ -13,9 +13,7 @@ import {
   Star,
   Hotel,
 } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import AmbientBackground from "@/components/AmbientBackground";
 import ScrollFloat from "@/components/ScrollFloat";
 import GlassCard from "@/components/ui/GlassCard";
 import { EASE } from "@/lib/motion";
@@ -231,8 +229,6 @@ const LandingPage = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="hero" />
-      <Navbar />
 
       {/* ---------- HERO ---------- */}
       <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-28 pb-20">

@@ -2,12 +2,10 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuestionnaire } from "../context/QuestionnaireContext";
-import Navbar from "../components/Navbar";
 import { motion } from "framer-motion";
 import { Sparkles, PencilLine, ArrowRight, CheckCircle2 } from "lucide-react";
 import prefsData from "../../backend/preferences.json";
 import subQuestionMap from "@/data/subQuestionMap";
-import AmbientBackground from "@/components/AmbientBackground";
 import GlassCard from "@/components/ui/GlassCard";
 
 const humanizeKey = (k) =>
@@ -139,8 +137,6 @@ const QuestionnaireSummary = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="hero" />
-      <Navbar />
 
       <div className="min-h-screen flex flex-col pt-28 pb-16 px-4 max-w-6xl mx-auto w-full">
         {/* Celebration header */}

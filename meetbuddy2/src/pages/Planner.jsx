@@ -3,8 +3,6 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
-import Navbar from "../components/Navbar";
-import AmbientBackground from "@/components/AmbientBackground";
 import usePlannerSession from "@/hooks/usePlannerSession";
 import PlannerHome from "@/components/planner/PlannerHome";
 import StepExplorer from "@/components/planner/StepExplorer";
@@ -61,8 +59,6 @@ export default function Planner() {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="app" />
-      <Navbar />
 
       <div className="min-h-screen pt-28 pb-16">
         {/* HOME / preferences panel */}

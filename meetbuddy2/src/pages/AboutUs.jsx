@@ -2,9 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Users, MapPin, Sparkles, ArrowRight, Compass, HeartHandshake } from "lucide-react";
-import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import AmbientBackground from "@/components/AmbientBackground";
 import ScrollFloat from "@/components/ScrollFloat";
 import GlassCard from "@/components/ui/GlassCard";
 
@@ -74,8 +72,6 @@ const initialsOf = (name) =>
 const AboutUs = () => {
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="hero" />
-      <Navbar />
 
       <main>
         {/* ---------- Hero ---------- */}

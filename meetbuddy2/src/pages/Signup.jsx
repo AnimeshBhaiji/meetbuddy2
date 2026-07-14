@@ -16,8 +16,6 @@ import {
   HeartHandshake,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import Navbar from '@/components/Navbar';
-import AmbientBackground from '@/components/AmbientBackground';
 import Field from '@/components/ui/Field';
 import GlowButton from '@/components/ui/GlowButton';
 import GlassCard from '@/components/ui/GlassCard';
@@ -181,8 +179,6 @@ const Signup = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="hero" />
-      <Navbar />
 
       <div className="min-h-screen flex items-center justify-center px-4 pt-28 pb-16">
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">

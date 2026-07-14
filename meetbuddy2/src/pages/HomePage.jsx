@@ -1,7 +1,6 @@
 import React, { useContext, useState } from "react";
 import { AuthContext } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
-import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { motion } from "framer-motion";
 import {
@@ -16,7 +15,6 @@ import {
   Wand2,
   SlidersHorizontal,
 } from "lucide-react";
-import AmbientBackground from "@/components/AmbientBackground";
 import GlassCard from "@/components/ui/GlassCard";
 import AccessDeniedModal from "@/components/AccessDeniedModal";
 
@@ -85,9 +83,7 @@ const HomePage = () => {
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-x-clip">
-      <AmbientBackground intensity="app" />
       <AccessDeniedModal isOpen={showAccessModal} onClose={() => setShowAccessModal(false)} />
-      <Navbar />
 
       <div className="flex-1 flex flex-col items-center px-6 md:px-12 pt-32 pb-20">
         <div className="w-full max-w-6xl">

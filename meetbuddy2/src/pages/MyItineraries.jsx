@@ -4,8 +4,6 @@ import axios from "axios";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CalendarDays, MapPin, Trash2, ArrowRight, Rocket } from "lucide-react";
-import Navbar from "../components/Navbar";
-import AmbientBackground from "@/components/AmbientBackground";
 import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
 
@@ -41,8 +39,6 @@ export default function MyItineraries() {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="app" />
-      <Navbar />
       <div className="min-h-screen pt-28 pb-16 max-w-4xl mx-auto px-6">
         <motion.h1 initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
                    className="text-3xl md:text-5xl font-bold text-white mb-8">

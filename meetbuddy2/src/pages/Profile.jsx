@@ -13,8 +13,6 @@ import {
   Clock,
   AlertTriangle,
 } from 'lucide-react';
-import Navbar from '@/components/Navbar';
-import AmbientBackground from '@/components/AmbientBackground';
 import GlassCard from '@/components/ui/GlassCard';
 import GlowButton from '@/components/ui/GlowButton';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
@@ -169,7 +167,6 @@ const Profile = () => {
   if (loading) {
     return (
       <div className="relative min-h-screen overflow-x-clip">
-        <AmbientBackground intensity="app" />
         <div className="min-h-screen flex items-center justify-center">
           <div className="relative w-14 h-14">
             <div className="absolute inset-0 rounded-full border-4 border-white/10" />
@@ -182,8 +179,6 @@ const Profile = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="app" />
-      <Navbar />
 
       <main className="min-h-screen pt-32 pb-16 px-4">
         <motion.div

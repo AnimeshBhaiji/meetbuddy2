@@ -1,4 +1,5 @@
 // meetbuddy2/e2e/planner-flow.cjs
+// Requires playwright (not a repo dependency): npm i -D playwright && npx playwright install chromium — or set NODE_PATH to a directory containing it.
 // Smoke: seeded prefs -> 3-step planner flow -> summary. Needs backend :8000
 // and vite :5173 running, and a warm/valid SerpAPI or cached searches.
 const { chromium } = require("playwright");

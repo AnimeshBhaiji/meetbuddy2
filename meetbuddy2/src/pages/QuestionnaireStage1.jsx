@@ -8,8 +8,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { useQuestionnaire } from "@/context/QuestionnaireContext";
 import subQuestionMap from "@/data/subQuestionMap";
-import Navbar from "@/components/Navbar";
-import AmbientBackground from "@/components/AmbientBackground";
 import GlowButton from "@/components/ui/GlowButton";
 
 const MAIN_QUESTIONS = [
@@ -218,8 +216,6 @@ const QuestionnaireFlow = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="app" />
-      <Navbar />
 
       <div className="min-h-screen flex flex-col pt-28 pb-12 px-4">
         {/* Header: label + progress */}

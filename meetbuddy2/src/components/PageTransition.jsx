@@ -2,19 +2,18 @@
 import React from "react";
 import { motion } from "framer-motion";
 
+// transform/opacity only — animating filter forces full-page repaints
 const pageVariants = {
-  initial: { opacity: 0, y: 18, filter: "blur(6px)" },
+  initial: { opacity: 0, y: 12 },
   enter: {
     opacity: 1,
     y: 0,
-    filter: "blur(0px)",
-    transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] },
+    transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
   },
   exit: {
     opacity: 0,
-    y: -12,
-    filter: "blur(4px)",
-    transition: { duration: 0.25, ease: "easeIn" },
+    y: -8,
+    transition: { duration: 0.12, ease: "easeIn" },
   },
 };
 

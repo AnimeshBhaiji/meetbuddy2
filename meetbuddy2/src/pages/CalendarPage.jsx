@@ -6,8 +6,6 @@ import { format, parse, startOfWeek, getDay, addHours, isValid } from 'date-fns'
 import { motion } from 'framer-motion';
 import { Plus, Calendar as CalendarIcon, Clock, MapPin, Users, X, Edit2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import Navbar from '@/components/Navbar';
-import AmbientBackground from '@/components/AmbientBackground';
 import GlassCard from '@/components/ui/GlassCard';
 import GlowButton from '@/components/ui/GlowButton';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -118,8 +116,6 @@ const CalendarPage = () => {
 
   return (
     <div className="relative min-h-screen overflow-x-clip">
-      <AmbientBackground intensity="app" />
-      <Navbar />
       <div className="min-h-screen flex flex-col pt-28">
         <main className="flex-1 p-4 md:p-8">
           <motion.div

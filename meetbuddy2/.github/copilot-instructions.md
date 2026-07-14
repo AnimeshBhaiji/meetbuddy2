@@ -82,7 +82,7 @@ home → (start session) → step → (select options) → (next step) → summa
 **Core algorithm:**
 1. **Normalize preferences** → Convert questionnaire answers (dicts/lists) to standard label format via `PREFERENCE_TO_FLOW` mapping
 2. **Determine flow** → Map preference labels to step sequence (e.g., "Fun & Energetic" → `["restaurant", "activity"]`)
-3. **Generate suggestions** → For each step, call `scraper.get_places()` with SerpAPI query, rank by user mood/preferences
+3. **Generate suggestions** → For each step, call `scraper.search_places()` (Postgres-cached SerpAPI page), rank via `scoring.rank_places()`
 4. **Filter & rank** → `LABEL_TO_PLACE_TYPES` determines which Google Place types to fetch per step
 
 **Key assumption:** Preferences in `preferences.json` define categories (mood, planningStyle, etc.); their selected labels influence both flow & place type selection.

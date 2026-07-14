@@ -33,11 +33,16 @@ meetbuddy2/                  React 19 + Vite frontend
 ├── src/lib/motion.js        Shared animation tokens (one easing curve, 3 durations)
 └── backend/                 FastAPI
     ├── main.py              All HTTP endpoints (auth, preferences, planner sessions)
-    ├── planner.py           The brain: questionnaire → search directives → scored venues
-    ├── scraper.py           SerpAPI Google Maps search + Nominatim geocoding (1 h cache)
+    ├── planner.py           Orchestration: one cached search per step + fallback
+    ├── directives.py        Questionnaire → search directives (queries, radius, priorities)
+    ├── scoring.py           Local ranking: rating, distance, mood/atmosphere analysis
+    ├── place_analyzer.py    Mood-fit / atmosphere / parking detection from reviews
+    ├── scraper.py           SerpAPI Google Maps fetch + parsing
+    ├── cache.py             Postgres-backed cache (searches 7 days, geocodes 90 days)
+    ├── geo.py               Distance math + cached Nominatim geocoding
     ├── planner_sessions.py  In-memory sessions (best-effort disk backup)
     ├── database.py          PostgreSQL connection (SQLAlchemy)
-    ├── models.py            User table
+    ├── models.py            User + api_cache tables
     └── create_tables.py     Schema creation script (no migrations — re-run after changes)
 ```
 
@@ -111,7 +116,7 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 > **Note:** `python main.py` does *not* start the server — `main.py` has no `__main__` block. Use the uvicorn command above.
 
-Verify the full stack: sign up at <http://localhost:5173>, complete the questionnaire, and generate an itinerary. The **first search takes 60–90 s** (live SerpAPI calls); results are cached in memory for an hour, so repeat searches are fast.
+Verify the full stack: sign up at <http://localhost:5173>, complete the questionnaire, and generate an itinerary. Searches hit SerpAPI once per planner step (~1 credit each) and are cached in PostgreSQL for 7 days — repeat searches in the same area cost zero credits and return in ~2 s.
 
 Other useful commands:
 

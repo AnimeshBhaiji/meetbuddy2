@@ -11,6 +11,8 @@ import json, os
 from pathlib import Path
 from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import create_session, get_session, push_selection, set_last_options
+from itineraries import router as itineraries_router
+from geo import geocode_address
 
 
 # -------- DATABASE SETUP --------
@@ -25,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(itineraries_router)
 
 # -------- FILE PATHS (UNIFIED) --------
 ROOT_DIR = os.path.dirname(__file__)
@@ -387,6 +391,45 @@ async def planner_session_skip(sid: str, request: Request):
         "anchor_text": follow.get("anchor_text"),
         "search_error": follow.get("search_error"),
     }
+
+# Stateless options search — powers add/swap on saved itineraries where no
+# planner session exists. Reuses the followup pipeline with a synthetic state.
+@app.post("/planner/options")
+async def planner_options(request: Request):
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    anchor = raw.get("anchor") or {}
+    if anchor.get("lat") is None or anchor.get("lng") is None:
+        raise HTTPException(status_code=400, detail="Missing anchor coordinates")
+
+    category = raw.get("category") or "restaurant"
+    synthetic_state = {
+        "payload": {
+            "preferences": raw.get("preferences") or {},
+            "coords": {"lat": anchor["lat"], "lng": anchor["lng"]},
+            "location": raw.get("location"),
+        },
+        "steps": [],
+    }
+    follow = generate_followup_suggestions(synthetic_state, category, num_results=15)
+    return {
+        "options": follow.get("options", []),
+        "anchor_text": follow.get("anchor_text"),
+        "search_error": follow.get("search_error"),
+    }
+
+# Free-text -> coords for custom itinerary stops (cache-first Nominatim).
+@app.get("/geocode")
+def geocode(q: str = ""):
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Missing query")
+    coords = geocode_address(q.strip())
+    if not coords:
+        raise HTTPException(status_code=404, detail="Address not found")
+    return {"lat": coords[0], "lng": coords[1]}
 
 # Read session state
 @app.get("/planner/session/{sid}")

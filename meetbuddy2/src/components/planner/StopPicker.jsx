@@ -2,6 +2,7 @@
 // One picker for both "swap this stop" and "add a stop": cached suggestions
 // first (free), fresh anchored search on demand, or a custom geocoded place.
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/config";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Search, Star, MapPin, Loader2 } from "lucide-react";
@@ -66,7 +67,7 @@ export default function StopPicker({ open, category, anchor, prefs, cachedOption
     if (!anchor) { setError("No location to search around."); return; }
     setLoading(true); setError(null);
     try {
-      const res = await axios.post("http://localhost:8000/planner/options",
+      const res = await axios.post(`${API_BASE_URL}/planner/options`,
         { category: searchCat, anchor, preferences: prefs || {} }, { timeout: 60000 });
       if (res.data.search_error) setError(`Search failed: ${res.data.search_error}`);
       setResults((res.data.options || []).filter((o) => !excludeKeys.includes(placeKey(o))));
@@ -81,7 +82,7 @@ export default function StopPicker({ open, category, anchor, prefs, cachedOption
     if (!customText.trim()) return;
     setLoading(true); setError(null); setCustomCoords(null);
     try {
-      const res = await axios.get("http://localhost:8000/geocode",
+      const res = await axios.get(`${API_BASE_URL}/geocode`,
         { params: { q: customText.trim() }, timeout: 30000 });
       setCustomCoords(res.data);
     } catch {

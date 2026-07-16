@@ -1,5 +1,6 @@
 // src/pages/Planner.jsx
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/config";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,7 +48,7 @@ export default function Planner() {
     if (!id) { setReopened(null); return; }
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user) return;
-    axios.get(`http://localhost:8000/itineraries/${id}`,
+    axios.get(`${API_BASE_URL}/itineraries/${id}`,
       { params: { user_id: user.user_id }, timeout: 30000 })
       .then((res) => { setReopened(res.data); P.setPage("summary"); })
       .catch(() => P.setPlannerError("Couldn't open that itinerary."));

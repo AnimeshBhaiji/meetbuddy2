@@ -2,6 +2,7 @@
 // All planner session state + API calls, extracted from Planner.jsx so the
 // view components (PlannerHome / StepExplorer / ItineraryCanvas) stay thin.
 import { useState, useEffect } from "react";
+import { API_BASE_URL } from "@/config";
 import axios from "axios";
 
 export const PREF_META = [
@@ -238,7 +239,7 @@ export default function usePlannerSession() {
       };
 
       // primary request to the session endpoint
-      const res = await axios.post("http://localhost:8000/planner/session", payload, { timeout: 60000 });
+      const res = await axios.post(`${API_BASE_URL}/planner/session`, payload, { timeout: 60000 });
 
       const sid = res.data.session_id;
       setSessionId(sid);
@@ -326,7 +327,7 @@ export default function usePlannerSession() {
           setOverlayText(`Finding your ${humanStepName(nextStep).toLowerCase()}...`);
         }
         const res = await axios.post(
-          `http://localhost:8000/planner/session/${sid}/select`,
+          `${API_BASE_URL}/planner/session/${sid}/select`,
           { step, place: pick, next_step: nextStep, selected_tokens: [] },
           { timeout: 120000 }
         );
@@ -376,7 +377,7 @@ export default function usePlannerSession() {
     setShowOverlay(true);
     try {
       const res = await axios.post(
-        `http://localhost:8000/planner/session/${sessionId}/skip`,
+        `${API_BASE_URL}/planner/session/${sessionId}/skip`,
         { next_step: nextStep },
         { timeout: 120000 }
       );
@@ -453,7 +454,7 @@ export default function usePlannerSession() {
         payload.next_step = "done";
       }
 
-      const res = await axios.post(`http://localhost:8000/planner/session/${sessionId}/select`, payload, { timeout: 60000 });
+      const res = await axios.post(`${API_BASE_URL}/planner/session/${sessionId}/select`, payload, { timeout: 60000 });
 
       // push selection locally
       setSelectedChain((s) => [...s, { step: payload.step, place: opt }]);
@@ -520,7 +521,7 @@ export default function usePlannerSession() {
     // try to get session state from server and restore last_options
     try {
       setSessionLoading(true);
-      const res = await axios.get(`http://localhost:8000/planner/session/${sessionId}`, { timeout: 30000 });
+      const res = await axios.get(`${API_BASE_URL}/planner/session/${sessionId}`, { timeout: 30000 });
       const s = res.data || {};
       const last_opts = (s.last_options && s.last_options[stepToRestore]) || (s.last_options && s.last_options.initial) || s.options || [];
       if (last_opts && last_opts.length) {

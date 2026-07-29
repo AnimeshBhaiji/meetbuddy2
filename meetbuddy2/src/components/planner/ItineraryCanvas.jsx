@@ -2,6 +2,7 @@
 // "Your perfect itinerary" as an editable route canvas. All edits are local:
 // the map redraws instantly, nothing cascades, Save persists to the API.
 import { useMemo, useState } from "react";
+import { API_BASE_URL } from "@/config";
 import axios from "axios";
 import { motion, Reorder } from "framer-motion";
 import { GripVertical, RefreshCw, X, Plus, StickyNote, Rocket, Printer,
@@ -76,8 +77,8 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
                       planned_date: plannedDate || null, stops };
     try {
       const res = savedId
-        ? await axios.put(`http://localhost:8000/itineraries/${savedId}`, payload, { timeout: 30000 })
-        : await axios.post("http://localhost:8000/itineraries", payload, { timeout: 30000 });
+        ? await axios.put(`${API_BASE_URL}/itineraries/${savedId}`, payload, { timeout: 30000 })
+        : await axios.post(`${API_BASE_URL}/itineraries`, payload, { timeout: 30000 });
       setSavedId(res.data.id);
       setSaveState("saved");
     } catch {

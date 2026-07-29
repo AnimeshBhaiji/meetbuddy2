@@ -1,5 +1,6 @@
 // src/pages/MyItineraries.jsx
 import { useEffect, useState } from "react";
+import { API_BASE_URL } from "@/config";
 import axios from "axios";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -16,7 +17,7 @@ export default function MyItineraries() {
   const load = async () => {
     if (!user) return setItems([]);
     try {
-      const res = await axios.get("http://localhost:8000/itineraries",
+      const res = await axios.get(`${API_BASE_URL}/itineraries`,
         { params: { user_id: user.user_id }, timeout: 30000 });
       setItems(res.data);
     } catch {
@@ -29,7 +30,7 @@ export default function MyItineraries() {
   const remove = async (id) => {
     if (!window.confirm("Delete this itinerary?")) return;
     try {
-      await axios.delete(`http://localhost:8000/itineraries/${id}`,
+      await axios.delete(`${API_BASE_URL}/itineraries/${id}`,
         { params: { user_id: user.user_id }, timeout: 30000 });
       setItems((cur) => cur.filter((i) => i.id !== id));
     } catch {

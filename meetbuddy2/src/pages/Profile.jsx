@@ -126,7 +126,7 @@ const Profile = () => {
     setDeleteError('');
 
     try {
-      const response = await fetch(`http://localhost:8000/user/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/user/${userId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

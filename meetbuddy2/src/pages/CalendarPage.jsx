@@ -107,13 +107,15 @@ const CalendarPage = () => {
     navigate('/planner', { state: { slot: slotToPrefill(start, end, action) } });
   }, [navigate]);
 
-  const handleNavigateToPlanner = () => {
-    if (selectedEvent?.itineraryId) {
-      navigate('/planner', { state: { itineraryId: selectedEvent.itineraryId } });
-    } else {
-      navigate('/planner');
-    }
+  // Reopen a saved plan in the itinerary editor. Planner.jsx loads by id —
+  // the old call passed the whole event object, which it silently ignored.
+  const openSelectedPlan = () => {
+    if (!selectedEvent?.itineraryId) return;
+    setShowEventModal(false);
+    navigate('/planner', { state: { itineraryId: selectedEvent.itineraryId } });
   };
+
+  const handleNewMeetup = () => navigate('/planner', { state: {} });
 
   const eventStyleGetter = (event) => {
     const style = {
@@ -149,7 +151,7 @@ const CalendarPage = () => {
                   Every plan, mapped to its moment
                 </p>
               </div>
-              <GlowButton onClick={handleNavigateToPlanner}>
+              <GlowButton onClick={handleNewMeetup}>
                 <Plus className="w-4.5 h-4.5" />
                 New meetup
               </GlowButton>
@@ -276,25 +278,11 @@ const CalendarPage = () => {
                 </div>
               </div>
 
+              {/* One action: the itinerary canvas is the viewer and the editor. */}
               <div className="flex justify-end gap-2 pt-4">
-                <GlowButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowEventModal(false);
-                    navigate('/planner', {
-                      state: {
-                        eventData: selectedEvent,
-                        isEditing: true
-                      }
-                    });
-                  }}
-                >
+                <GlowButton size="sm" onClick={openSelectedPlan}>
                   <Edit2 className="w-4 h-4" />
-                  Edit
-                </GlowButton>
-                <GlowButton size="sm" onClick={handleNavigateToPlanner}>
-                  View details
+                  Open plan
                 </GlowButton>
               </div>
             </div>

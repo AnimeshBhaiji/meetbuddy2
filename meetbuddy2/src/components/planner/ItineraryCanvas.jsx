@@ -11,6 +11,8 @@ import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
 import StopPicker from "./StopPicker";
 import { STEP_EMOJI, humanStepName, deriveServiceNotes } from "@/hooks/usePlannerSession";
+import { toDateInput, toTimeInput, fromDateTimeInput, toLocalISO, parseISO,
+         addMinutes, DEFAULT_DURATION_MIN } from "@/lib/schedule";
 
 const haversineKm = (a, b) => {
   const R = 6371, dLat = ((b.lat - a.lat) * Math.PI) / 180, dLng = ((b.lng - a.lng) * Math.PI) / 180;
@@ -21,7 +23,11 @@ const haversineKm = (a, b) => {
 
 const stopKey = (s) => s.place?.place_id || s.place?.title || "";
 
-export default function ItineraryCanvas({ P, initialItinerary = null }) {
+const fieldClass =
+  "bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-foreground/85 " +
+  "outline-none focus:border-brand/50 [color-scheme:dark]";
+
+export default function ItineraryCanvas({ P, initialItinerary = null, prefillSlot = null }) {
   const { userPrefs, user, selectedChain, optionsByStep, setPage, setSessionId, setSelectedChain } = P;
 
   const [stops, setStops] = useState(() =>
@@ -30,7 +36,37 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
       : selectedChain.map((s) => ({ step: s.step, place: s.place, note: "", _uid: crypto.randomUUID() }))
   );
   const [title, setTitle] = useState(initialItinerary?.title || `${userPrefs?.mood || "My"} meetup plan`);
-  const [plannedDate, setPlannedDate] = useState(initialItinerary?.planned_date || "");
+
+  // Schedule: an existing plan's saved times win, otherwise the calendar slot
+  // the user clicked to get here, otherwise unscheduled.
+  const [schedule, setSchedule] = useState(() => {
+    const start = parseISO(initialItinerary?.start_at);
+    const end = parseISO(initialItinerary?.end_at);
+    if (start) {
+      return {
+        date: toDateInput(start),
+        startTime: toTimeInput(start),
+        endTime: toTimeInput(end || addMinutes(start, DEFAULT_DURATION_MIN)),
+        allDay: !!initialItinerary?.all_day,
+      };
+    }
+    if (prefillSlot) return { ...prefillSlot, allDay: false };
+    return { date: "", startTime: "", endTime: "", allDay: false };
+  });
+
+  const patchSchedule = (patch) => {
+    setSchedule((cur) => {
+      const next = { ...cur, ...patch };
+      // keep end after start when the user moves start past it
+      if (patch.startTime && next.endTime && next.endTime <= patch.startTime) {
+        const s = fromDateTimeInput(next.date || "2000-01-01", patch.startTime);
+        next.endTime = toTimeInput(addMinutes(s, DEFAULT_DURATION_MIN));
+      }
+      return next;
+    });
+    setSaveState("idle");
+  };
+
   const [savedId, setSavedId] = useState(initialItinerary?.id || null);
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
   const [noteOpen, setNoteOpen] = useState(null);     // stop _uid with the note field open
@@ -69,11 +105,29 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
     setNoteOpen(null);
   };
 
+  // date + times -> the API's start_at/end_at. No date means unscheduled, and
+  // an all-day plan spans the whole day so the calendar can place it.
+  const scheduleFields = () => {
+    const { date, startTime, endTime, allDay } = schedule;
+    if (!date) return { start_at: null, end_at: null, all_day: false };
+    if (allDay) {
+      const start = fromDateTimeInput(date, "00:00");
+      return { start_at: toLocalISO(start), end_at: toLocalISO(addMinutes(start, 1440)), all_day: true };
+    }
+    const start = fromDateTimeInput(date, startTime || "12:00");
+    const end = fromDateTimeInput(date, endTime || "") || addMinutes(start, DEFAULT_DURATION_MIN);
+    return {
+      start_at: toLocalISO(start),
+      end_at: toLocalISO(end > start ? end : addMinutes(start, DEFAULT_DURATION_MIN)),
+      all_day: false,
+    };
+  };
+
   const save = async () => {
     if (!user) return;
     setSaveState("saving");
     const payload = { user_id: user.user_id, title: title.trim() || "Untitled plan",
-                      planned_date: plannedDate || null, stops };
+                      ...scheduleFields(), stops };
     try {
       const res = savedId
         ? await axios.put(`http://localhost:8000/itineraries/${savedId}`, payload, { timeout: 30000 })
@@ -134,13 +188,46 @@ export default function ItineraryCanvas({ P, initialItinerary = null }) {
             className="w-full bg-transparent text-xl font-semibold text-white outline-none border-b border-transparent focus:border-brand/40 pb-1 mb-2"
             aria-label="Itinerary title"
           />
-          <input
-            type="date"
-            value={plannedDate || ""}
-            onChange={(e) => { setPlannedDate(e.target.value); setSaveState("idle"); }}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-foreground/85 outline-none focus:border-brand/50 mb-5 [color-scheme:dark]"
-            aria-label="Planned date"
-          />
+          {/* -------- when -------- */}
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            <input
+              type="date"
+              value={schedule.date}
+              onChange={(e) => patchSchedule({ date: e.target.value })}
+              className={fieldClass}
+              aria-label="Planned date"
+            />
+            {schedule.date && !schedule.allDay && (
+              <>
+                <input
+                  type="time"
+                  value={schedule.startTime}
+                  onChange={(e) => patchSchedule({ startTime: e.target.value })}
+                  className={fieldClass}
+                  aria-label="Start time"
+                />
+                <span className="text-muted-foreground text-sm">to</span>
+                <input
+                  type="time"
+                  value={schedule.endTime}
+                  onChange={(e) => patchSchedule({ endTime: e.target.value })}
+                  className={fieldClass}
+                  aria-label="End time"
+                />
+              </>
+            )}
+            {schedule.date && (
+              <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={schedule.allDay}
+                  onChange={(e) => patchSchedule({ allDay: e.target.checked })}
+                  className="accent-brand w-3.5 h-3.5"
+                />
+                All day
+              </label>
+            )}
+          </div>
 
           <AddBetween index={0} />
           <Reorder.Group axis="y" values={stops} onReorder={(v) => { setStops(v); setSaveState("idle"); setNoteOpen(null); }} className="space-y-1">

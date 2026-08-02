@@ -6,7 +6,10 @@ const { chromium } = require("playwright");
 const USER_ID = Number(process.env.USER_ID || 1);
 const API = "http://localhost:8000";
 
-const fail = (msg) => { console.log("OPEN PLAN: FAIL —", msg); process.exit(1); };
+// Throws rather than process.exit: exiting here would skip the finally block
+// and leave seeded plans behind in the database.
+const fail = (msg) => { throw new Error(msg); };
+const report = (e) => { console.log("OPEN PLAN: FAIL —", e.message); process.exitCode = 1; };
 
 const d = new Date();
 const p = (n) => String(n).padStart(2, "0");
@@ -75,6 +78,8 @@ const iso = (dt) => {
 
     if (errors.length) fail(`page errors: ${errors.join(" | ")}`);
     console.log("OPEN PLAN: PASS");
+  } catch (e) {
+    report(e);
   } finally {
     for (const id of [decoy.id, target.id]) {
       await fetch(`${API}/itineraries/${id}?user_id=${USER_ID}`, { method: "DELETE" }).catch(() => {});

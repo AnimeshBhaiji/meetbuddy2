@@ -5,11 +5,15 @@
 const { chromium } = require("playwright");
 const USER_ID = Number(process.env.USER_ID || 1);
 
-const fail = (msg) => { console.log("SCHEDULE EDITOR: FAIL —", msg); process.exit(1); };
+// Throws rather than process.exit, so the finally block still deletes the plan
+// this test saves through the UI.
+const fail = (msg) => { throw new Error(msg); };
 
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage();
+  let savedId = null;
+  try {
 
   await page.goto("http://localhost:5173/");
   await page.evaluate((uid) => {
@@ -44,6 +48,7 @@ const fail = (msg) => { console.log("SCHEDULE EDITOR: FAIL —", msg); process.e
   }, USER_ID);
   const saved = rows.find((r) => r.title === title);
   if (!saved) fail("saved plan not returned by the API");
+  savedId = saved.id;
   console.log("API row:", JSON.stringify({
     start_at: saved.start_at, end_at: saved.end_at, all_day: saved.all_day }));
 
@@ -74,11 +79,15 @@ const fail = (msg) => { console.log("SCHEDULE EDITOR: FAIL —", msg); process.e
   if (reopened.start !== "15:00") fail(`start not restored: ${reopened.start}`);
   if (reopened.end !== "17:00") fail(`end not restored: ${reopened.end}`);
 
-  // cleanup
-  await page.evaluate(async ({ uid, id }) => {
-    await fetch(`http://localhost:8000/itineraries/${id}?user_id=${uid}`, { method: "DELETE" });
-  }, { uid: USER_ID, id: saved.id });
-
   console.log("SCHEDULE EDITOR: PASS");
-  await browser.close();
+  } catch (e) {
+    console.log("SCHEDULE EDITOR: FAIL —", e.message);
+    process.exitCode = 1;
+  } finally {
+    if (savedId) {
+      await fetch(`http://localhost:8000/itineraries/${savedId}?user_id=${USER_ID}`,
+        { method: "DELETE" }).catch(() => {});
+    }
+    await browser.close();
+  }
 })();

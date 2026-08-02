@@ -6,7 +6,10 @@ const { chromium } = require("playwright");
 const USER_ID = Number(process.env.USER_ID || 1);
 const API = "http://localhost:8000";
 
-const fail = (msg) => { console.log("CALENDAR EVENTS: FAIL —", msg); process.exit(1); };
+// Throws rather than process.exit: exiting here would skip the finally block
+// and leave seeded plans behind in the database.
+const fail = (msg) => { throw new Error(msg); };
+const report = (e) => { console.log("CALENDAR EVENTS: FAIL —", e.message); process.exitCode = 1; };
 
 // A date the calendar will be showing: the 15th of the current month.
 const d = new Date();
@@ -93,6 +96,8 @@ const iso = (dt) => {
 
     if (errors.length) fail(`page errors: ${errors.join(" | ")}`);
     console.log("CALENDAR EVENTS: PASS");
+  } catch (e) {
+    report(e);
   } finally {
     await cleanup();
     await browser.close();

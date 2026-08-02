@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Integer, String,
+                        Text, func, text)
 from sqlalchemy.dialects.postgresql import JSONB
 from database import Base
 
@@ -28,7 +29,11 @@ class Itinerary(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
     title = Column(Text, nullable=False)
-    planned_date = Column(Date, nullable=True)
+    # When the plan happens. Both null = unscheduled (never shown on the calendar).
+    # all_day = true means only the date matters; the times are the day's bounds.
+    start_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    end_at = Column(DateTime(timezone=True), nullable=True)
+    all_day = Column(Boolean, nullable=False, server_default=text("false"), default=False)
     stops = Column(JSONB, nullable=False, default=list)  # [{step, place, note}]
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(),

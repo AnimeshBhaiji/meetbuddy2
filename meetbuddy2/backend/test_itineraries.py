@@ -1,7 +1,9 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from database import SessionLocal
 from models import Itinerary, User
@@ -75,6 +77,79 @@ def test_itinerary_crud_roundtrip():
             db.query(Itinerary).filter(Itinerary.id == created_id).delete()
             db.commit()
         db.close()
+
+
+def test_itinerary_schedule_roundtrip():
+    """start_at/end_at/all_day survive create -> list -> update -> fetch."""
+    db = SessionLocal()
+    created_id = None
+    try:
+        uid = _ensure_user(db)
+        start = datetime(2026, 8, 5, 15, 0, tzinfo=timezone.utc)
+        end = start + timedelta(hours=2)
+
+        created = api.create_itinerary(
+            api.ItineraryIn(user_id=uid, title="Timed plan",
+                            start_at=start, end_at=end, stops=[]), db)
+        created_id = created["id"]
+        assert created["start_at"] is not None
+        assert created["all_day"] is False
+
+        row = next(r for r in api.list_itineraries(uid, db) if r["id"] == created_id)
+        assert row["start_at"] is not None and row["end_at"] is not None
+
+        # rescheduling (what a calendar drag sends) moves both ends
+        moved_start = start + timedelta(days=1)
+        moved = api.update_itinerary(
+            created_id,
+            api.ItineraryUpdate(user_id=uid, start_at=moved_start,
+                                end_at=moved_start + timedelta(hours=2)), db)
+        assert moved["start_at"].startswith("2026-08-06")
+        assert moved["title"] == "Timed plan"  # untouched fields survive
+
+        # clearing the schedule unschedules the plan
+        cleared = api.update_itinerary(
+            created_id, api.ItineraryUpdate(user_id=uid, start_at=None, end_at=None), db)
+        assert cleared["start_at"] is None and cleared["end_at"] is None
+
+        api.delete_itinerary(created_id, uid, db)
+        created_id = None
+    finally:
+        if created_id:
+            db.query(Itinerary).filter(Itinerary.id == created_id).delete()
+            db.commit()
+        db.close()
+
+
+def test_all_day_flag_persists():
+    db = SessionLocal()
+    created_id = None
+    try:
+        uid = _ensure_user(db)
+        day = datetime(2026, 8, 7, 0, 0, tzinfo=timezone.utc)
+        created = api.create_itinerary(
+            api.ItineraryIn(user_id=uid, title="All day", start_at=day,
+                            end_at=day + timedelta(days=1), all_day=True), db)
+        created_id = created["id"]
+        assert created["all_day"] is True
+        assert api.get_itinerary(created_id, uid, db)["all_day"] is True
+        api.delete_itinerary(created_id, uid, db)
+        created_id = None
+    finally:
+        if created_id:
+            db.query(Itinerary).filter(Itinerary.id == created_id).delete()
+            db.commit()
+        db.close()
+
+
+def test_end_before_start_rejected():
+    start = datetime(2026, 8, 5, 15, 0, tzinfo=timezone.utc)
+    with pytest.raises(ValidationError):
+        api.ItineraryIn(user_id=1, title="Backwards", start_at=start,
+                        end_at=start - timedelta(hours=1))
+    with pytest.raises(ValidationError):
+        api.ItineraryUpdate(user_id=1, start_at=start,
+                            end_at=start - timedelta(minutes=1))
 
 
 def test_itinerary_user_isolation():

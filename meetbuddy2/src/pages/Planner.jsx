@@ -42,6 +42,9 @@ export default function Planner() {
   const P = usePlannerSession();
   const location = useLocation();
   const [reopened, setReopened] = useState(null);
+  // Date/time of the calendar slot the user clicked to get here, if any.
+  // Consumed by the editor as a prefill; a reopened plan's own times win.
+  const slot = location.state?.slot || null;
 
   useEffect(() => {
     const id = location.state?.itineraryId;
@@ -70,7 +73,8 @@ export default function Planner() {
 
         {/* SUMMARY PAGE: editable route canvas */}
         {P.page === "summary" && (
-          <ItineraryCanvas key={reopened?.id ?? "live"} P={P} initialItinerary={reopened} />
+          <ItineraryCanvas key={reopened?.id ?? "live"} P={P} initialItinerary={reopened}
+                           prefillSlot={slot} />
         )}
       </div>
 

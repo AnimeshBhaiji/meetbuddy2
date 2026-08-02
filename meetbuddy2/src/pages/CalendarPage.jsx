@@ -1,14 +1,22 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import CustomToolbar from '@/components/calendar/CustomToolbar';
 import { format, parse, startOfWeek, getDay, addHours, isValid } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Plus, Calendar as CalendarIcon, Clock, MapPin, Users, X, Edit2 } from 'lucide-react';
+import { Plus, Clock, MapPin, Edit2, Loader2, RefreshCw } from 'lucide-react';
+import { API_BASE_URL } from '@/config';
+import { parseISO, slotToPrefill, toLocalISO } from '@/lib/schedule';
+import { humanStepName } from '@/hooks/usePlannerSession';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import GlassCard from '@/components/ui/GlassCard';
 import GlowButton from '@/components/ui/GlowButton';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
+
+const DnDCalendar = withDragAndDrop(Calendar);
 
 const localizer = dateFnsLocalizer({
   format: (date, formatStr, options) => {
@@ -30,74 +38,116 @@ const safeParseDate = (date) => {
   return isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
-// Sample events data - will be replaced with API calls
-const sampleEvents = [
-  {
-    id: 1,
-    title: 'Team Lunch',
-    start: addHours(new Date(), 1),
-    end: addHours(new Date(), 2.5),
-    location: 'Downtown Bistro',
-    attendees: ['john@example.com', 'jane@example.com'],
-    description: 'Quarterly team lunch to discuss project updates',
-    color: '#3b82f6',
-  },
-];
+/**
+ * Saved itinerary -> react-big-calendar event.
+ *
+ * This is the calendar's only source adapter. A second source (standalone
+ * events, an external calendar) plugs in by writing another function with this
+ * same output shape and concatenating it into `events` — nothing below here
+ * knows where an event came from, only that it has {id, title, start, end}.
+ */
+const itineraryToEvent = (it) => {
+  const start = parseISO(it.start_at);
+  if (!start) return null;                       // unscheduled plans stay off the calendar
+  const end = parseISO(it.end_at) || addHours(start, 2);
+  return {
+    id: it.id,
+    itineraryId: it.id,
+    title: it.title || 'Untitled plan',
+    start,
+    end: end > start ? end : addHours(start, 2),
+    allDay: !!it.all_day,
+    stopCount: it.stop_count,
+    source: 'itinerary',
+  };
+};
 
 const CalendarPage = () => {
-  const [events] = useState(() => {
-    try {
-      const savedEvents = localStorage.getItem('meetupEvents');
-      if (!savedEvents) return sampleEvents;
-
-      const parsedEvents = JSON.parse(savedEvents);
-      // Convert string dates back to Date objects
-      return parsedEvents.map(event => ({
-        ...event,
-        start: new Date(event.start),
-        end: new Date(event.end)
-      }));
-    } catch (error) {
-      console.error('Error loading events:', error);
-      return sampleEvents;
-    }
-  });
+  const [events, setEvents] = useState([]);
+  const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [scheduleError, setScheduleError] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [date, setDate] = useState(() => new Date());
   const [view, setView] = useState(Views.MONTH);
   const navigate = useNavigate();
 
-  const handleSelectEvent = useCallback((event) => {
-    // Convert string dates back to Date objects
-    const eventWithDates = {
-      ...event,
-      start: new Date(event.start),
-      end: new Date(event.end)
-    };
-    setSelectedEvent(eventWithDates);
-    setShowEventModal(true);
+  const user = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); }
+    catch { return null; }
   }, []);
 
-  // Clicking an empty slot starts planning a meetup for that date
-  const handleSelectSlot = useCallback(({ start }) => {
-    navigate('/planner', {
-      state: { startDate: start, endDate: addHours(start, 1) },
-    });
+  const loadEvents = useCallback(async () => {
+    if (!user) { setEvents([]); setStatus('ready'); return; }
+    setStatus('loading');
+    try {
+      const res = await axios.get(`${API_BASE_URL}/itineraries`,
+        { params: { user_id: user.user_id }, timeout: 30000 });
+      setEvents((res.data || []).map(itineraryToEvent).filter(Boolean));
+      setStatus('ready');
+    } catch {
+      setStatus('error');
+    }
+  }, [user]);
+
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+
+  // The list endpoint omits stops, so pull the full plan for the modal.
+  const handleSelectEvent = useCallback(async (event) => {
+    setSelectedEvent(event);
+    setShowEventModal(true);
+    if (!user || !event.itineraryId) return;
+    try {
+      const res = await axios.get(`${API_BASE_URL}/itineraries/${event.itineraryId}`,
+        { params: { user_id: user.user_id }, timeout: 30000 });
+      setSelectedEvent((cur) =>
+        cur && cur.id === event.id ? { ...cur, stops: res.data.stops || [] } : cur);
+    } catch {
+      setSelectedEvent((cur) => (cur && cur.id === event.id ? { ...cur, stops: [] } : cur));
+    }
+  }, [user]);
+
+  // Clicking an empty slot starts planning a meetup for that date and time
+  const handleSelectSlot = useCallback(({ start, end, action }) => {
+    navigate('/planner', { state: { slot: slotToPrefill(start, end, action) } });
   }, [navigate]);
 
-  const handleNavigateToPlanner = () => {
-    if (selectedEvent) {
-      navigate('/planner', {
-        state: {
-          startDate: selectedEvent.start,
-          endDate: selectedEvent.end
-        }
-      });
-    } else {
-      navigate('/planner');
+  /**
+   * Drag to move / edge-drag to resize. The event moves on screen immediately
+   * and the write follows; if the write fails the move is rolled back so the
+   * grid never shows a time the server didn't accept.
+   */
+  const rescheduleEvent = useCallback(async ({ event, start, end, isAllDay }) => {
+    if (!user || !event.itineraryId) return;
+    const nextAllDay = isAllDay ?? event.allDay;
+    const previous = events;
+
+    setEvents((cur) => cur.map((e) =>
+      e.id === event.id ? { ...e, start, end, allDay: nextAllDay } : e));
+    setScheduleError(null);
+
+    try {
+      await axios.put(`${API_BASE_URL}/itineraries/${event.itineraryId}`, {
+        user_id: user.user_id,
+        start_at: toLocalISO(start),
+        end_at: toLocalISO(end),
+        all_day: nextAllDay,
+      }, { timeout: 30000 });
+    } catch {
+      setEvents(previous);
+      setScheduleError("Couldn't save the new time. Put back.");
     }
+  }, [user, events]);
+
+  // Reopen a saved plan in the itinerary editor. Planner.jsx loads by id —
+  // the old call passed the whole event object, which it silently ignored.
+  const openSelectedPlan = () => {
+    if (!selectedEvent?.itineraryId) return;
+    setShowEventModal(false);
+    navigate('/planner', { state: { itineraryId: selectedEvent.itineraryId } });
   };
+
+  const handleNewMeetup = () => navigate('/planner', { state: {} });
 
   const eventStyleGetter = (event) => {
     const style = {
@@ -133,15 +183,42 @@ const CalendarPage = () => {
                   Every plan, mapped to its moment
                 </p>
               </div>
-              <GlowButton onClick={handleNavigateToPlanner}>
+              <GlowButton onClick={handleNewMeetup}>
                 <Plus className="w-4.5 h-4.5" />
                 New meetup
               </GlowButton>
             </div>
 
+            {scheduleError && (
+              <GlassCard variant="strong" className="p-4 mb-4">
+                <p className="text-sm text-red-300">{scheduleError}</p>
+              </GlassCard>
+            )}
+            {status === 'error' && (
+              <GlassCard variant="strong" className="p-4 mb-4 flex items-center justify-between gap-4">
+                <p className="text-sm text-red-300">Couldn't load your plans.</p>
+                <button onClick={loadEvents}
+                        className="flex items-center gap-1.5 text-sm text-foreground/85 hover:text-white cursor-pointer">
+                  <RefreshCw className="w-4 h-4" /> Retry
+                </button>
+              </GlassCard>
+            )}
+            {status === 'ready' && events.length === 0 && (
+              <GlassCard variant="strong" className="p-4 mb-4">
+                <p className="text-sm text-muted-foreground" data-testid="calendar-empty">
+                  No scheduled plans yet — click any day to start one, or give a saved plan a date in My Plans.
+                </p>
+              </GlassCard>
+            )}
+
             <GlassCard variant="strong" className="p-6 md:p-8">
-                <div className="h-[700px]">
-                  <Calendar
+                <div className="h-[700px] relative">
+                  {status === 'loading' && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 rounded-xl">
+                      <Loader2 className="w-6 h-6 text-white/70 animate-spin" />
+                    </div>
+                  )}
+                  <DnDCalendar
                     localizer={localizer}
                     events={events}
                     startAccessor="start"
@@ -149,6 +226,9 @@ const CalendarPage = () => {
                     style={{ height: '100%' }}
                     onSelectEvent={handleSelectEvent}
                     onSelectSlot={handleSelectSlot}
+                    onEventDrop={rescheduleEvent}
+                    onEventResize={rescheduleEvent}
+                    resizable
                     selectable
                     eventPropGetter={eventStyleGetter}
                     views={{
@@ -202,75 +282,47 @@ const CalendarPage = () => {
                 <Clock className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
                 <div>
                   <p className="text-gray-400 text-sm">When</p>
-                  <p className="text-white/90">
-                    {format(selectedEvent.start, 'PPP p')} - {format(selectedEvent.end, 'p')}
+                  <p className="text-white/90" data-testid="event-when">
+                    {selectedEvent.allDay
+                      ? `${format(selectedEvent.start, 'PPP')} · all day`
+                      : `${format(selectedEvent.start, 'PPP p')} - ${format(selectedEvent.end, 'p')}`}
                   </p>
                 </div>
               </div>
 
-              {(selectedEvent.itinerary?.steps?.length > 0 || selectedEvent.location) && (
-                <div className="flex items-start">
-                  <MapPin className="w-5 h-5 text-purple-400 mt-0.5 mr-3 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-gray-400 text-sm mb-1">Planned Locations</p>
-                    <div className="space-y-2">
-                      {selectedEvent.itinerary?.steps?.map((step, index) => (
-                        <div key={index} className="bg-white/5 p-2 rounded">
-                          <p className="text-white/90 font-medium">{step.name}</p>
-                          {step.address && (
-                            <p className="text-xs text-gray-400">{step.address}</p>
-                          )}
-                        </div>
-                      )) || (
-                          <p className="text-white/90">{selectedEvent.location}</p>
+              <div className="flex items-start">
+                <MapPin className="w-5 h-5 text-purple-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-gray-400 text-sm mb-1">Stops</p>
+                  <div className="space-y-2">
+                    {selectedEvent.stops === undefined && (
+                      <p className="text-sm text-muted-foreground">Loading stops…</p>
+                    )}
+                    {selectedEvent.stops?.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No stops on this plan.</p>
+                    )}
+                    {selectedEvent.stops?.map((stop, index) => (
+                      <div key={index} className="bg-white/5 p-2 rounded">
+                        <p className="text-white/90 font-medium">
+                          {stop.place?.title || humanStepName(stop.step)}
+                        </p>
+                        {stop.place?.address && (
+                          <p className="text-xs text-gray-400">{stop.place.address}</p>
                         )}
-                    </div>
+                        {stop.note && (
+                          <p className="text-xs text-brand-3/80 mt-0.5">{stop.note}</p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
 
-              {selectedEvent.attendees?.length > 0 && (
-                <div className="flex items-start">
-                  <Users className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
-                  <div>
-                    <p className="text-gray-400 text-sm">Attendees</p>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {selectedEvent.attendees.map((email, index) => (
-                        <span key={index} className="bg-white/10 text-white/90 text-xs px-2 py-1 rounded">
-                          {email}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedEvent.description && (
-                <div className="pt-2">
-                  <p className="text-gray-400 text-sm mb-1">Description</p>
-                  <p className="text-white/90">{selectedEvent.description}</p>
-                </div>
-              )}
-
+              {/* One action: the itinerary canvas is the viewer and the editor. */}
               <div className="flex justify-end gap-2 pt-4">
-                <GlowButton
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowEventModal(false);
-                    navigate('/planner', {
-                      state: {
-                        eventData: selectedEvent,
-                        isEditing: true
-                      }
-                    });
-                  }}
-                >
+                <GlowButton size="sm" onClick={openSelectedPlan}>
                   <Edit2 className="w-4 h-4" />
-                  Edit
-                </GlowButton>
-                <GlowButton size="sm" onClick={handleNavigateToPlanner}>
-                  View details
+                  Open plan
                 </GlowButton>
               </div>
             </div>

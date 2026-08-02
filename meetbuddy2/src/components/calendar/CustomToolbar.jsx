@@ -4,23 +4,33 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export const CustomToolbar = ({ date, onNavigate, onView, view }) => {
-  const navigate = (action) => {
-    const newDate = new Date(date);
-    switch (action) {
-      case 'PREV':
-        newDate.setMonth(newDate.getMonth() - 1);
+  // Step by the unit the current view actually shows. Always stepping a month
+  // meant "next" in week view skipped four weeks and day view skipped ~30 days.
+  const step = (newDate, direction) => {
+    switch (view) {
+      case 'week':
+        newDate.setDate(newDate.getDate() + 7 * direction);
         break;
-      case 'NEXT':
-        newDate.setMonth(newDate.getMonth() + 1);
+      case 'day':
+      case 'agenda':
+        newDate.setDate(newDate.getDate() + direction);
         break;
-      case 'TODAY':
-        onNavigate(new Date());
-        return;
-      default:
-        return;
+      default: // month
+        newDate.setMonth(newDate.getMonth() + direction);
     }
+  };
+
+  const navigate = (action) => {
+    if (action === 'TODAY') return onNavigate(new Date());
+    const newDate = new Date(date);
+    step(newDate, action === 'NEXT' ? 1 : -1);
     onNavigate(newDate);
   };
+
+  // Month view names the month; the narrower views need the day too.
+  const heading = view === 'month'
+    ? date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const viewNames = {
     month: 'Month',
@@ -56,11 +66,8 @@ export const CustomToolbar = ({ date, onNavigate, onView, view }) => {
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <h2 className="ml-2 text-lg font-semibold text-white/90">
-          {date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-          })}
+        <h2 className="ml-2 text-lg font-semibold text-white/90" data-testid="calendar-heading">
+          {heading}
         </h2>
       </div>
 

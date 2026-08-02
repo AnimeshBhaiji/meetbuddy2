@@ -80,12 +80,6 @@ const subQuestionMap = {
       ],
       "Full control": [
         {
-          id: "fc_itinerary",
-          question: "Prefer building your own itinerary?",
-          type: "single",
-          options: ["Yes — full control", "No — I want help"]
-        },
-        {
           id: "fc_filters",
           question: "Important filters for you",
           type: "multi",

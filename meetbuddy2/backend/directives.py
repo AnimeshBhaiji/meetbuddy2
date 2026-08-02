@@ -265,8 +265,7 @@ def _build_search_directives(prefs_data: Dict[str, Any]) -> Dict[str, Any]:
         if block:
             d["avoid_terms"] = [t.strip().lower() for t in re.split(r"[,;/]+", block) if t.strip()]
     elif "full control" in planning:
-        wants_help = _sub_text(plan_sub, "fc_itinerary").lower().startswith("no")
-        d["plan_mode"] = "semi" if wants_help else "full"
+        d["plan_mode"] = "full"
         d["filters"] = [f.lower() for f in _sub_list(plan_sub, "fc_filters")]
     else:  # Semi-custom (also the default when unanswered)
         d["plan_mode"] = "semi"

@@ -16,7 +16,7 @@ import {
 import GlassCard from '@/components/ui/GlassCard';
 import GlowButton from '@/components/ui/GlowButton';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
-import { API_BASE_URL } from '@/config';
+import { api } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -71,13 +71,7 @@ const Profile = () => {
         // Always fetch fresh user data from the server using the user_id
         const userId = parsedUser.id || parsedUser.user_id;
         if (userId) {
-          fetch(`${API_BASE_URL}/user/${userId}`)
-            .then((res) => {
-              if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
-              }
-              return res.json();
-            })
+          api.get(`/user/${userId}`)
             .then((userData) => {
               // Update localStorage with the complete user data
               localStorage.setItem('user', JSON.stringify(userData));
@@ -126,20 +120,7 @@ const Profile = () => {
     setDeleteError('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/user/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const responseData = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(
-          responseData.detail || `Failed to delete account: ${response.status} ${response.statusText}`
-        );
-      }
+      await api.del(`/user/${userId}`);
 
       // Logout the user after successful deletion
       localStorage.removeItem('user');

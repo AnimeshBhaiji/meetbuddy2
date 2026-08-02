@@ -1,13 +1,12 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import CustomToolbar from '@/components/calendar/CustomToolbar';
 import { format, parse, startOfWeek, getDay, addHours, isValid } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Plus, Clock, MapPin, Edit2, Loader2, RefreshCw } from 'lucide-react';
-import { API_BASE_URL } from '@/config';
 import { parseISO, slotToPrefill, toLocalISO } from '@/lib/schedule';
 import { humanStepName } from '@/hooks/usePlannerSession';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -81,9 +80,8 @@ const CalendarPage = () => {
     if (!user) { setEvents([]); setStatus('ready'); return; }
     setStatus('loading');
     try {
-      const res = await axios.get(`${API_BASE_URL}/itineraries`,
-        { params: { user_id: user.user_id }, timeout: 30000 });
-      setEvents((res.data || []).map(itineraryToEvent).filter(Boolean));
+      const rows = await api.get('/itineraries', { params: { user_id: user.user_id } });
+      setEvents((rows || []).map(itineraryToEvent).filter(Boolean));
       setStatus('ready');
     } catch {
       setStatus('error');
@@ -98,10 +96,10 @@ const CalendarPage = () => {
     setShowEventModal(true);
     if (!user || !event.itineraryId) return;
     try {
-      const res = await axios.get(`${API_BASE_URL}/itineraries/${event.itineraryId}`,
-        { params: { user_id: user.user_id }, timeout: 30000 });
+      const plan = await api.get(`/itineraries/${event.itineraryId}`,
+        { params: { user_id: user.user_id } });
       setSelectedEvent((cur) =>
-        cur && cur.id === event.id ? { ...cur, stops: res.data.stops || [] } : cur);
+        cur && cur.id === event.id ? { ...cur, stops: plan.stops || [] } : cur);
     } catch {
       setSelectedEvent((cur) => (cur && cur.id === event.id ? { ...cur, stops: [] } : cur));
     }
@@ -127,12 +125,12 @@ const CalendarPage = () => {
     setScheduleError(null);
 
     try {
-      await axios.put(`${API_BASE_URL}/itineraries/${event.itineraryId}`, {
+      await api.put(`/itineraries/${event.itineraryId}`, {
         user_id: user.user_id,
         start_at: toLocalISO(start),
         end_at: toLocalISO(end),
         all_day: nextAllDay,
-      }, { timeout: 30000 });
+      });
     } catch {
       setEvents(previous);
       setScheduleError("Couldn't save the new time. Put back.");

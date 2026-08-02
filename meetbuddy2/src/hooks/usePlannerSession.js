@@ -2,8 +2,7 @@
 // All planner session state + API calls, extracted from Planner.jsx so the
 // view components (PlannerHome / StepExplorer / ItineraryCanvas) stay thin.
 import { useState, useEffect } from "react";
-import { API_BASE_URL } from "@/config";
-import axios from "axios";
+import { api } from "@/lib/api";
 
 export const PREF_META = [
   { key: "mood", label: "Mood", emoji: "🎭" },
@@ -239,14 +238,14 @@ export default function usePlannerSession() {
       };
 
       // primary request to the session endpoint
-      const res = await axios.post(`${API_BASE_URL}/planner/session`, payload, { timeout: 60000 });
+      const res = await api.post("/planner/session", payload, { timeout: 60000 });
 
-      const sid = res.data.session_id;
+      const sid = res.session_id;
       setSessionId(sid);
 
       // Use backend-provided recommended flow, or fallback to deriving from place_types
-      const recommendedFlow = res.data.initial?.recommended_flow || res.data.initial?.recommendedFlow;
-      const place_types = res.data.initial?.place_types || res.data.initial?.placeTypes || [];
+      const recommendedFlow = res.initial?.recommended_flow || res.initial?.recommendedFlow;
+      const place_types = res.initial?.place_types || res.initial?.placeTypes || [];
 
       let flow = recommendedFlow;
       if (!flow || !Array.isArray(flow) || flow.length === 0) {
@@ -270,8 +269,8 @@ export default function usePlannerSession() {
       setCurrentStep(flow[0] || "restaurant");
 
       // Use server-sent options (empty array if none returned — StepGrid handles empty state)
-      const initialOptions = res.data.initial?.options || [];
-      const searchError = res.data.initial?.search_error;
+      const initialOptions = res.initial?.options || [];
+      const searchError = res.initial?.search_error;
       if (initialOptions.length === 0 && searchError) {
         // Every search attempt failed server-side (e.g. invalid SerpAPI key) —
         // stay on the home page and show the real reason instead of an empty grid
@@ -280,11 +279,11 @@ export default function usePlannerSession() {
       }
 
       // Planning mode comes from the questionnaire (Surprise me / Semi-custom / Full control)
-      const mode = res.data.initial?.plan_mode || "semi";
+      const mode = res.initial?.plan_mode || "semi";
       setPlanMode(mode);
-      setDirectives(res.data.initial?.directives || null);
+      setDirectives(res.initial?.directives || null);
       setShowAllOptions(false);
-      setAnchorText(res.data.initial?.location_hint || payload.location || "");
+      setAnchorText(res.initial?.location_hint || payload.location || "");
       setSelectedChain([]);
 
       if (mode === "surprise" && initialOptions.length > 0) {
@@ -326,15 +325,15 @@ export default function usePlannerSession() {
         if (nextStep !== "done") {
           setOverlayText(`Finding your ${humanStepName(nextStep).toLowerCase()}...`);
         }
-        const res = await axios.post(
-          `${API_BASE_URL}/planner/session/${sid}/select`,
+        const res = await api.post(
+          `/planner/session/${sid}/select`,
           { step, place: pick, next_step: nextStep, selected_tokens: [] },
           { timeout: 120000 }
         );
         if (nextStep === "done") break;
-        options = res.data.options || [];
-        if (options.length === 0 && res.data.search_error) {
-          setPlannerError(`Venue search failed: ${res.data.search_error}`);
+        options = res.options || [];
+        if (options.length === 0 && res.search_error) {
+          setPlannerError(`Venue search failed: ${res.search_error}`);
           break;
         }
       }
@@ -376,12 +375,12 @@ export default function usePlannerSession() {
     setOverlayText(`Skipping to ${humanStepName(nextStep).toLowerCase()}...`);
     setShowOverlay(true);
     try {
-      const res = await axios.post(
-        `${API_BASE_URL}/planner/session/${sessionId}/skip`,
+      const res = await api.post(
+        `/planner/session/${sessionId}/skip`,
         { next_step: nextStep },
         { timeout: 120000 }
       );
-      const opts = res.data.options || [];
+      const opts = res.options || [];
       setInitialFlow(newFlow);
       setCurrentStep(nextStep);
       setStepOptions(opts);
@@ -389,10 +388,10 @@ export default function usePlannerSession() {
       setActiveFilters([]);
       if (opts.length > 0) {
         setOptionsByStep((m) => ({ ...m, [nextStep]: opts }));
-      } else if (res.data.search_error) {
-        setPlannerError(`Venue search failed: ${res.data.search_error}`);
+      } else if (res.search_error) {
+        setPlannerError(`Venue search failed: ${res.search_error}`);
       }
-      setAnchorText(res.data.anchor_text || anchorText);
+      setAnchorText(res.anchor_text || anchorText);
     } catch (err) {
       console.error("Skip failed", err);
       setPlannerError("Couldn't skip this step. Please try again.");
@@ -454,13 +453,13 @@ export default function usePlannerSession() {
         payload.next_step = "done";
       }
 
-      const res = await axios.post(`${API_BASE_URL}/planner/session/${sessionId}/select`, payload, { timeout: 60000 });
+      const res = await api.post(`/planner/session/${sessionId}/select`, payload, { timeout: 60000 });
 
       // push selection locally
       setSelectedChain((s) => [...s, { step: payload.step, place: opt }]);
 
       // if server returned next options, switch to them
-      const nextStep = res.data.next_step;
+      const nextStep = res.next_step;
       if (!nextStep || nextStep === "done") {
         setCurrentStep(null);
         setStepOptions([]);
@@ -468,7 +467,7 @@ export default function usePlannerSession() {
         setPage("summary");
       } else {
         setCurrentStep(nextStep);
-        const nextOpts = res.data.options || [];
+        const nextOpts = res.options || [];
         setShowAllOptions(false);
         setActiveFilters([]);
         setSortBy("match");
@@ -476,15 +475,15 @@ export default function usePlannerSession() {
           setStepOptions(nextOpts);
           setOptionsByStep((m) => ({ ...m, [nextStep]: nextOpts }));
         } else {
-          console.warn("No options returned for next step from server:", res.data);
+          console.warn("No options returned for next step from server:", res);
           setStepOptions([]);
           setPlannerError(
-            res.data.search_error
-              ? `Venue search failed: ${res.data.search_error}`
+            res.search_error
+              ? `Venue search failed: ${res.search_error}`
               : "No nearby options found for the next step. You can try again or go back."
           );
         }
-        setAnchorText(res.data.anchor_text || "");
+        setAnchorText(res.anchor_text || "");
         setShowOverlay(false);
       }
     } catch (err) {
@@ -521,8 +520,8 @@ export default function usePlannerSession() {
     // try to get session state from server and restore last_options
     try {
       setSessionLoading(true);
-      const res = await axios.get(`${API_BASE_URL}/planner/session/${sessionId}`, { timeout: 30000 });
-      const s = res.data || {};
+      const res = await api.get(`/planner/session/${sessionId}`);
+      const s = res || {};
       const last_opts = (s.last_options && s.last_options[stepToRestore]) || (s.last_options && s.last_options.initial) || s.options || [];
       if (last_opts && last_opts.length) {
         setStepOptions(last_opts);

@@ -1,7 +1,6 @@
 // src/context/QuestionnaireContext.jsx
 import React, { createContext, useState, useContext, useEffect } from "react";
-import axios from "axios";
-import { getApiUrl, DEFAULT_HEADERS } from "@/config";
+import { api } from "@/lib/api";
 
 // Create the context
 const QuestionnaireContext = createContext();
@@ -40,19 +39,7 @@ export const QuestionnaireProvider = ({ children }) => {
 
       if (user && userId) {
         // Backend expects a flat payload: { user_id, mood, ..., mood_sub, ... }
-        await axios.post(
-          getApiUrl('/save_preferences'),
-          {
-            user_id: userId,
-            ...updatedAnswers
-          },
-          {
-            headers: {
-              ...DEFAULT_HEADERS,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+        await api.post("/save_preferences", { user_id: userId, ...updatedAnswers });
         console.log("Preferences saved to backend successfully");
       }
     } catch (error) {

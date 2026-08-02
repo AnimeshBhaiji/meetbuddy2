@@ -2,17 +2,21 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
+import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import CustomToolbar from '@/components/calendar/CustomToolbar';
 import { format, parse, startOfWeek, getDay, addHours, isValid } from 'date-fns';
 import { motion } from 'framer-motion';
 import { Plus, Clock, MapPin, Edit2, Loader2, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
-import { parseISO, slotToPrefill } from '@/lib/schedule';
+import { parseISO, slotToPrefill, toLocalISO } from '@/lib/schedule';
 import { humanStepName } from '@/hooks/usePlannerSession';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import GlassCard from '@/components/ui/GlassCard';
 import GlowButton from '@/components/ui/GlowButton';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
+
+const DnDCalendar = withDragAndDrop(Calendar);
 
 const localizer = dateFnsLocalizer({
   format: (date, formatStr, options) => {
@@ -61,6 +65,7 @@ const itineraryToEvent = (it) => {
 const CalendarPage = () => {
   const [events, setEvents] = useState([]);
   const [status, setStatus] = useState('loading'); // loading | ready | error
+  const [scheduleError, setScheduleError] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [date, setDate] = useState(() => new Date());
@@ -106,6 +111,33 @@ const CalendarPage = () => {
   const handleSelectSlot = useCallback(({ start, end, action }) => {
     navigate('/planner', { state: { slot: slotToPrefill(start, end, action) } });
   }, [navigate]);
+
+  /**
+   * Drag to move / edge-drag to resize. The event moves on screen immediately
+   * and the write follows; if the write fails the move is rolled back so the
+   * grid never shows a time the server didn't accept.
+   */
+  const rescheduleEvent = useCallback(async ({ event, start, end, isAllDay }) => {
+    if (!user || !event.itineraryId) return;
+    const nextAllDay = isAllDay ?? event.allDay;
+    const previous = events;
+
+    setEvents((cur) => cur.map((e) =>
+      e.id === event.id ? { ...e, start, end, allDay: nextAllDay } : e));
+    setScheduleError(null);
+
+    try {
+      await axios.put(`${API_BASE_URL}/itineraries/${event.itineraryId}`, {
+        user_id: user.user_id,
+        start_at: toLocalISO(start),
+        end_at: toLocalISO(end),
+        all_day: nextAllDay,
+      }, { timeout: 30000 });
+    } catch {
+      setEvents(previous);
+      setScheduleError("Couldn't save the new time. Put back.");
+    }
+  }, [user, events]);
 
   // Reopen a saved plan in the itinerary editor. Planner.jsx loads by id —
   // the old call passed the whole event object, which it silently ignored.
@@ -157,6 +189,11 @@ const CalendarPage = () => {
               </GlowButton>
             </div>
 
+            {scheduleError && (
+              <GlassCard variant="strong" className="p-4 mb-4">
+                <p className="text-sm text-red-300">{scheduleError}</p>
+              </GlassCard>
+            )}
             {status === 'error' && (
               <GlassCard variant="strong" className="p-4 mb-4 flex items-center justify-between gap-4">
                 <p className="text-sm text-red-300">Couldn't load your plans.</p>
@@ -181,7 +218,7 @@ const CalendarPage = () => {
                       <Loader2 className="w-6 h-6 text-white/70 animate-spin" />
                     </div>
                   )}
-                  <Calendar
+                  <DnDCalendar
                     localizer={localizer}
                     events={events}
                     startAccessor="start"
@@ -189,6 +226,9 @@ const CalendarPage = () => {
                     style={{ height: '100%' }}
                     onSelectEvent={handleSelectEvent}
                     onSelectSlot={handleSelectSlot}
+                    onEventDrop={rescheduleEvent}
+                    onEventResize={rescheduleEvent}
+                    resizable
                     selectable
                     eventPropGetter={eventStyleGetter}
                     views={{

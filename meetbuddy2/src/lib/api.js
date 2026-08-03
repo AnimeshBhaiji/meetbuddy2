@@ -48,7 +48,16 @@ const readDetail = (body) => {
 };
 
 async function request(method, path, { params, body, timeout = DEFAULT_TIMEOUT_MS, headers } = {}) {
+  const asNetworkError = (e) => {
+    const timedOut = e?.name === "TimeoutError" || e?.name === "AbortError";
+    return new NetworkError(
+      timedOut ? `Request to ${path} timed out after ${timeout}ms` : "Could not reach the server",
+      timedOut
+    );
+  };
+
   let res;
+  let text;
   try {
     res = await fetch(buildUrl(path, params), {
       method,
@@ -56,16 +65,16 @@ async function request(method, path, { params, body, timeout = DEFAULT_TIMEOUT_M
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
     });
+    // The body read shares the abort signal, so it has to share the error
+    // handling: a timeout that lands mid-download rejects here, not above, and
+    // would otherwise escape as a raw DOMException past every `instanceof
+    // ApiError` check in the app.
+    text = await res.text();
   } catch (e) {
-    const timedOut = e?.name === "TimeoutError" || e?.name === "AbortError";
-    throw new NetworkError(
-      timedOut ? `Request to ${path} timed out after ${timeout}ms` : `Could not reach the server`,
-      timedOut
-    );
+    throw asNetworkError(e);
   }
 
   // 204 and empty bodies are valid; don't blow up parsing them.
-  const text = await res.text();
   let parsed = null;
   if (text) {
     try { parsed = JSON.parse(text); } catch { parsed = text; }

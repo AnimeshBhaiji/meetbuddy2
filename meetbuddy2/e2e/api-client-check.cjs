@@ -25,6 +25,9 @@ const USER_ID = Number(process.env.USER_ID || 1);
         all_day: false, stops: [],
       });
       id = created.id;
+      // Publish immediately so the finally block can clean up even if an
+      // assertion below throws and this function never returns.
+      window.__apiCheckId = created.id;
       ok(!!created.id && created.title === "API client check", "POST returns parsed body");
 
       // GET with query params
@@ -62,18 +65,30 @@ const USER_ID = Number(process.env.USER_ID || 1);
         ok(typeof e.detail === "string" && e.detail.length > 0, "422 detail is readable text");
       }
 
-      // timeout -> NetworkError, flagged as a timeout
-      try {
-        await api.get("/itineraries", { params: { user_id: uid }, timeout: 1 });
-        throw new Error("timeout should have thrown");
-      } catch (e) {
-        ok(e instanceof NetworkError && e.timedOut === true, "timeout raises NetworkError");
+      // Timeout -> NetworkError, flagged as a timeout. Repeated, because the
+      // abort can land either during the fetch or during the body read, and an
+      // earlier version of this client only classified the first case — the
+      // second escaped as a raw DOMException.
+      let timeoutRuns = 0;
+      for (let i = 0; i < 8; i++) {
+        await api.get("/itineraries", { params: { user_id: uid } }); // warm the cache
+        try {
+          await api.get("/itineraries", { params: { user_id: uid }, timeout: 1 });
+        } catch (e) {
+          timeoutRuns++;
+          ok(e instanceof NetworkError,
+            `timeout raises NetworkError (run ${i + 1}, got ${e.name})`);
+          ok(e.timedOut === true,
+            `timeout is flagged as timedOut (run ${i + 1}, got ${e.timedOut})`);
+        }
       }
+      ok(timeoutRuns > 0, `timeout path exercised (${timeoutRuns}/8 runs timed out)`);
 
       // DELETE
       const gone = await api.del(`/itineraries/${id}`, { params: { user_id: uid } });
       ok(gone.message === "deleted", "DELETE works");
       id = null;
+      window.__apiCheckId = null;
 
       return { log, id };
     }, USER_ID);
@@ -85,9 +100,14 @@ const USER_ID = Number(process.env.USER_ID || 1);
     console.log("API CLIENT CHECK: FAIL —", e.message);
     process.exitCode = 1;
   } finally {
+    // Read the id straight from the page: on a mid-test failure the evaluate
+    // above never returns, so `result` is undefined and the row would leak.
+    createdId = createdId
+      ?? await page.evaluate(() => window.__apiCheckId ?? null).catch(() => null);
     if (createdId) {
       await fetch(`http://localhost:8000/itineraries/${createdId}?user_id=${USER_ID}`,
         { method: "DELETE" }).catch(() => {});
+      console.log(`cleaned up itinerary ${createdId}`);
     }
     await browser.close();
   }

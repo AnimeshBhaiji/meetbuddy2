@@ -17,7 +17,7 @@ import GlowButton from '@/components/ui/GlowButton';
 import GlassCard from '@/components/ui/GlassCard';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
 import { AuthContext } from '@/context/AuthContext';
-import { API_BASE_URL } from '@/config';
+import { api } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -55,39 +55,15 @@ const Login = () => {
     setError('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        // no credentials: auth uses a token in localStorage, and 'include'
-        // is rejected by browsers when the server allows origin '*'
-        body: JSON.stringify({
-          identifier: identifier,
-          password: password,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let message = errorText;
-        try {
-          message = JSON.parse(errorText).detail || errorText;
-        } catch {
-          /* not JSON — show as-is */
-        }
-        throw new Error(message || 'Login failed. Please check your credentials.');
-      }
-
-      const data = await response.json();
+      // api throws ApiError on non-2xx with the server's `detail` as the message
+      const data = await api.post('/login', { identifier, password });
 
       login(data, data.token || 'mock-token');
       resetAnswers();
       navigate('/home');
     } catch (error) {
       console.error('Login error:', error);
-      setError(error.message || 'An error occurred during login.');
+      setError(error.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

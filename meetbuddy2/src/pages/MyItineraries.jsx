@@ -1,7 +1,6 @@
 // src/pages/MyItineraries.jsx
 import { useEffect, useState } from "react";
-import { API_BASE_URL } from "@/config";
-import axios from "axios";
+import { api } from "@/lib/api";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { CalendarDays, MapPin, Trash2, ArrowRight, Rocket } from "lucide-react";
@@ -28,9 +27,7 @@ export default function MyItineraries() {
   const load = async () => {
     if (!user) return setItems([]);
     try {
-      const res = await axios.get(`${API_BASE_URL}/itineraries`,
-        { params: { user_id: user.user_id }, timeout: 30000 });
-      setItems(res.data);
+      setItems(await api.get("/itineraries", { params: { user_id: user.user_id } }));
     } catch {
       setError("Couldn't load your itineraries.");
       setItems([]);
@@ -41,8 +38,7 @@ export default function MyItineraries() {
   const remove = async (id) => {
     if (!window.confirm("Delete this itinerary?")) return;
     try {
-      await axios.delete(`${API_BASE_URL}/itineraries/${id}`,
-        { params: { user_id: user.user_id }, timeout: 30000 });
+      await api.del(`/itineraries/${id}`, { params: { user_id: user.user_id } });
       setItems((cur) => cur.filter((i) => i.id !== id));
     } catch {
       setError("Delete failed. Please try again.");

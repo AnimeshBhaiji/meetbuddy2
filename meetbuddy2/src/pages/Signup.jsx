@@ -21,7 +21,7 @@ import GlowButton from '@/components/ui/GlowButton';
 import GlassCard from '@/components/ui/GlassCard';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
 import { AuthContext } from '@/context/AuthContext';
-import { API_BASE_URL } from '@/config';
+import { api, ApiError } from '@/lib/api';
 
 const PERKS = [
   { icon: PartyPopper, text: 'Free forever for planning with friends' },
@@ -146,33 +146,25 @@ const Signup = () => {
 
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          email: formData.email,
-          phone: formData.phone,
-          username: formData.username,
-          password: formData.password,
-        }),
+      const data = await api.post('/signup', {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone,
+        username: formData.username,
+        password: formData.password,
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.detail || 'Signup failed');
-        setIsLoading(false);
-      } else {
-        resetAnswers();
-        // Register with AuthContext so protected routes see the new user
-        // immediately (writing localStorage alone leaves context state null)
-        login(data, data.token || 'mock-token');
-        navigate('/questionnaire-stage1');
-      }
+      resetAnswers();
+      // Register with AuthContext so protected routes see the new user
+      // immediately (writing localStorage alone leaves context state null)
+      login(data, data.token || 'mock-token');
+      navigate('/questionnaire-stage1');
     } catch (err) {
       console.error('Signup error:', err);
-      setError('Something went wrong');
+      // ApiError carries the server's reason ("Email already registered");
+      // anything else is a network/parsing problem the user can't act on.
+      setError(err instanceof ApiError ? err.message : 'Something went wrong');
       setIsLoading(false);
     }
   };

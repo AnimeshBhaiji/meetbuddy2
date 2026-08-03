@@ -8,7 +8,20 @@ const USER_ID = Number(process.env.USER_ID || 1);
 const firstStopTitle = (page) =>
   page.locator("p.text-sm.text-white.font-medium.truncate").first().textContent();
 
+// Remove any "E2E plan" rows this suite left behind. Run at both ends: a single
+// leftover makes the "E2E plan" card locator match twice on the next run, which
+// fails Playwright strict mode before the test can clean up after itself.
+const clearE2EPlans = async () => {
+  try {
+    const rows = await (await fetch(`http://localhost:8000/itineraries?user_id=${USER_ID}`)).json();
+    for (const r of rows.filter((x) => x.title === "E2E plan")) {
+      await fetch(`http://localhost:8000/itineraries/${r.id}?user_id=${USER_ID}`, { method: "DELETE" });
+    }
+  } catch { /* best effort */ }
+};
+
 (async () => {
+  await clearE2EPlans();   // start from a known-clean slate
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto("http://localhost:5173/");
@@ -106,6 +119,8 @@ const firstStopTitle = (page) =>
   console.log(pass
     ? "ITINERARY EDIT: PASS"
     : `ITINERARY EDIT: FAIL note=${noteThere} stops=${stopsAfter}/${stopCount} reorderOk=${reorderOk} reorderPersisted=${reorderPersisted}`);
+
+  await clearE2EPlans();
   await browser.close();
   process.exit(pass ? 0 : 1);
 })();

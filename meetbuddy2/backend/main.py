@@ -10,7 +10,8 @@ from typing import List, Optional
 import json, os
 from pathlib import Path
 from planner import generate_initial_suggestions, generate_followup_suggestions
-from planner_sessions import create_session, get_session, push_selection, set_last_options
+from planner_sessions import (create_session, get_session, push_selection,
+                              set_last_options, update_session, delete_sessions_for_user)
 from itineraries import router as itineraries_router
 from geo import geocode_address
 from auth import create_access_token, get_current_user
@@ -121,24 +122,27 @@ def get_user(user: User = Depends(get_current_user)):
 @app.delete("/user/me")
 def delete_user(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Delete your own account and everything it owns."""
-    # itineraries.user_id is declared without ON DELETE CASCADE, so Postgres
-    # would reject the user row while plans still reference it. Both deletes
-    # share one transaction: if either fails, the account survives intact.
+    # Neither itineraries.user_id nor planner_sessions.user_id is declared with
+    # ON DELETE CASCADE, so Postgres would reject the user row while either
+    # still references it. All three deletes share one transaction: if any
+    # fails, the account survives intact.
     removed = (db.query(Itinerary)
                .filter(Itinerary.user_id == user.id)
                .delete(synchronize_session=False))
+    sessions_removed = delete_sessions_for_user(user.id, db)
     db.delete(user)
     db.commit()
-    return {"message": "deleted", "itineraries_deleted": removed}
+    return {"message": "deleted", "itineraries_deleted": removed,
+            "sessions_deleted": sessions_removed}
 
-def _owned_session(sid: str, user: User):
+def _owned_session(sid: str, user: User, db: Session):
     """A planner session, but only if it belongs to the caller.
 
     Session ids were previously enough on their own to read or drive anyone's
     session. A mismatch returns 404 rather than 403 so the response cannot be
     used to discover which session ids exist.
     """
-    session = get_session(sid)
+    session = get_session(sid, db)
     if not session or int(session.get("user_id", -1)) != user.id:
         raise HTTPException(status_code=404, detail="Session not found or expired")
     return session
@@ -288,7 +292,8 @@ def read_user_prefs(user: User = Depends(get_current_user)):
 
 # Start a planner session (create initial suggestions)
 @app.post("/planner/session")
-async def planner_session_start(request: Request, user: User = Depends(get_current_user)):
+async def planner_session_start(request: Request, db: Session = Depends(get_db),
+                                user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
     except Exception:
@@ -313,10 +318,11 @@ async def planner_session_start(request: Request, user: User = Depends(get_curre
         print(f"WARNING: no options from generate_initial_suggestions for user {user_id}")
 
     # include selected_tokens into session state for downstream
-    session_id = create_session(user_id, payload, initial_state={"selected_tokens": initial.get("selected_tokens", [])})
+    session_id = create_session(user_id, payload, db,
+                                initial_state={"selected_tokens": initial.get("selected_tokens", [])})
 
     # save selected_tokens and last_options in session
-    set_last_options(session_id, "initial", initial.get("options", []))
+    set_last_options(session_id, "initial", initial.get("options", []), db)
 
     return {
         "session_id": session_id,
@@ -338,14 +344,14 @@ async def planner_session_start(request: Request, user: User = Depends(get_curre
 
 # Select an option in a session and get next-step options
 @app.post("/planner/session/{sid}/select")
-async def planner_session_select(sid: str, request: Request,
+async def planner_session_select(sid: str, request: Request, db: Session = Depends(get_db),
                                  user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    session = _owned_session(sid, user)
+    session = _owned_session(sid, user, db)
 
     step = raw.get("step") or "default"
     selected_place = raw.get("place")
@@ -353,7 +359,7 @@ async def planner_session_select(sid: str, request: Request,
         raise HTTPException(status_code=400, detail="Missing selected place")
 
     # store selection
-    push_selection(sid, step, selected_place)
+    push_selection(sid, step, selected_place, db)
 
     # decide next_step - client can specify next_step or we infer a simple flow
     next_step = raw.get("next_step")
@@ -364,11 +370,12 @@ async def planner_session_select(sid: str, request: Request,
 
     # update session selected_tokens if provided in client payload
     if raw.get("selected_tokens"):
-        session["selected_tokens"] = raw.get("selected_tokens")
+        # get_session returns a snapshot, not the stored row — persist explicitly
+        session = update_session(sid, "selected_tokens", raw.get("selected_tokens"), db) or session
 
     # Generate followup suggestions based on last selected place
     follow = generate_followup_suggestions(session, next_step, num_results=15)
-    set_last_options(sid, next_step, follow.get("options", []))
+    set_last_options(sid, next_step, follow.get("options", []), db)
 
     return {
         "session_id": sid,
@@ -382,21 +389,21 @@ async def planner_session_select(sid: str, request: Request,
 # Skip the current step without selecting a place (full-control mode).
 # Followup options anchor to the last actual selection (or the origin).
 @app.post("/planner/session/{sid}/skip")
-async def planner_session_skip(sid: str, request: Request,
+async def planner_session_skip(sid: str, request: Request, db: Session = Depends(get_db),
                                user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    _owned_session(sid, user)
+    session = _owned_session(sid, user, db)
 
     next_step = raw.get("next_step")
     if not next_step or next_step == "done":
         return {"session_id": sid, "next_step": "done", "options": []}
 
     follow = generate_followup_suggestions(session, next_step, num_results=15)
-    set_last_options(sid, next_step, follow.get("options", []))
+    set_last_options(sid, next_step, follow.get("options", []), db)
 
     return {
         "session_id": sid,
@@ -447,5 +454,6 @@ def geocode(q: str = "", user: User = Depends(get_current_user)):
 
 # Read session state
 @app.get("/planner/session/{sid}")
-def read_planner_session(sid: str, user: User = Depends(get_current_user)):
-    return _owned_session(sid, user)
+def read_planner_session(sid: str, db: Session = Depends(get_db),
+                         user: User = Depends(get_current_user)):
+    return _owned_session(sid, user, db)

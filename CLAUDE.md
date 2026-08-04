@@ -43,7 +43,7 @@ python create_tables.py   # Creates PostgreSQL tables (no Alembic — run again 
   - `JWT_SECRET=<random string>` — the backend will not start without it. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
   - `SERPAPI_KEY=<key>` for place discovery
 - PostgreSQL connection is **hardcoded** in `meetbuddy2/backend/database.py`: `postgresql://postgres:123456@localhost:5432/meetbuddy` — update the file directly if credentials differ
-- No migration tool. `create_tables.py` uses `create_all()`, which only creates missing tables — it never alters an existing one, so a column change needs a hand-written script (see `backend/migrate_itinerary_times.py`)
+- No migration tool. `create_tables.py` uses `create_all()`, which only creates missing tables — it never alters an existing one, so a column change needs a hand-written script. Existing ones, all re-runnable: `backend/migrate_itinerary_times.py`, `backend/migrate_user_preferences.py`
 - Backend tests need `pytest` and `httpx` (`pip install pytest httpx`); they are not in `requirements.txt`, which is the runtime list
 
 ## Authentication
@@ -63,10 +63,15 @@ Every route except `POST /login` and `POST /signup` requires a bearer token.
 - `get_session` returns a **snapshot, not the live row.** Mutating it does nothing — persist through `update_session`/`push_selection`/`set_last_options`.
 - JSONB columns need reassignment, not in-place mutation: `row.steps.append(x)` never reaches the database, `row.steps = [*row.steps, x]` does.
 
+## User preferences
+
+Questionnaire answers live in `users.preferences` (JSONB), written by `POST /save_preferences` and read by `GET /user_prefs/me`, both scoped to the token holder. They are deleted with the account, since the column is part of the row.
+
+They were previously `user_last_prefs.json`, a single-slot file rewritten as `{user_id: prefs}` on every save — so one account saving erased everyone else's. Don't reintroduce a shared file for per-user state.
+
 ## Known TODOs — Do Not "Fix" Without Explicit Request
 
 - **CORS allows all origins** — intentional for local development; do not restrict. Safe here because auth uses an `Authorization` header, not cookies.
-- **Deleted accounts leave an entry in `user_last_prefs.json`** — the database side (itineraries and planner sessions) cascades correctly
 
 ## Commit Convention
 

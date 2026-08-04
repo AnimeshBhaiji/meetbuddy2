@@ -8,7 +8,6 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from typing import List, Optional
 import json, os
-from pathlib import Path
 from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import (create_session, get_session, push_selection,
                               set_last_options, update_session, delete_sessions_for_user)
@@ -35,8 +34,6 @@ app.include_router(itineraries_router)
 # -------- FILE PATHS (UNIFIED) --------
 ROOT_DIR = os.path.dirname(__file__)
 PREFERENCES_FILE = os.path.join(ROOT_DIR, "preferences.json")
-USER_PREFS_FILE = os.path.join(ROOT_DIR, "user_last_prefs.json")
-PREF_FILE = Path(USER_PREFS_FILE)
 
 # -------- PASSWORD HASHING --------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -202,12 +199,11 @@ def _to_list_of_strings(v):
 # (unchanged from your previous implementation)
 # -------------------------------
 @app.post("/save_preferences")
-async def save_preferences(request: Request, user: User = Depends(get_current_user)):
+async def save_preferences(request: Request, db: Session = Depends(get_db),
+                           user: User = Depends(get_current_user)):
     data = await request.json()
     # Any user_id in the body is ignored — preferences belong to the token holder.
     user_id = user.id
-    user_id_str = str(user_id)
-    print("Received save_preferences payload:", data)
 
     # Overwrite behavior: do not preserve other users' saved preferences.
     # We'll build merged_for_user and write a file that contains only this user's prefs.
@@ -264,30 +260,19 @@ async def save_preferences(request: Request, user: User = Depends(get_current_us
 
     merged_for_user["user_id"] = int(user_id)
 
-    # Write a file containing only the current user's preferences (overwrite)
-    to_write = {user_id_str: merged_for_user}
-    try:
-        with open(USER_PREFS_FILE, "w", encoding="utf-8") as f:
-            json.dump(to_write, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print("ERROR writing prefs file:", e)
-        raise HTTPException(status_code=500, detail="Failed to save preferences")
+    # Stored per account. The previous JSON file held one user at a time, so
+    # whoever saved last wiped everyone else's answers.
+    user.preferences = merged_for_user
+    db.commit()
 
-    print(f"Saved preferences for user {user_id}: {merged_for_user}")
     return {"message": "Preferences saved successfully", "prefs": merged_for_user}
 
 # -------- READ SAVED PREFS --------
 @app.get("/user_prefs/me")
 def read_user_prefs(user: User = Depends(get_current_user)):
-    user_id = user.id
-    if not os.path.exists(USER_PREFS_FILE):
+    if not user.preferences:
         raise HTTPException(status_code=404, detail="No saved preferences")
-    with open(USER_PREFS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    prefs = data.get(str(user_id))
-    if not prefs:
-        raise HTTPException(status_code=404, detail="No prefs for this user")
-    return {"user_id": user_id, "prefs": prefs}
+    return {"user_id": user.id, "prefs": user.preferences}
 
 
 # Start a planner session (create initial suggestions)

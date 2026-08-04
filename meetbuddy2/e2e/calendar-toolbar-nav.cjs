@@ -3,6 +3,7 @@
 // a month in month view, 7 days in week view, 1 day in day view.
 // Needs vite :5173 (no backend data required).
 const { chromium } = require("playwright");
+const { createTestUser, deleteTestUser, signIn } = require("./_auth.cjs");
 
 const fail = (msg) => { console.log("TOOLBAR NAV: FAIL —", msg); process.exit(1); };
 
@@ -23,6 +24,7 @@ const setView = async (page, name) => {
 const heading = (page) => page.locator('[data-testid="calendar-heading"]').innerText();
 
 (async () => {
+  const user = await createTestUser("tb");
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   const errors = [];
@@ -30,7 +32,7 @@ const heading = (page) => page.locator('[data-testid="calendar-heading"]').inner
 
   try {
     await page.goto("http://localhost:5173/");
-    await page.evaluate(() => localStorage.setItem("user", JSON.stringify({ user_id: 1, username: "test" })));
+    await signIn(page, user);
     await page.goto("http://localhost:5173/calendar");
     await page.waitForSelector(".rbc-calendar", { timeout: 30000 });
     await page.waitForTimeout(1500);
@@ -88,5 +90,6 @@ const heading = (page) => page.locator('[data-testid="calendar-heading"]').inner
     console.log("TOOLBAR NAV: PASS");
   } finally {
     await browser.close();
+    await deleteTestUser(user);
   }
 })();

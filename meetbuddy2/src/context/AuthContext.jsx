@@ -14,6 +14,10 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = (userData, token) => {
+    // Without a token every protected request would 401 straight back to login,
+    // so treat a missing one as a failed sign-in rather than a half-open session.
+    if (!token) throw new Error("Sign-in did not return a token");
+
     // Clear any old preferences from previous sessions
     localStorage.removeItem("userPreferences");
     localStorage.removeItem("questionnaireAnswers");

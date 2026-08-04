@@ -3,8 +3,7 @@
 // the fake "Team Lunch" sample is gone, and clicking an event shows real stops.
 // Needs backend :8000 + vite :5173. Env USER_ID (default 1).
 const { chromium } = require("playwright");
-const USER_ID = Number(process.env.USER_ID || 1);
-const API = "http://localhost:8000";
+const { API, createTestUser, deleteTestUser, signIn } = require("./_auth.cjs");
 
 // Throws rather than process.exit: exiting here would skip the finally block
 // and leave seeded plans behind in the database.
@@ -22,10 +21,10 @@ const iso = (dt) => {
 
 (async () => {
   // --- seed via the API ---
+  const user = await createTestUser("ce");
   const mk = async (body) => {
     const r = await fetch(`${API}/itineraries`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: USER_ID, ...body }),
+      method: "POST", headers: user.headers, body: JSON.stringify(body),
     });
     if (!r.ok) fail(`seed failed: ${r.status} ${await r.text()}`);
     return r.json();
@@ -45,11 +44,7 @@ const iso = (dt) => {
   });
   const unscheduled = await mk({ title: "E2E Unscheduled Plan", stops: [] });
 
-  const cleanup = async () => {
-    for (const id of [timed.id, allDay.id, unscheduled.id]) {
-      await fetch(`${API}/itineraries/${id}?user_id=${USER_ID}`, { method: "DELETE" }).catch(() => {});
-    }
-  };
+  const cleanup = () => deleteTestUser(user);   // removes the account and its plans
 
   const browser = await chromium.launch();
   const page = await browser.newPage();
@@ -58,9 +53,7 @@ const iso = (dt) => {
 
   try {
     await page.goto("http://localhost:5173/");
-    await page.evaluate((uid) => {
-      localStorage.setItem("user", JSON.stringify({ user_id: uid, username: "test" }));
-    }, USER_ID);
+    await signIn(page, user);
 
     await page.goto("http://localhost:5173/calendar");
     await page.waitForSelector(".rbc-calendar", { timeout: 30000 });

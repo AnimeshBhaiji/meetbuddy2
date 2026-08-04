@@ -218,7 +218,7 @@ export default function usePlannerSession() {
     setSessionLoading(true);
     try {
       const payload = {
-        user_id: user.user_id,
+        // no user_id: the session is owned by whoever the bearer token names
         preferences: {
           mood: userPrefs.mood,
           planningStyle: userPrefs.planningStyle,

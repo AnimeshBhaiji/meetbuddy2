@@ -126,7 +126,7 @@ export default function ItineraryCanvas({ P, initialItinerary = null, prefillSlo
   const save = async () => {
     if (!user) return;
     setSaveState("saving");
-    const payload = { user_id: user.user_id, title: title.trim() || "Untitled plan",
+    const payload = { title: title.trim() || "Untitled plan",
                       ...scheduleFields(), stops };
     try {
       const saved = savedId

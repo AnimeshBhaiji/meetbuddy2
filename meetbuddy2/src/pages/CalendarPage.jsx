@@ -80,7 +80,7 @@ const CalendarPage = () => {
     if (!user) { setEvents([]); setStatus('ready'); return; }
     setStatus('loading');
     try {
-      const rows = await api.get('/itineraries', { params: { user_id: user.user_id } });
+      const rows = await api.get('/itineraries');
       setEvents((rows || []).map(itineraryToEvent).filter(Boolean));
       setStatus('ready');
     } catch {
@@ -96,8 +96,7 @@ const CalendarPage = () => {
     setShowEventModal(true);
     if (!user || !event.itineraryId) return;
     try {
-      const plan = await api.get(`/itineraries/${event.itineraryId}`,
-        { params: { user_id: user.user_id } });
+      const plan = await api.get(`/itineraries/${event.itineraryId}`);
       setSelectedEvent((cur) =>
         cur && cur.id === event.id ? { ...cur, stops: plan.stops || [] } : cur);
     } catch {
@@ -126,7 +125,6 @@ const CalendarPage = () => {
 
     try {
       await api.put(`/itineraries/${event.itineraryId}`, {
-        user_id: user.user_id,
         start_at: toLocalISO(start),
         end_at: toLocalISO(end),
         all_day: nextAllDay,

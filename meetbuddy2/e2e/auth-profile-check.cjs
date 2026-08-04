@@ -19,6 +19,7 @@ const USER = {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   let userId = null;
+  let token = null;
 
   try {
     // ---------- signup through the UI ----------
@@ -62,6 +63,7 @@ const USER = {
       body: JSON.stringify({ identifier: USER.username, password: USER.password }),
     })).json();
     userId = who.user_id;
+    token = who.token;
 
     // ---------- login: wrong password must surface the server's message ----------
     await page.goto("http://localhost:5173/login");
@@ -96,7 +98,8 @@ const USER = {
     await page.waitForTimeout(1200);
     await page.locator("button", { hasText: "Chill & Relaxed" }).first().click();
     await page.waitForTimeout(2500);
-    const prefs = await fetch(`${API}/user_prefs/${userId}`);
+    const prefs = await fetch(`${API}/user_prefs/me`,
+      { headers: { Authorization: `Bearer ${token}` } });
     if (!prefs.ok) fail(`preferences were never saved (${prefs.status})`);
     const prefsBody = await prefs.json();
     if (!JSON.stringify(prefsBody).includes("Chill"))
@@ -111,7 +114,9 @@ const USER = {
   } finally {
     await browser.close();
     if (userId) {
-      const r = await fetch(`${API}/user/${userId}`, { method: "DELETE" }).catch(() => null);
+      const r = await fetch(`${API}/user/me`, {
+        method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
       console.log(r && r.ok
         ? `cleaned up test user ${USER.username} (id=${userId})`
         : `WARNING: could not delete test user ${USER.username} (id=${userId})`);

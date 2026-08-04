@@ -78,8 +78,10 @@ const fillStage2 = async (page, u) => {
         body: JSON.stringify({ identifier: U.username, password: U.password }),
       });
       if (r.ok) {
-        const { user_id } = await r.json();
-        await fetch(`${API}/user/${user_id}`, { method: "DELETE" });
+        const { user_id, token } = await r.json();
+        await fetch(`${API}/user/me`, {
+          method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+        });
         console.log(`cleaned up test user ${U.username} (id=${user_id})`);
       }
     } catch { /* best effort */ }

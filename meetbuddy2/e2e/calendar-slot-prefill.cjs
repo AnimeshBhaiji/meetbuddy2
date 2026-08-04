@@ -4,22 +4,17 @@
 // Week-view click -> exact clicked time. Month-view click -> 12:00-14:00.
 // Needs backend :8000 + vite :5173. Env USER_ID (default 1).
 const { chromium } = require("playwright");
-const USER_ID = Number(process.env.USER_ID || 1);
+const { createTestUser, deleteTestUser, signIn, DEFAULT_PREFS } = require("./_auth.cjs");
 
 const fail = (msg) => { console.log("SLOT PREFILL: FAIL —", msg); process.exit(1); };
 
-const seedUser = (page) => page.evaluate((uid) => {
-  localStorage.setItem("user", JSON.stringify({ user_id: uid, username: "test" }));
-  localStorage.setItem("userPreferences", JSON.stringify({
-    mood: "Romantic", planningStyle: "Surprise me", adventureLevel: "Stick to the city",
-    memorableFactor: "Amazing food", location: "Indiranagar Bangalore",
-  }));
-}, USER_ID);
+const seedUser = (page, user) => signIn(page, user, DEFAULT_PREFS);
 
 // Read what the planner actually received, without paying for a full plan run.
 const slotFromState = (page) => page.evaluate(() => window.history.state?.usr?.slot ?? null);
 
 (async () => {
+  const user = await createTestUser("sp");
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   const errors = [];
@@ -27,7 +22,7 @@ const slotFromState = (page) => page.evaluate(() => window.history.state?.usr?.s
 
   try {
     await page.goto("http://localhost:5173/");
-    await seedUser(page);
+    await seedUser(page, user);
 
     // ---------- week view: click a specific hour ----------
     await page.goto("http://localhost:5173/calendar");
@@ -96,5 +91,6 @@ const slotFromState = (page) => page.evaluate(() => window.history.state?.usr?.s
     console.log("SLOT PREFILL: PASS");
   } finally {
     await browser.close();
+    await deleteTestUser(user);
   }
 })();

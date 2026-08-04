@@ -134,3 +134,48 @@ def test_preferences_go_with_a_deleted_account():
         assert client.get("/user_prefs/me", headers=h).status_code == 401
     finally:
         db.close()
+
+
+def test_planner_uses_the_saved_preferences_not_the_request():
+    """A stale or forged client copy must not steer the plan."""
+    db = SessionLocal()
+    user = None
+    try:
+        user = _new_user(db)
+        h = _auth(user)
+        client.post("/save_preferences", headers=h,
+                    json={"mood": "Business-y", "planningStyle": "Surprise me"})
+
+        # send contradicting preferences in the body
+        resp = client.post("/planner/session", headers=h, json={
+            "preferences": {"mood": "Romantic", "planningStyle": "Full control"},
+            "location": "Indiranagar Bangalore",
+        })
+        assert resp.status_code == 200, resp.text
+
+        # the session records what the account had saved, not what was sent
+        sid = resp.json()["session_id"]
+        stored = client.get(f"/planner/session/{sid}", headers=h).json()
+        assert stored["payload"]["preferences"]["mood"] == ["Business-y"]
+        assert stored["payload"]["preferences"]["planningStyle"] == ["Surprise me"]
+    finally:
+        if user:
+            from models import PlannerSession
+            db.query(PlannerSession).filter(PlannerSession.user_id == user.id).delete()
+            db.commit()
+        _cleanup(db, user)
+        db.close()
+
+
+def test_planning_without_saved_preferences_is_rejected():
+    db = SessionLocal()
+    user = None
+    try:
+        user = _new_user(db)
+        resp = client.post("/planner/session", headers=_auth(user),
+                           json={"location": "Indiranagar Bangalore"})
+        assert resp.status_code == 400
+        assert "questionnaire" in resp.json()["detail"].lower()
+    finally:
+        _cleanup(db, user)
+        db.close()

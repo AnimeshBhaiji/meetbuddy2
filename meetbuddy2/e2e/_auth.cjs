@@ -34,8 +34,26 @@ async function deleteTestUser(user) {
   }).catch(() => {});
 }
 
-/** Put the account into the browser exactly as a real sign-in would. */
+/** Save questionnaire answers for this account (what the questionnaire posts). */
+async function savePreferences(user, prefs) {
+  // location/coords are cached client-side only; /save_preferences stores just
+  // the questionnaire answers.
+  const questionnaire = { ...prefs };
+  delete questionnaire.location;
+  delete questionnaire.coords;
+  const r = await fetch(`${API}/save_preferences`, {
+    method: "POST", headers: user.headers, body: JSON.stringify(questionnaire),
+  });
+  if (!r.ok) throw new Error(`save_preferences failed: ${r.status} ${await r.text()}`);
+}
+
+/**
+ * Put the account into the browser exactly as a real sign-in would.
+ * Preferences are saved server-side as well as cached locally: the planner now
+ * reads them from the account, so a localStorage-only seed would be rejected.
+ */
 async function signIn(page, user, prefs = null) {
+  if (prefs) await savePreferences(user, prefs);
   await page.evaluate(({ u, prefs }) => {
     localStorage.setItem("user", JSON.stringify({ user_id: u.id, username: u.username }));
     localStorage.setItem("token", u.token);
@@ -56,4 +74,5 @@ const asUser = (user) => (path, init = {}) =>
                Authorization: `Bearer ${user.token}` },
   });
 
-module.exports = { API, createTestUser, deleteTestUser, signIn, asUser, DEFAULT_PREFS };
+module.exports = { API, createTestUser, deleteTestUser, signIn, savePreferences,
+                   asUser, DEFAULT_PREFS };

@@ -6,7 +6,8 @@
 // Needs backend :8000 (this script restarts it) + vite :5173.
 const { spawn, execSync } = require("child_process");
 const path = require("path");
-const { API, createTestUser, deleteTestUser } = require("./_auth.cjs");
+const { API, createTestUser, deleteTestUser, savePreferences,
+        DEFAULT_PREFS } = require("./_auth.cjs");
 
 const BACKEND_DIR = path.join(__dirname, "..", "backend");
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -32,15 +33,14 @@ const waitFor = async (want, tries = 40) => {
 
   try {
     user = await createTestUser("sr");
+    // The planner reads preferences from the account, so they must be saved
+    // before a session can start.
+    await savePreferences(user, DEFAULT_PREFS);
 
     // ---- start a planning session ----
     const started = await (await fetch(`${API}/planner/session`, {
       method: "POST", headers: user.headers,
-      body: JSON.stringify({
-        preferences: { mood: "Romantic", planningStyle: "Surprise me",
-                       adventureLevel: "Stick to the city", memorableFactor: "Amazing food" },
-        location: "Indiranagar Bangalore",
-      }),
+      body: JSON.stringify({ location: "Indiranagar Bangalore" }),
     })).json();
     const sid = started.session_id;
     if (!sid) fail(`no session created: ${JSON.stringify(started).slice(0, 200)}`);

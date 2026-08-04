@@ -55,11 +55,18 @@ Every route except `POST /login` and `POST /signup` requires a bearer token.
 - The account's own routes are `/user/me`, not `/user/{id}`, so there is no id to swap.
 - `backend/auth.py` refuses to start without `JWT_SECRET`; a default secret would let anyone mint tokens.
 
+## Planner sessions
+
+`planner_sessions.py` stores sessions in the `planner_sessions` table, so they survive a backend restart. They expire 24 hours after the last activity, and creating a session sweeps expired rows (no scheduled job).
+
+- Every function takes the request's `db` session, so a session write shares the route's transaction.
+- `get_session` returns a **snapshot, not the live row.** Mutating it does nothing — persist through `update_session`/`push_selection`/`set_last_options`.
+- JSONB columns need reassignment, not in-place mutation: `row.steps.append(x)` never reaches the database, `row.steps = [*row.steps, x]` does.
+
 ## Known TODOs — Do Not "Fix" Without Explicit Request
 
 - **CORS allows all origins** — intentional for local development; do not restrict. Safe here because auth uses an `Authorization` header, not cookies.
-- **In-memory sessions** — `planner_sessions.py` data is lost on backend restart; `planner_sessions_data/` disk backup is best-effort
-- **Deleted accounts leave stale side data** — an entry in `user_last_prefs.json` and any in-memory planner sessions outlive the account (the DB cascade is complete)
+- **Deleted accounts leave an entry in `user_last_prefs.json`** — the database side (itineraries and planner sessions) cascades correctly
 
 ## Commit Convention
 

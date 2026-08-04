@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import main
 from auth import create_access_token
 from database import SessionLocal
-from models import Itinerary, User
+from models import Itinerary, PlannerSession, User
 
 client = TestClient(main.app)
 
@@ -149,7 +149,7 @@ def test_planner_session_of_another_user_is_not_reachable():
     try:
         alice, bob = _new_account(db), _new_account(db)
         from planner_sessions import create_session
-        sid = create_session(alice.id, {"preferences": {}, "coords": None, "location": None})
+        sid = create_session(alice.id, {"preferences": {}, "coords": None, "location": None}, db)
 
         assert client.get(f"/planner/session/{sid}", headers=_auth(bob)).status_code == 404
         assert client.post(f"/planner/session/{sid}/skip", json={"next_step": "activity"},
@@ -157,8 +157,10 @@ def test_planner_session_of_another_user_is_not_reachable():
         # the owner still reaches it
         assert client.get(f"/planner/session/{sid}", headers=_auth(alice)).status_code == 200
     finally:
+        # sessions first: planner_sessions.user_id has no ON DELETE CASCADE
         for u in (alice, bob):
             if u:
+                db.query(PlannerSession).filter(PlannerSession.user_id == u.id).delete()
                 db.query(User).filter(User.id == u.id).delete()
         db.commit()
         db.close()

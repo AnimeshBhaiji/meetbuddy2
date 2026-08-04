@@ -23,6 +23,26 @@ class ApiCache(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
 
 
+class PlannerSession(Base):
+    """An in-progress planning run.
+
+    Previously a module-level dict with best-effort JSON files beside it, which
+    meant a backend restart dropped whoever was mid-plan.
+    """
+    __tablename__ = "planner_sessions"
+
+    session_id = Column(Text, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+    payload = Column(JSONB, nullable=False, default=dict)          # prefs, coords, location
+    anchor = Column(JSONB, nullable=False, default=dict)
+    steps = Column(JSONB, nullable=False, default=list)            # [{step, place, ts}]
+    last_options = Column(JSONB, nullable=False, default=dict)     # step -> options[]
+    selected_tokens = Column(JSONB, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(),
+                        onupdate=func.now(), nullable=False, index=True)
+
+
 class Itinerary(Base):
     __tablename__ = "itineraries"
 

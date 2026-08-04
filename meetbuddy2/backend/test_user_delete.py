@@ -40,7 +40,10 @@ def test_delete_me_cascades_to_the_callers_itineraries():
 
         resp = client.delete("/user/me", headers=_auth(user))
         assert resp.status_code == 200
-        assert resp.json() == {"message": "deleted", "itineraries_deleted": 2}
+        body = resp.json()
+        assert body["message"] == "deleted"
+        assert body["itineraries_deleted"] == 2
+        assert body["sessions_deleted"] == 0
 
         assert db.query(User).filter(User.id == user_id).first() is None
         assert db.query(Itinerary).filter(Itinerary.user_id == user_id).count() == 0

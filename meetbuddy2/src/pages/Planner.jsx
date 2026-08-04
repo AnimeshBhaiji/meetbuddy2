@@ -50,7 +50,7 @@ export default function Planner() {
     if (!id) { setReopened(null); return; }
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user) return;
-    api.get(`/itineraries/${id}`, { params: { user_id: user.user_id } })
+    api.get(`/itineraries/${id}`)
       .then((data) => { setReopened(data); P.setPage("summary"); })
       .catch(() => P.setPlannerError("Couldn't open that itinerary."));
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps

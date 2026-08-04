@@ -17,7 +17,7 @@ import GlowButton from '@/components/ui/GlowButton';
 import GlassCard from '@/components/ui/GlassCard';
 import { useQuestionnaire } from '@/context/QuestionnaireContext';
 import { AuthContext } from '@/context/AuthContext';
-import { api } from '@/lib/api';
+import { api, SESSION_EXPIRED_FLAG } from '@/lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0, y: 24 },
@@ -43,7 +43,16 @@ const Login = () => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+  // api.js signals a rejected token via sessionStorage (and ?expired=1 when it
+  // wins the redirect race) — say why, otherwise being bounced out mid-task
+  // just looks like the app broke.
+  const [error, setError] = useState(() => {
+    const flagged = sessionStorage.getItem(SESSION_EXPIRED_FLAG) === '1';
+    if (flagged) sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+    return flagged || new URLSearchParams(window.location.search).has('expired')
+      ? 'Your session expired. Please sign in again.'
+      : '';
+  });
   const [isLoading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { resetAnswers } = useQuestionnaire();
@@ -58,7 +67,7 @@ const Login = () => {
       // api throws ApiError on non-2xx with the server's `detail` as the message
       const data = await api.post('/login', { identifier, password });
 
-      login(data, data.token || 'mock-token');
+      login(data, data.token);
       resetAnswers();
       navigate('/home');
     } catch (error) {

@@ -3,8 +3,7 @@
 // opens THAT itinerary in the editor, with its own title and times loaded.
 // Needs backend :8000 + vite :5173. Env USER_ID (default 1).
 const { chromium } = require("playwright");
-const USER_ID = Number(process.env.USER_ID || 1);
-const API = "http://localhost:8000";
+const { API, createTestUser, deleteTestUser, signIn } = require("./_auth.cjs");
 
 // Throws rather than process.exit: exiting here would skip the finally block
 // and leave seeded plans behind in the database.
@@ -19,14 +18,15 @@ const iso = (dt) => {
 };
 
 (async () => {
+  const user = await createTestUser("op");
   // Two plans on different days, so "opened the right one" is a real assertion.
   const mk = async (title, dayNum, hour) => {
     const start = new Date(d.getFullYear(), d.getMonth(), dayNum, hour, 0, 0, 0);
     const end = new Date(d.getFullYear(), d.getMonth(), dayNum, hour + 2, 0, 0, 0);
     const r = await fetch(`${API}/itineraries`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: user.headers,
       body: JSON.stringify({
-        user_id: USER_ID, title, start_at: iso(start), end_at: iso(end), all_day: false,
+        title, start_at: iso(start), end_at: iso(end), all_day: false,
         stops: [{ step: "restaurant", place: { title: `${title} stop` }, note: "" }],
       }),
     });
@@ -44,9 +44,7 @@ const iso = (dt) => {
 
   try {
     await page.goto("http://localhost:5173/");
-    await page.evaluate((uid) => {
-      localStorage.setItem("user", JSON.stringify({ user_id: uid, username: "test" }));
-    }, USER_ID);
+    await signIn(page, user);
 
     await page.goto("http://localhost:5173/calendar");
     await page.waitForSelector(".rbc-calendar", { timeout: 30000 });
@@ -81,9 +79,7 @@ const iso = (dt) => {
   } catch (e) {
     report(e);
   } finally {
-    for (const id of [decoy.id, target.id]) {
-      await fetch(`${API}/itineraries/${id}?user_id=${USER_ID}`, { method: "DELETE" }).catch(() => {});
-    }
+    await deleteTestUser(user);   // removes the account and both plans
     await browser.close();
   }
 })();

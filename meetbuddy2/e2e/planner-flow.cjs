@@ -3,14 +3,16 @@
 // Smoke: seeded prefs -> 3-step planner flow -> summary. Needs backend :8000
 // and vite :5173 running, and a warm/valid SerpAPI or cached searches.
 const { chromium } = require("playwright");
+const { createTestUser, deleteTestUser, signIn } = require("./_auth.cjs");
 
 (async () => {
+  const user = await createTestUser("pf");
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto("http://localhost:5173/");
+  await page.evaluate(() => localStorage.clear());
+  await signIn(page, user);
   await page.evaluate(() => {
-    localStorage.clear();
-    localStorage.setItem("user", JSON.stringify({ user_id: 1, username: "test" }));
     localStorage.setItem("userPreferences", JSON.stringify({
       mood: "Romantic", planningStyle: "Full control", adventureLevel: "Stick to the city",
       memorableFactor: "Amazing food",
@@ -31,5 +33,6 @@ const { chromium } = require("playwright");
   const done = (await page.locator("text=Your perfect").count()) > 0;
   console.log(done ? "PLANNER FLOW: PASS" : "PLANNER FLOW: FAIL");
   await browser.close();
+  await deleteTestUser(user);
   process.exit(done ? 0 : 1);
 })();

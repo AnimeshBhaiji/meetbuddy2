@@ -1,38 +1,22 @@
 // meetbuddy2/e2e/itinerary-edit.cjs
 // Requires the playwright devDependency (npm install) plus browsers: npx playwright install chromium
 // Plan -> summary -> edit (note + cached add + reorder + remove) -> save -> reopen from My Plans.
-// Needs backend :8000 + vite :5173 and a real logged-in user id (env USER_ID).
+// Needs backend :8000 + vite :5173. Creates its own throwaway account.
 const { chromium } = require("playwright");
-const USER_ID = Number(process.env.USER_ID || 1);
+const { createTestUser, deleteTestUser, signIn, DEFAULT_PREFS } = require("./_auth.cjs");
 
 const firstStopTitle = (page) =>
   page.locator("p.text-sm.text-white.font-medium.truncate").first().textContent();
 
-// Remove any "E2E plan" rows this suite left behind. Run at both ends: a single
-// leftover makes the "E2E plan" card locator match twice on the next run, which
-// fails Playwright strict mode before the test can clean up after itself.
-const clearE2EPlans = async () => {
-  try {
-    const rows = await (await fetch(`http://localhost:8000/itineraries?user_id=${USER_ID}`)).json();
-    for (const r of rows.filter((x) => x.title === "E2E plan")) {
-      await fetch(`http://localhost:8000/itineraries/${r.id}?user_id=${USER_ID}`, { method: "DELETE" });
-    }
-  } catch { /* best effort */ }
-};
-
 (async () => {
-  await clearE2EPlans();   // start from a known-clean slate
+  // A throwaway account per run: it starts with no plans, so the "E2E plan"
+  // card locator can never match a leftover from a previous run.
+  const user = await createTestUser("ie");
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto("http://localhost:5173/");
-  await page.evaluate((uid) => {
-    localStorage.clear();
-    localStorage.setItem("user", JSON.stringify({ user_id: uid, username: "test" }));
-    localStorage.setItem("userPreferences", JSON.stringify({
-      mood: "Romantic", planningStyle: "Surprise me", adventureLevel: "Stick to the city",
-      memorableFactor: "Amazing food", location: "Indiranagar Bangalore",
-    }));
-  }, USER_ID);
+  await page.evaluate(() => localStorage.clear());
+  await signIn(page, user, DEFAULT_PREFS);
 
   // Surprise mode -> straight to summary
   await page.goto("http://localhost:5173/planner");
@@ -120,7 +104,7 @@ const clearE2EPlans = async () => {
     ? "ITINERARY EDIT: PASS"
     : `ITINERARY EDIT: FAIL note=${noteThere} stops=${stopsAfter}/${stopCount} reorderOk=${reorderOk} reorderPersisted=${reorderPersisted}`);
 
-  await clearE2EPlans();
   await browser.close();
+  await deleteTestUser(user);   // removes the account and everything it saved
   process.exit(pass ? 0 : 1);
 })();

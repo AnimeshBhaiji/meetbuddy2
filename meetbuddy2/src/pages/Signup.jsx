@@ -158,7 +158,7 @@ const Signup = () => {
       resetAnswers();
       // Register with AuthContext so protected routes see the new user
       // immediately (writing localStorage alone leaves context state null)
-      login(data, data.token || 'mock-token');
+      login(data, data.token);
       navigate('/questionnaire-stage1');
     } catch (err) {
       console.error('Signup error:', err);

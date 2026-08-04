@@ -1,6 +1,6 @@
 # itineraries.py — saved-itinerary CRUD.
-# JWT validation is a tracked project TODO: like the rest of the API,
-# endpoints trust the user_id the client sends.
+# Every route is scoped to the authenticated user from the bearer token.
+# Payloads carry no user_id: a client-supplied id could name anyone.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
+from auth import get_current_user
 from database import get_db
-from models import Itinerary
+from models import Itinerary, User
 
 router = APIRouter(prefix="/itineraries", tags=["itineraries"])
 
@@ -26,7 +27,6 @@ class _Scheduled(BaseModel):
 
 
 class ItineraryIn(_Scheduled):
-    user_id: int
     title: str
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
@@ -35,7 +35,6 @@ class ItineraryIn(_Scheduled):
 
 
 class ItineraryUpdate(_Scheduled):
-    user_id: int
     title: Optional[str] = None
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
@@ -71,8 +70,9 @@ def _get_owned(itinerary_id: int, user_id: int, db: Session) -> Itinerary:
 
 
 @router.post("")
-def create_itinerary(payload: ItineraryIn, db: Session = Depends(get_db)):
-    it = Itinerary(user_id=payload.user_id, title=payload.title,
+def create_itinerary(payload: ItineraryIn, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    it = Itinerary(user_id=user.id, title=payload.title,
                    start_at=payload.start_at, end_at=payload.end_at,
                    all_day=payload.all_day, stops=payload.stops)
     db.add(it)
@@ -82,8 +82,9 @@ def create_itinerary(payload: ItineraryIn, db: Session = Depends(get_db)):
 
 
 @router.get("")
-def list_itineraries(user_id: int, db: Session = Depends(get_db)):
-    rows = (db.query(Itinerary).filter(Itinerary.user_id == user_id)
+def list_itineraries(db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    rows = (db.query(Itinerary).filter(Itinerary.user_id == user.id)
             .order_by(Itinerary.updated_at.desc()).all())
     return [{
         "id": r.id,
@@ -97,13 +98,15 @@ def list_itineraries(user_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{itinerary_id}")
-def get_itinerary(itinerary_id: int, user_id: int, db: Session = Depends(get_db)):
-    return _to_dict(_get_owned(itinerary_id, user_id, db))
+def get_itinerary(itinerary_id: int, db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    return _to_dict(_get_owned(itinerary_id, user.id, db))
 
 
 @router.put("/{itinerary_id}")
-def update_itinerary(itinerary_id: int, payload: ItineraryUpdate, db: Session = Depends(get_db)):
-    it = _get_owned(itinerary_id, payload.user_id, db)
+def update_itinerary(itinerary_id: int, payload: ItineraryUpdate, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    it = _get_owned(itinerary_id, user.id, db)
     data = payload.model_dump(exclude_unset=True)
     for field in ("title", "start_at", "end_at", "all_day", "stops"):
         if field in data:
@@ -114,8 +117,9 @@ def update_itinerary(itinerary_id: int, payload: ItineraryUpdate, db: Session = 
 
 
 @router.delete("/{itinerary_id}")
-def delete_itinerary(itinerary_id: int, user_id: int, db: Session = Depends(get_db)):
-    it = _get_owned(itinerary_id, user_id, db)
+def delete_itinerary(itinerary_id: int, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    it = _get_owned(itinerary_id, user.id, db)
     db.delete(it)
     db.commit()
     return {"message": "deleted"}

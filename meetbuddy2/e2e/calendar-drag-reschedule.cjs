@@ -3,8 +3,7 @@
 // page reload; resizing changes the duration; a failed write rolls back.
 // Needs backend :8000 + vite :5173. Env USER_ID (default 1).
 const { chromium } = require("playwright");
-const USER_ID = Number(process.env.USER_ID || 1);
-const API = "http://localhost:8000";
+const { API, createTestUser, deleteTestUser, signIn } = require("./_auth.cjs");
 
 // Throws rather than process.exit: exiting here would skip the finally block
 // and leave seeded plans behind in the database.
@@ -26,14 +25,16 @@ const target = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate(
 const startAt = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 10, 0, 0, 0);
 const endAt = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 12, 0, 0, 0);
 
+let user = null;
 const fetchPlan = async (id) =>
-  (await fetch(`${API}/itineraries/${id}?user_id=${USER_ID}`)).json();
+  (await fetch(`${API}/itineraries/${id}`, { headers: user.headers })).json();
 
 (async () => {
+  user = await createTestUser("dr");
   const created = await (await fetch(`${API}/itineraries`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+    method: "POST", headers: user.headers,
     body: JSON.stringify({
-      user_id: USER_ID, title: "E2E Drag Plan",
+      title: "E2E Drag Plan",
       start_at: iso(startAt), end_at: iso(endAt), all_day: false,
       stops: [{ step: "restaurant", place: { title: "Drag stop" }, note: "" }],
     }),
@@ -63,9 +64,7 @@ const fetchPlan = async (id) =>
 
   try {
     await page.goto("http://localhost:5173/");
-    await page.evaluate((uid) => {
-      localStorage.setItem("user", JSON.stringify({ user_id: uid, username: "test" }));
-    }, USER_ID);
+    await signIn(page, user);
 
     await gotoWeekOfEvent();
 
@@ -160,7 +159,7 @@ const fetchPlan = async (id) =>
   } catch (e) {
     report(e);
   } finally {
-    await fetch(`${API}/itineraries/${created.id}?user_id=${USER_ID}`, { method: "DELETE" }).catch(() => {});
+    await deleteTestUser(user);   // removes the account and its plan
     await browser.close();
   }
 })();

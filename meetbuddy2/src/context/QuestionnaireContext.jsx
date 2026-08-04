@@ -38,8 +38,9 @@ export const QuestionnaireProvider = ({ children }) => {
       const userId = user.user_id || user.id;
 
       if (user && userId) {
-        // Backend expects a flat payload: { user_id, mood, ..., mood_sub, ... }
-        await api.post("/save_preferences", { user_id: userId, ...updatedAnswers });
+        // Flat payload: { mood, ..., mood_sub, ... } — the account comes
+        // from the bearer token, not from anything we send.
+        await api.post("/save_preferences", updatedAnswers);
         console.log("Preferences saved to backend successfully");
       }
     } catch (error) {

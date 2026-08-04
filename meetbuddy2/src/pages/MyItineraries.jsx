@@ -27,7 +27,7 @@ export default function MyItineraries() {
   const load = async () => {
     if (!user) return setItems([]);
     try {
-      setItems(await api.get("/itineraries", { params: { user_id: user.user_id } }));
+      setItems(await api.get("/itineraries"));
     } catch {
       setError("Couldn't load your itineraries.");
       setItems([]);
@@ -38,7 +38,7 @@ export default function MyItineraries() {
   const remove = async (id) => {
     if (!window.confirm("Delete this itinerary?")) return;
     try {
-      await api.del(`/itineraries/${id}`, { params: { user_id: user.user_id } });
+      await api.del(`/itineraries/${id}`);
       setItems((cur) => cur.filter((i) => i.id !== id));
     } catch {
       setError("Delete failed. Please try again.");

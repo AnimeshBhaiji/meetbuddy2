@@ -13,6 +13,7 @@ from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import create_session, get_session, push_selection, set_last_options
 from itineraries import router as itineraries_router
 from geo import geocode_address
+from auth import create_access_token, get_current_user
 
 
 # -------- DATABASE SETUP --------
@@ -69,16 +70,6 @@ class UserLogin(BaseModel):
     identifier: str
     password: str
 
-class UserPreferences(BaseModel):
-    user_id: int
-    mood: Optional[List[str]] = []
-    planningStyle: Optional[List[str]] = []
-    adventureLevel: Optional[List[str]] = []
-    addOnMagic: Optional[List[str]] = []
-    memorableFactor: Optional[List[str]] = []
-    class Config:
-        extra = "allow"
-
 # -------- USER AUTH --------
 @app.post("/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
@@ -98,7 +89,8 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return {"message": "User created successfully", "user_id": new_user.id}
+    return {"message": "User created successfully", "user_id": new_user.id,
+            "username": new_user.username, "token": create_access_token(new_user)}
 
 @app.post("/login")
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
@@ -109,13 +101,13 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="User not found")
     if not verify_password(credentials.password, user.password):
         raise HTTPException(status_code=400, detail="Incorrect password")
-    return {"message": "Login successful", "user_id": user.id, "username": user.username}
+    return {"message": "Login successful", "user_id": user.id, "username": user.username,
+            "token": create_access_token(user)}
 
-@app.get("/user/{user_id}")
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+# /user/me rather than /user/{id}: the account is whoever the token says it is,
+# so there is no id for a caller to swap for someone else's.
+@app.get("/user/me")
+def get_user(user: User = Depends(get_current_user)):
     return {
         "user_id": user.id,
         "firstName": user.first_name,
@@ -126,25 +118,31 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     }
 
 
-@app.delete("/user/{user_id}")
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    """Delete an account and everything it owns.
-
-    Like the rest of this API, the caller is trusted — see the JWT TODO.
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
+@app.delete("/user/me")
+def delete_user(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Delete your own account and everything it owns."""
     # itineraries.user_id is declared without ON DELETE CASCADE, so Postgres
     # would reject the user row while plans still reference it. Both deletes
     # share one transaction: if either fails, the account survives intact.
     removed = (db.query(Itinerary)
-               .filter(Itinerary.user_id == user_id)
+               .filter(Itinerary.user_id == user.id)
                .delete(synchronize_session=False))
     db.delete(user)
     db.commit()
     return {"message": "deleted", "itineraries_deleted": removed}
+
+def _owned_session(sid: str, user: User):
+    """A planner session, but only if it belongs to the caller.
+
+    Session ids were previously enough on their own to read or drive anyone's
+    session. A mismatch returns 404 rather than 403 so the response cannot be
+    used to discover which session ids exist.
+    """
+    session = get_session(sid)
+    if not session or int(session.get("user_id", -1)) != user.id:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    return session
+
 
 # -------------------------------
 # Helper: normalize incoming value -> list of strings
@@ -200,12 +198,10 @@ def _to_list_of_strings(v):
 # (unchanged from your previous implementation)
 # -------------------------------
 @app.post("/save_preferences")
-async def save_preferences(request: Request):
+async def save_preferences(request: Request, user: User = Depends(get_current_user)):
     data = await request.json()
-    user_id = data.get("user_id")
-    if user_id is None:
-        raise HTTPException(status_code=400, detail="Missing user_id in payload")
-
+    # Any user_id in the body is ignored — preferences belong to the token holder.
+    user_id = user.id
     user_id_str = str(user_id)
     print("Received save_preferences payload:", data)
 
@@ -277,8 +273,9 @@ async def save_preferences(request: Request):
     return {"message": "Preferences saved successfully", "prefs": merged_for_user}
 
 # -------- READ SAVED PREFS --------
-@app.get("/user_prefs/{user_id}")
-def read_user_prefs(user_id: int):
+@app.get("/user_prefs/me")
+def read_user_prefs(user: User = Depends(get_current_user)):
+    user_id = user.id
     if not os.path.exists(USER_PREFS_FILE):
         raise HTTPException(status_code=404, detail="No saved preferences")
     with open(USER_PREFS_FILE, "r", encoding="utf-8") as f:
@@ -291,15 +288,13 @@ def read_user_prefs(user_id: int):
 
 # Start a planner session (create initial suggestions)
 @app.post("/planner/session")
-async def planner_session_start(request: Request):
+async def planner_session_start(request: Request, user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    user_id = raw.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Missing user_id")
+    user_id = user.id
 
     # Build a payload object similar to planner.generate_plan
     payload = {
@@ -343,15 +338,14 @@ async def planner_session_start(request: Request):
 
 # Select an option in a session and get next-step options
 @app.post("/planner/session/{sid}/select")
-async def planner_session_select(sid: str, request: Request):
+async def planner_session_select(sid: str, request: Request,
+                                 user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    session = get_session(sid)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
+    session = _owned_session(sid, user)
 
     step = raw.get("step") or "default"
     selected_place = raw.get("place")
@@ -388,15 +382,14 @@ async def planner_session_select(sid: str, request: Request):
 # Skip the current step without selecting a place (full-control mode).
 # Followup options anchor to the last actual selection (or the origin).
 @app.post("/planner/session/{sid}/skip")
-async def planner_session_skip(sid: str, request: Request):
+async def planner_session_skip(sid: str, request: Request,
+                               user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON body")
 
-    session = get_session(sid)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
+    _owned_session(sid, user)
 
     next_step = raw.get("next_step")
     if not next_step or next_step == "done":
@@ -416,7 +409,7 @@ async def planner_session_skip(sid: str, request: Request):
 # Stateless options search — powers add/swap on saved itineraries where no
 # planner session exists. Reuses the followup pipeline with a synthetic state.
 @app.post("/planner/options")
-async def planner_options(request: Request):
+async def planner_options(request: Request, user: User = Depends(get_current_user)):
     try:
         raw = await request.json()
     except Exception:
@@ -444,7 +437,7 @@ async def planner_options(request: Request):
 
 # Free-text -> coords for custom itinerary stops (cache-first Nominatim).
 @app.get("/geocode")
-def geocode(q: str = ""):
+def geocode(q: str = "", user: User = Depends(get_current_user)):
     if not q or not q.strip():
         raise HTTPException(status_code=400, detail="Missing query")
     coords = geocode_address(q.strip())
@@ -454,8 +447,5 @@ def geocode(q: str = ""):
 
 # Read session state
 @app.get("/planner/session/{sid}")
-def read_planner_session(sid: str):
-    s = get_session(sid)
-    if not s:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
-    return s
+def read_planner_session(sid: str, user: User = Depends(get_current_user)):
+    return _owned_session(sid, user)

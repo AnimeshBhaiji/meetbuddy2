@@ -1,11 +1,18 @@
+"""Account deletion via DELETE /user/me — cascade and scoping.
+
+Identity comes from the token, so there is no id to pass and no 'delete someone
+else' case to test here; a token that names no live account is covered by
+test_auth.test_token_for_deleted_account_rejected."""
 import uuid
 
-import pytest
-from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 import main
+from auth import create_access_token
 from database import SessionLocal
 from models import Itinerary, User
+
+client = TestClient(main.app)
 
 
 def _make_user(db):
@@ -18,69 +25,51 @@ def _make_user(db):
     return user
 
 
-def _make_plan(db, user_id, title="Plan"):
-    it = Itinerary(user_id=user_id, title=title, stops=[])
-    db.add(it)
-    db.commit()
-    db.refresh(it)
-    return it
+def _auth(user):
+    return {"Authorization": f"Bearer {create_access_token(user)}"}
 
 
-def test_delete_user_cascades_to_their_itineraries():
+def test_delete_me_cascades_to_the_callers_itineraries():
     db = SessionLocal()
     try:
         user = _make_user(db)
-        _make_plan(db, user.id, "One")
-        _make_plan(db, user.id, "Two")
+        user_id = user.id
+        db.add(Itinerary(user_id=user_id, title="One", stops=[]))
+        db.add(Itinerary(user_id=user_id, title="Two", stops=[]))
+        db.commit()
 
-        result = main.delete_user(user.id, db)
-        assert result["message"] == "deleted"
-        assert result["itineraries_deleted"] == 2
+        resp = client.delete("/user/me", headers=_auth(user))
+        assert resp.status_code == 200
+        assert resp.json() == {"message": "deleted", "itineraries_deleted": 2}
 
-        assert db.query(User).filter(User.id == user.id).first() is None
-        assert db.query(Itinerary).filter(Itinerary.user_id == user.id).count() == 0
+        assert db.query(User).filter(User.id == user_id).first() is None
+        assert db.query(Itinerary).filter(Itinerary.user_id == user_id).count() == 0
     finally:
         db.close()
 
 
-def test_delete_user_with_no_itineraries():
+def test_delete_me_with_no_itineraries():
     db = SessionLocal()
     try:
         user = _make_user(db)
-        result = main.delete_user(user.id, db)
-        assert result["itineraries_deleted"] == 0
-        assert db.query(User).filter(User.id == user.id).first() is None
+        user_id = user.id
+        resp = client.delete("/user/me", headers=_auth(user))
+        assert resp.status_code == 200
+        assert resp.json()["itineraries_deleted"] == 0
+        assert db.query(User).filter(User.id == user_id).first() is None
     finally:
         db.close()
 
 
-def test_delete_user_leaves_other_users_data_alone():
-    """The cascade must be scoped to the deleted account."""
-    db = SessionLocal()
-    keeper = None
-    try:
-        victim = _make_user(db)
-        keeper = _make_user(db)
-        _make_plan(db, victim.id, "Victim plan")
-        keeper_plan = _make_plan(db, keeper.id, "Keeper plan")
-
-        main.delete_user(victim.id, db)
-
-        assert db.query(User).filter(User.id == keeper.id).first() is not None
-        assert db.query(Itinerary).filter(Itinerary.id == keeper_plan.id).first() is not None
-    finally:
-        if keeper:
-            db.query(Itinerary).filter(Itinerary.user_id == keeper.id).delete()
-            db.query(User).filter(User.id == keeper.id).delete()
-            db.commit()
-        db.close()
-
-
-def test_delete_unknown_user_is_404():
+def test_the_token_stops_working_once_the_account_is_gone():
+    """Deleting an account must end its live session, not just its data."""
     db = SessionLocal()
     try:
-        with pytest.raises(HTTPException) as exc:
-            main.delete_user(999999999, db)
-        assert exc.value.status_code == 404
+        user = _make_user(db)
+        headers = _auth(user)
+        assert client.delete("/user/me", headers=headers).status_code == 200
+        # same token, now orphaned
+        assert client.get("/user/me", headers=headers).status_code == 401
+        assert client.get("/itineraries", headers=headers).status_code == 401
     finally:
         db.close()

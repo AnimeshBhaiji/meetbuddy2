@@ -68,10 +68,11 @@ const Profile = () => {
       try {
         const parsedUser = JSON.parse(storedUser);
 
-        // Always fetch fresh user data from the server using the user_id
+        // Always fetch fresh user data from the server. Which account that is
+        // comes from the bearer token, so no id is sent.
         const userId = parsedUser.id || parsedUser.user_id;
         if (userId) {
-          api.get(`/user/${userId}`)
+          api.get("/user/me")
             .then((userData) => {
               // Update localStorage with the complete user data
               localStorage.setItem('user', JSON.stringify(userData));
@@ -120,7 +121,7 @@ const Profile = () => {
     setDeleteError('');
 
     try {
-      await api.del(`/user/${userId}`);
+      await api.del("/user/me");
 
       // Logout the user after successful deletion
       localStorage.removeItem('user');

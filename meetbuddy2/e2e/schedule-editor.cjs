@@ -3,27 +3,22 @@
 // persist to the API, and reopening the saved plan shows them again.
 // Needs backend :8000 + vite :5173. Env USER_ID (default 1).
 const { chromium } = require("playwright");
-const USER_ID = Number(process.env.USER_ID || 1);
+const { API, createTestUser, deleteTestUser, signIn, DEFAULT_PREFS } = require("./_auth.cjs");
 
 // Throws rather than process.exit, so the finally block still deletes the plan
 // this test saves through the UI.
 const fail = (msg) => { throw new Error(msg); };
 
 (async () => {
+  const user = await createTestUser("se");
   const browser = await chromium.launch();
   const page = await browser.newPage();
   let savedId = null;
   try {
 
   await page.goto("http://localhost:5173/");
-  await page.evaluate((uid) => {
-    localStorage.clear();
-    localStorage.setItem("user", JSON.stringify({ user_id: uid, username: "test" }));
-    localStorage.setItem("userPreferences", JSON.stringify({
-      mood: "Romantic", planningStyle: "Surprise me", adventureLevel: "Stick to the city",
-      memorableFactor: "Amazing food", location: "Indiranagar Bangalore",
-    }));
-  }, USER_ID);
+  await page.evaluate(() => localStorage.clear());
+  await signIn(page, user, DEFAULT_PREFS);
 
   await page.goto("http://localhost:5173/planner");
   await page.waitForTimeout(1500);
@@ -42,10 +37,12 @@ const fail = (msg) => { throw new Error(msg); };
   await page.waitForSelector("text=Saved", { timeout: 30000 });
 
   // --- what actually reached the database ---
-  const rows = await page.evaluate(async (uid) => {
-    const r = await fetch(`http://localhost:8000/itineraries?user_id=${uid}`);
+  const rows = await page.evaluate(async () => {
+    const r = await fetch("http://localhost:8000/itineraries", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
     return r.json();
-  }, USER_ID);
+  });
   const saved = rows.find((r) => r.title === title);
   if (!saved) fail("saved plan not returned by the API");
   savedId = saved.id;
@@ -84,10 +81,7 @@ const fail = (msg) => { throw new Error(msg); };
     console.log("SCHEDULE EDITOR: FAIL —", e.message);
     process.exitCode = 1;
   } finally {
-    if (savedId) {
-      await fetch(`http://localhost:8000/itineraries/${savedId}?user_id=${USER_ID}`,
-        { method: "DELETE" }).catch(() => {});
-    }
+    await deleteTestUser(user);   // removes the account and anything it saved
     await browser.close();
   }
 })();

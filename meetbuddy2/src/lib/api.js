@@ -4,8 +4,8 @@
 // JSON parsing, query-param serialisation and timeouts, all of which fetch +
 // AbortSignal cover — so this drops a dependency instead of wrapping one.
 //
-// When JWT validation is turned on, the Authorization header goes in `headers()`
-// below and every call site gets it at once.
+// It also attaches the bearer token and handles its expiry, so no call site
+// has to think about authentication.
 import { API_BASE_URL, DEFAULT_HEADERS } from "@/config";
 
 /** Non-2xx response. `status` and `detail` are what callers actually branch on. */
@@ -29,6 +29,36 @@ export class NetworkError extends ApiError {
 }
 
 const DEFAULT_TIMEOUT_MS = 30000;
+
+/** Routes that must work before there is a token to send. */
+const PUBLIC_PATHS = ["/login", "/signup"];
+
+const authHeader = () => {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+/**
+ * The token is gone, expired, or was rejected. Clear the session and send the
+ * user to login. Done here rather than per call site so no screen can end up
+ * rendering against an identity the server has already refused.
+ */
+export const SESSION_EXPIRED_FLAG = "session_expired";
+
+const onSessionExpired = () => {
+  for (const key of ["user", "token", "userPreferences", "questionnaireAnswers",
+                     "planner_session_id"]) {
+    localStorage.removeItem(key);
+  }
+  // Flag in sessionStorage rather than relying on the ?expired=1 query: clearing
+  // the token above lets ProtectedRoute's client-side <Navigate> reach /login
+  // first, dropping the query string. The flag survives either route.
+  try { sessionStorage.setItem(SESSION_EXPIRED_FLAG, "1"); } catch { /* private mode */ }
+
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login?expired=1");
+  }
+};
 
 const buildUrl = (path, params) => {
   const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
@@ -61,7 +91,7 @@ async function request(method, path, { params, body, timeout = DEFAULT_TIMEOUT_M
   try {
     res = await fetch(buildUrl(path, params), {
       method,
-      headers: { ...DEFAULT_HEADERS, ...headers },
+      headers: { ...DEFAULT_HEADERS, ...authHeader(), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeout),
     });
@@ -82,6 +112,11 @@ async function request(method, path, { params, body, timeout = DEFAULT_TIMEOUT_M
 
   if (!res.ok) {
     const detail = readDetail(parsed);
+    // 401 on a protected route means this session is over — never surface it to
+    // the caller as an ordinary error it might swallow with `catch {}`.
+    if (res.status === 401 && !PUBLIC_PATHS.some((p) => path.startsWith(p))) {
+      onSessionExpired();
+    }
     throw new ApiError(detail || `${method} ${path} failed with ${res.status}`,
       { status: res.status, detail, body: parsed });
   }

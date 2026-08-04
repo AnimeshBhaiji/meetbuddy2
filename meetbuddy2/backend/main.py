@@ -286,10 +286,19 @@ async def planner_session_start(request: Request, db: Session = Depends(get_db),
 
     user_id = user.id
 
+    # Preferences come from the account, not the request. A client copy can
+    # drift from the saved answers (a stale browser, a failed save), and the
+    # server already holds the authoritative set.
+    preferences = user.preferences or {}
+    if not preferences:
+        raise HTTPException(
+            status_code=400,
+            detail="Save your questionnaire preferences before starting a plan.")
+
     # Build a payload object similar to planner.generate_plan
     payload = {
         "user_id": user_id,
-        "preferences": raw.get("preferences", {}),
+        "preferences": preferences,
         "max_terms": raw.get("max_terms", raw.get("maxTerms", 3)),
         "coords": raw.get("coords") or raw.get("coordinate") or raw.get("latlng") or None,
         "location": raw.get("location") or raw.get("place") or None,

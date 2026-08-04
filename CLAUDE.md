@@ -67,6 +67,12 @@ Every route except `POST /login` and `POST /signup` requires a bearer token.
 
 Questionnaire answers live in `users.preferences` (JSONB), written by `POST /save_preferences` and read by `GET /user_prefs/me`, both scoped to the token holder. They are deleted with the account, since the column is part of the row.
 
+**The account is the source of truth; `localStorage.userPreferences` is a cache of it.**
+
+- `QuestionnaireContext` refills that cache from `/user_prefs/me` on sign-in, so answers follow the account to another browser. Signing in used to clear the cache while nothing read the server's copy, which meant a returning user was asked to retake the questionnaire.
+- `POST /planner/session` reads `user.preferences` and **ignores any `preferences` in the request body** — a client copy can be stale or forged. It returns 400 if the account has not answered yet.
+- The cache also holds `location` and `coords`, which are not questionnaire answers; those are sent explicitly with each planner request and are never written to `users.preferences`.
+
 They were previously `user_last_prefs.json`, a single-slot file rewritten as `{user_id: prefs}` on every save — so one account saving erased everyone else's. Don't reintroduce a shared file for per-user state.
 
 ## Known TODOs — Do Not "Fix" Without Explicit Request

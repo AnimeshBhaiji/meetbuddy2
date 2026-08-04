@@ -11,13 +11,13 @@ const { createTestUser, deleteTestUser, signIn } = require("./_auth.cjs");
   const page = await browser.newPage();
   await page.goto("http://localhost:5173/");
   await page.evaluate(() => localStorage.clear());
-  await signIn(page, user);
-  await page.evaluate(() => {
-    localStorage.setItem("userPreferences", JSON.stringify({
-      mood: "Romantic", planningStyle: "Full control", adventureLevel: "Stick to the city",
-      memorableFactor: "Amazing food",
-      location: "Indiranagar Bangalore",
-    }));
+  // Full-control mode drives this flow's step-by-step selection, so it does not
+  // use DEFAULT_PREFS. signIn saves these to the account as well as caching
+  // them, since the planner reads preferences from the account now.
+  await signIn(page, user, {
+    mood: "Romantic", planningStyle: "Full control", adventureLevel: "Stick to the city",
+    memorableFactor: "Amazing food",
+    location: "Indiranagar Bangalore",
   });
   await page.goto("http://localhost:5173/planner");
   await page.waitForTimeout(1500);

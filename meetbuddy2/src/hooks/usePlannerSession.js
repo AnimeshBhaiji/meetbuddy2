@@ -218,21 +218,10 @@ export default function usePlannerSession() {
     setSessionLoading(true);
     try {
       const payload = {
-        // no user_id: the session is owned by whoever the bearer token names
-        preferences: {
-          mood: userPrefs.mood,
-          planningStyle: userPrefs.planningStyle,
-          adventureLevel: userPrefs.adventureLevel,
-          addOnMagic: userPrefs.addOnMagic,
-          memorableFactor: userPrefs.memorableFactor,
-          // include stage2 sub-preferences so backend can respect them (e.g. "No" stay)
-          mood_sub: userPrefs.mood_sub,
-          planningStyle_sub: userPrefs.planningStyle_sub,
-          adventureLevel_sub: userPrefs.adventureLevel_sub,
-          addOnMagic_sub: userPrefs.addOnMagic_sub,
-          memorableFactor_sub: userPrefs.memorableFactor_sub,
-        },
-        // Prioritize current coords/location input over saved preferences
+        // No user_id and no preferences: the session belongs to whoever the
+        // bearer token names, and the backend reads their saved answers. Only
+        // location and coords are the client's to send — they are chosen here
+        // and are not part of the questionnaire.
         coords: coords || userPrefs.coords || null,
         location: (placeText && placeText.trim() ? placeText.trim() : null) || userPrefs.location || null,
       };

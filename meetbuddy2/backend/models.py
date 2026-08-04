@@ -13,6 +13,10 @@ class User(Base):
     phone = Column(String(20), unique=True)
     username = Column(String(50), unique=True, index=True)
     password = Column(String(200))
+    # Questionnaire answers. Previously a single-slot JSON file on disk, where
+    # each save overwrote whichever user had saved last.
+    preferences = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"),
+                         default=dict)
 
 
 class ApiCache(Base):

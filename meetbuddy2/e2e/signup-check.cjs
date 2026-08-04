@@ -70,6 +70,18 @@ const fillStage2 = async (page, u) => {
     process.exitCode = 1;
   } finally {
     await browser.close();
-    console.log(`(left test user ${U.username}; no delete endpoint exists)`);
+    // The account was created through the UI, so ask the login endpoint for its
+    // id before removing it (cascading any itineraries it picked up).
+    try {
+      const r = await fetch(`${API}/login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: U.username, password: U.password }),
+      });
+      if (r.ok) {
+        const { user_id } = await r.json();
+        await fetch(`${API}/user/${user_id}`, { method: "DELETE" });
+        console.log(`cleaned up test user ${U.username} (id=${user_id})`);
+      }
+    } catch { /* best effort */ }
   }
 })();

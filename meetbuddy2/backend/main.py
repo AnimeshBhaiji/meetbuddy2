@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
-from models import User
+from models import User, Itinerary
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from typing import List, Optional
@@ -124,6 +124,27 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
         "contact": user.phone,
         "username": user.username,
     }
+
+
+@app.delete("/user/{user_id}")
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    """Delete an account and everything it owns.
+
+    Like the rest of this API, the caller is trusted — see the JWT TODO.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # itineraries.user_id is declared without ON DELETE CASCADE, so Postgres
+    # would reject the user row while plans still reference it. Both deletes
+    # share one transaction: if either fails, the account survives intact.
+    removed = (db.query(Itinerary)
+               .filter(Itinerary.user_id == user_id)
+               .delete(synchronize_session=False))
+    db.delete(user)
+    db.commit()
+    return {"message": "deleted", "itineraries_deleted": removed}
 
 # -------------------------------
 # Helper: normalize incoming value -> list of strings

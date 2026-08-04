@@ -110,6 +110,11 @@ const USER = {
     process.exitCode = 1;
   } finally {
     await browser.close();
-    if (userId) console.log(`(left test user ${USER.username} id=${userId}; no delete endpoint exists)`);
+    if (userId) {
+      const r = await fetch(`${API}/user/${userId}`, { method: "DELETE" }).catch(() => null);
+      console.log(r && r.ok
+        ? `cleaned up test user ${USER.username} (id=${userId})`
+        : `WARNING: could not delete test user ${USER.username} (id=${userId})`);
+    }
   }
 })();

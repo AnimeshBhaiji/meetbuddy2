@@ -61,9 +61,14 @@ async function signIn(page, user, prefs = null) {
   }, { u: { id: user.id, username: user.username, token: user.token }, prefs });
 }
 
+// Includes *_sub answers on purpose: they are {sub_question_id: answer} objects,
+// and a fixture without them hides shape bugs in the whole stage-2 path.
 const DEFAULT_PREFS = {
   mood: "Romantic", planningStyle: "Surprise me", adventureLevel: "Stick to the city",
   memorableFactor: "Amazing food", location: "Indiranagar Bangalore",
+  mood_sub: { ro_setting: "Candlelit / intimate", ro_surprise: "No — keep it simple" },
+  planningStyle_sub: { sm_prior: ["Food quality", "Ambience"] },
+  adventureLevel_sub: { sc_area: "Central", sc_transport: "Parking assistance" },
 };
 
 /** Authenticated fetch against the API for a given test user. */

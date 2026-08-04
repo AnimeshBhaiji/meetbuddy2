@@ -233,13 +233,15 @@ async def save_preferences(request: Request, db: Session = Depends(get_db),
             if not base:
                 continue
 
-            incoming_sub_list = _to_list_of_strings(raw_val)
             stored_sub_key = f"{base}_sub"
 
-            # For each save, fully overwrite the stored *_sub list with the
-            # incoming values so previous instances are discarded.
-            if incoming_sub_list:
-                merged_for_user[stored_sub_key] = incoming_sub_list
+            # Keep sub-answers as {sub_question_id: answer}. Flattening them to
+            # a list of values throws the ids away, and every consumer looks
+            # answers up by id — directives._sub_answers silently returns {} for
+            # a non-dict, and place_analyzer indexes it directly.
+            # Each save fully replaces the stored object.
+            if isinstance(raw_val, dict) and raw_val:
+                merged_for_user[stored_sub_key] = raw_val
             else:
                 merged_for_user.pop(stored_sub_key, None)
 
@@ -248,13 +250,13 @@ async def save_preferences(request: Request, db: Session = Depends(get_db),
         for k in MAIN_KEYS:
             for sub_key_variant in (f"{k}_sub", f"{k}Sub", k + "_sub", k + "Sub"):
                 if sub_key_variant in prefs_nested:
-                    incoming_sub_list = _to_list_of_strings(prefs_nested.get(sub_key_variant))
+                    nested_sub = prefs_nested.get(sub_key_variant)
                     stored_sub_key = f"{k}_sub"
 
-                    # Nested preferences also fully overwrite the *_sub list
-                    # for this category on each save.
-                    if incoming_sub_list:
-                        merged_for_user[stored_sub_key] = incoming_sub_list
+                    # Nested preferences also fully replace this category's
+                    # sub-answers, and keep the same {id: answer} shape.
+                    if isinstance(nested_sub, dict) and nested_sub:
+                        merged_for_user[stored_sub_key] = nested_sub
                     else:
                         merged_for_user.pop(stored_sub_key, None)
 

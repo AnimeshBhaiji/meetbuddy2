@@ -153,9 +153,16 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
         'matches': [],
         'mismatches': []
     }
-    
+
+    def _sub(key):
+        """Sub-answers are {sub_question_id: answer}. Anything else means the
+        stored shape is wrong; degrade to no signal rather than raising, since
+        a scoring helper should never take down a plan request."""
+        val = stage2_prefs.get(key)
+        return val if isinstance(val, dict) else {}
+
     # Mood sub-preferences
-    mood_sub = stage2_prefs.get('mood_sub') or {}
+    mood_sub = _sub('mood_sub')
     if mood_sub:
         atm = detect_atmosphere(place)
         
@@ -172,7 +179,7 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
             results['matches'].append('Indoor seating')
     
     # Planning style sub-preferences
-    planning_sub = stage2_prefs.get('planningStyle_sub') or {}
+    planning_sub = _sub('planningStyle_sub')
     if planning_sub:
         fc_filters = planning_sub.get('fc_filters') or []
         if isinstance(fc_filters, list):
@@ -186,7 +193,7 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
                     results['matches'].append('Live music')
     
     # Adventure level sub-preferences
-    adventure_sub = stage2_prefs.get('adventureLevel_sub') or {}
+    adventure_sub = _sub('adventureLevel_sub')
     if adventure_sub:
         sc_transport = adventure_sub.get('sc_transport') or ''
         if 'Parking' in sc_transport:

@@ -43,7 +43,7 @@ python create_tables.py   # Creates PostgreSQL tables (no Alembic — run again 
   - `JWT_SECRET=<random string>` — the backend will not start without it. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
   - `SERPAPI_KEY=<key>` for place discovery
 - PostgreSQL connection is **hardcoded** in `meetbuddy2/backend/database.py`: `postgresql://postgres:123456@localhost:5432/meetbuddy` — update the file directly if credentials differ
-- No migration tool. `create_tables.py` uses `create_all()`, which only creates missing tables — it never alters an existing one, so a column change needs a hand-written script. Existing ones, all re-runnable: `backend/migrate_itinerary_times.py`, `backend/migrate_user_preferences.py`
+- No migration tool. `create_tables.py` uses `create_all()`, which only creates missing tables — it never alters an existing one, so a column change needs a hand-written script. Existing ones, all re-runnable: `backend/migrate_itinerary_times.py`, `backend/migrate_user_preferences.py`, `backend/migrate_sub_answer_shape.py` (the last repairs data rather than schema)
 - Backend tests need `pytest` and `httpx` (`pip install pytest httpx`); they are not in `requirements.txt`, which is the runtime list
 
 ## Authentication

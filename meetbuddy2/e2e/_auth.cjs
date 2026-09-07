@@ -63,12 +63,17 @@ async function signIn(page, user, prefs = null) {
 
 // Includes *_sub answers on purpose: they are {sub_question_id: answer} objects,
 // and a fixture without them hides shape bugs in the whole stage-2 path.
+//
+// planningStyle stays "Surprise me" even though the questionnaire no longer
+// offers it: the backend still supports the mode, these prefs are seeded through
+// the API rather than the UI, and this is the only remaining coverage of the
+// auto-plan path that suites like itinerary-edit rely on to reach the summary.
 const DEFAULT_PREFS = {
   mood: "Romantic", planningStyle: "Surprise me", adventureLevel: "Stick to the city",
   memorableFactor: "Amazing food", location: "Indiranagar Bangalore",
   mood_sub: { ro_setting: "Candlelit / intimate", ro_surprise: "No — keep it simple" },
   planningStyle_sub: { sm_prior: ["Food quality", "Ambience"] },
-  adventureLevel_sub: { sc_area: "Central", sc_transport: "Parking assistance" },
+  adventureLevel_sub: { sc_area: "Central", sc_transport: "Rides arranged" },
 };
 
 /** Authenticated fetch against the API for a given test user. */

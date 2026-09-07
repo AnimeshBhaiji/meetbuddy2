@@ -2,10 +2,11 @@
 // "Your perfect itinerary" as an editable route canvas. All edits are local:
 // the map redraws instantly, nothing cascades, Save persists to the API.
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { motion, Reorder } from "framer-motion";
 import { GripVertical, RefreshCw, X, Plus, StickyNote, Rocket, Printer,
-         Save, PartyPopper, Check } from "lucide-react";
+         Save, PartyPopper, Check, Sparkles } from "lucide-react";
 import MapPlanner from "@/components/MapPlanner";
 import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
@@ -28,7 +29,16 @@ const fieldClass =
   "outline-none focus:border-brand/50 [color-scheme:dark]";
 
 export default function ItineraryCanvas({ P, initialItinerary = null, prefillSlot = null }) {
-  const { userPrefs, user, selectedChain, optionsByStep, setPage, setSessionId, setSelectedChain } = P;
+  const { userPrefs, user, selectedChain, optionsByStep, resetSession } = P;
+  const navigate = useNavigate();
+
+  // Confirm first: an unsaved itinerary would otherwise vanish. Saved answers
+  // are kept — the questionnaire opens pre-filled.
+  const startNewPlanner = () => {
+    if (!window.confirm("Start a new planner? Your current progress will be lost.")) return;
+    resetSession();
+    navigate("/questionnaire-stage1");
+  };
 
   const [stops, setStops] = useState(() =>
     initialItinerary
@@ -139,7 +149,6 @@ export default function ItineraryCanvas({ P, initialItinerary = null, prefillSlo
     }
   };
 
-  const planAnother = () => { setPage("home"); setSessionId(null); setSelectedChain([]); };
   const serviceNotes = deriveServiceNotes(userPrefs);
 
   const AddBetween = ({ index }) => (
@@ -309,10 +318,13 @@ export default function ItineraryCanvas({ P, initialItinerary = null, prefillSlo
               <GlowButton variant="ghost" onClick={() => window.print()} className="flex-1">
                 <Printer className="w-4.5 h-4.5" /> Print
               </GlowButton>
-              <GlowButton variant="ghost" onClick={planAnother} className="flex-1">
+              <GlowButton variant="ghost" onClick={resetSession} className="flex-1">
                 <Rocket className="w-4.5 h-4.5" /> Plan another
               </GlowButton>
             </div>
+            <GlowButton variant="ghost" onClick={startNewPlanner} className="w-full">
+              <Sparkles className="w-4.5 h-4.5" /> Start a new planner
+            </GlowButton>
           </div>
         </GlassCard>
       </div>

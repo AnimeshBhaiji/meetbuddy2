@@ -527,6 +527,38 @@ export default function usePlannerSession() {
     }
   };
 
+  /**
+   * Clear the whole planning session back to a fresh state.
+   *
+   * This lives in the hook because only the hook can reach every setter — the
+   * screens used to each roll their own reset out of the three setters that
+   * happened to be exported, which is why old step options, filters and error
+   * banners survived a "restart". Location and identity are deliberately kept:
+   * they are not plan progress, and re-entering where you're meeting on every
+   * restart would be its own annoyance.
+   */
+  const resetSession = () => {
+    setPage("home");
+    setSessionId(null);
+    setCurrentStep(null);
+    setStepOptions([]);
+    setAnchorText("");
+    setSelectedChain([]);
+    setSessionLoading(false);
+    setFlowText("");
+    setInitialFlow([]);
+    setShowOverlay(false);
+    setOverlayText("Loading next step...");
+    setHighlightedPlace(null);
+    setPlannerError(null);
+    setPlanMode("semi");
+    setDirectives(null);
+    setOptionsByStep({});
+    setShowAllOptions(false);
+    setActiveFilters([]);
+    setSortBy("match");
+  };
+
   return {
     userPrefs, user, placeText, setPlaceText, coords, locLoading,
     page, setPage, sessionId, setSessionId, currentStep, stepOptions,
@@ -539,6 +571,6 @@ export default function usePlannerSession() {
     upcomingSteps,
     useMyLocation, handlePlaceTextBlur, startSession, autoPlan,
     skipStep, removeUpcomingStep, addUpcomingStep,
-    moveUpcomingStep, selectOption, goBackOneStep,
+    moveUpcomingStep, selectOption, goBackOneStep, resetSession,
   };
 }

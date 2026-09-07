@@ -100,7 +100,7 @@ const subQuestionMap = {
           id: "sc_transport",
           question: "Transport support",
           type: "single",
-          options: ["No", "Parking assistance", "Rides arranged"]
+          options: ["No", "Rides arranged"]
         }
       ],
       "Short drive to hidden gem": [

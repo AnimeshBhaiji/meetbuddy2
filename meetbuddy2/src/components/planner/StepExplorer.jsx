@@ -2,10 +2,11 @@
 // Map-first step page: full-viewport map, floating controls, bottom option
 // carousel, and a collapsed "view all options" card grid below the map.
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin, ArrowLeft, ArrowRight, X, Star, ExternalLink, Check,
-  RotateCcw, ChevronDown, ChevronUp, AlertTriangle, SlidersHorizontal,
+  RotateCcw, ChevronDown, ChevronUp, AlertTriangle, SlidersHorizontal, Sparkles,
 } from "lucide-react";
 import MapPlanner from "@/components/MapPlanner";
 import GlassCard from "@/components/ui/GlassCard";
@@ -220,8 +221,18 @@ export default function StepExplorer({ P }) {
     selectedChain, sessionLoading, plannerError, highlightedPlace, setHighlightedPlace,
     activeFilters, setActiveFilters, sortBy, setSortBy, showAllOptions, setShowAllOptions,
     upcomingSteps, removeUpcomingStep, addUpcomingStep, moveUpcomingStep,
-    selectOption, goBackOneStep, skipStep, startSession, setPage, setSessionId, setSelectedChain,
+    selectOption, goBackOneStep, skipStep, startSession, resetSession,
   } = P;
+
+  const navigate = useNavigate();
+
+  // Mid-flow, so confirm before throwing the picks away. Saved answers are kept
+  // — the questionnaire opens pre-filled.
+  const startNewPlanner = () => {
+    if (!window.confirm("Start a new planner? Your current progress will be lost.")) return;
+    resetSession();
+    navigate("/questionnaire-stage1");
+  };
 
   const shortlist = planMode === "semi" ? directives?.shortlist : null;
   let displayedOptions = shortlist && !showAllOptions ? stepOptions.slice(0, shortlist) : stepOptions;
@@ -229,7 +240,7 @@ export default function StepExplorer({ P }) {
   const filterChips = planMode === "full" ? directives?.filters || [] : [];
   const currentIdx = initialFlow.indexOf(currentStep);
 
-  const cancel = () => { setPage("home"); setSessionId(null); setSelectedChain([]); };
+
 
   return (
     <div className="max-w-none">
@@ -286,7 +297,10 @@ export default function StepExplorer({ P }) {
                 Skip <ArrowRight className="w-4 h-4" />
               </GlowButton>
             )}
-            <GlowButton variant="danger" onClick={cancel} aria-label="Cancel planning">
+            <GlowButton variant="ghost" onClick={startNewPlanner} aria-label="Start a new planner">
+              <Sparkles className="w-4 h-4" />
+            </GlowButton>
+            <GlowButton variant="danger" onClick={resetSession} aria-label="Cancel planning">
               <X className="w-4 h-4" />
             </GlowButton>
           </div>
@@ -444,7 +458,7 @@ export default function StepExplorer({ P }) {
               ) : (
                 <div className="flex justify-center gap-3">
                   <GlowButton onClick={startSession}><RotateCcw className="w-4 h-4" /> Retry</GlowButton>
-                  <GlowButton variant="ghost" onClick={cancel}><ArrowLeft className="w-4 h-4" /> Go back</GlowButton>
+                  <GlowButton variant="ghost" onClick={resetSession}><ArrowLeft className="w-4 h-4" /> Go back</GlowButton>
                 </div>
               )}
             </GlassCard>
@@ -474,7 +488,7 @@ export default function StepExplorer({ P }) {
                 loading={sessionLoading}
                 onHighlight={setHighlightedPlace}
                 onRetry={startSession}
-                onBack={cancel}
+                onBack={resetSession}
               />
             </motion.div>
           )}

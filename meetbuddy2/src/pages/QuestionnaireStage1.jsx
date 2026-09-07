@@ -19,7 +19,7 @@ const MAIN_QUESTIONS = [
   {
     key: "planningStyle",
     question: "How much effort do you want to put into planning?",
-    options: ["Surprise me", "Semi-custom", "Full control"],
+    options: ["Semi-custom", "Full control"],
   },
   {
     key: "adventureLevel",
@@ -47,7 +47,6 @@ const OPTION_EMOJI = {
   "Chill & Relaxed": "😌",
   "Business-y": "💼",
   "Romantic": "🌹",
-  "Surprise me": "🎲",
   "Semi-custom": "🎨",
   "Full control": "🎛️",
   "Stick to the city": "🏙️",

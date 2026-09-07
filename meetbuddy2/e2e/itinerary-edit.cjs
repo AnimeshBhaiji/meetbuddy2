@@ -24,6 +24,13 @@ const firstStopTitle = (page) =>
   await page.click("text=Generate itinerary");
   await page.waitForSelector("text=Save itinerary", { timeout: 120000 });
 
+  // the summary screen offers a full restart alongside "Plan another"
+  if ((await page.locator("text=Start a new planner").count()) === 0) {
+    console.log("ITINERARY EDIT: FAIL — no 'Start a new planner' button on the summary");
+    await browser.close();
+    process.exit(1);
+  }
+
   let stopCount = await page.locator('[aria-label="Remove stop"]').count();
   console.log("stops:", stopCount);
 

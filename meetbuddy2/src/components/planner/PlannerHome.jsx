@@ -1,6 +1,7 @@
 // src/components/planner/PlannerHome.jsx
 import { motion } from "framer-motion";
-import { MapPin, LocateFixed, Rocket } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { MapPin, LocateFixed, Rocket, Sparkles } from "lucide-react";
 import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
 import { PREF_META } from "@/hooks/usePlannerSession";
@@ -12,10 +13,20 @@ const displayPref = (val) => {
 };
 
 export default function PlannerHome({ P }) {
+  const navigate = useNavigate();
   const {
     userPrefs, placeText, setPlaceText, coords, locLoading, useMyLocation,
     handlePlaceTextBlur, flowText, plannerError, startSession, sessionLoading,
+    resetSession,
   } = P;
+
+  // Nothing is in progress on this screen, so no confirmation is needed. Your
+  // saved answers come back pre-filled — this reopens them for editing rather
+  // than wiping them.
+  const startNewPlanner = () => {
+    resetSession();
+    navigate("/questionnaire-stage1");
+  };
   return (
     <div className="max-w-4xl mx-auto px-6 py-6">
       <motion.div
@@ -31,6 +42,12 @@ export default function PlannerHome({ P }) {
           Personalized recommendations based on your preferences
         </p>
       </motion.div>
+
+      <div className="flex justify-end mb-4">
+        <GlowButton variant="ghost" size="sm" onClick={startNewPlanner}>
+          <Sparkles className="w-4 h-4" /> Start a new planner
+        </GlowButton>
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}

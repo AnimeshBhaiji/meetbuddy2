@@ -498,15 +498,22 @@ export default function usePlannerSession() {
       return;
     }
 
-    // remove last local selection
-    const newChain = selectedChain.slice(0, -1);
-    setSelectedChain(newChain);
-
-    // determine step to restore
-    const stepToRestore = newChain.length ? newChain[newChain.length - 1].step : (initialFlow[0] || "restaurant");
+    // Undo the latest pick and reopen *its* step. This used to reopen the step of
+    // the pick before it: with [restaurant, activity] picked, Back showed the
+    // restaurant options while the restaurant pick was still in the plan.
+    const undone = selectedChain[selectedChain.length - 1];
+    setSelectedChain(selectedChain.slice(0, -1));
+    const stepToRestore = undone.step || initialFlow[0] || "restaurant";
     setCurrentStep(stepToRestore);
 
-    // try to get session state from server and restore last_options
+    // Every step's options are kept in memory as they arrive; only a reloaded
+    // page, which has lost them, needs the server's copy.
+    const cached = optionsByStep[stepToRestore];
+    if (cached?.length) {
+      setStepOptions(cached);
+      return;
+    }
+
     try {
       setSessionLoading(true);
       const res = await api.get(`/planner/session/${sessionId}`);

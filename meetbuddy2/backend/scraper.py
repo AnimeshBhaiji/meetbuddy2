@@ -20,6 +20,18 @@ RADIUS_BUCKETS = (2500, 6000, 10000, 25000, 50000)  # matches directive radii
 # Billed-credit counter for this process; logged so savings are measurable.
 serpapi_calls = 0
 
+# Search cache outcomes for this process, logged with a running hit rate.
+# ponytail: unsynchronised counters (searches run on worker threads) can lose a
+# count under contention; fine for a log line, add a lock if they ever feed billing.
+_search_stats = {"hit": 0, "miss": 0}
+
+
+def _log_cache(outcome: str, key: str):
+    _search_stats[outcome] += 1
+    total = _search_stats["hit"] + _search_stats["miss"]
+    logger.info("search cache %s (%d/%d hits since start, %.0f%%): %s",
+                outcome, _search_stats["hit"], total, 100 * _search_stats["hit"] / total, key)
+
 
 def _ensure_key():
     if not SERPAPI_KEY:
@@ -163,8 +175,9 @@ def search_places(query: str, coords: Optional[Tuple[float, float]] = None,
     key = _cache_key(query, coords, radius_m)
     hit = cache.get(key)
     if hit is not None:
-        logger.info("search cache hit: %s", key)
+        _log_cache("hit", key)
         return hit
+    _log_cache("miss", key)
     places = fetch_places_page(query, coords, radius_m)
     # empty pages cached briefly too, so a no-result area doesn't re-bill a
     # credit on every request

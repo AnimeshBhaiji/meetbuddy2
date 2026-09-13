@@ -8,13 +8,22 @@ from models import User, Itinerary
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from typing import List, Optional
-import json, os
+import json, logging, os
 from planner import generate_initial_suggestions, generate_followup_suggestions
 from planner_sessions import (create_session, get_session, push_selection,
                               set_last_options, update_session, delete_sessions_for_user)
 from itineraries import router as itineraries_router
 from geo import geocode_address
 from auth import create_access_token, get_current_user
+
+# -------- LOGGING --------
+# Nothing configured logging, so INFO lines from the app's own modules (SerpAPI
+# calls, search cache hit rate) were dropped and only warnings reached the
+# console. Only these loggers go to INFO: raising the root logger would also
+# turn on SQLAlchemy's per-query logging.
+logging.basicConfig(format="%(levelname)s:     %(name)s: %(message)s")
+for _name in ("scraper", "planner", "geo", "cache"):
+    logging.getLogger(_name).setLevel(logging.INFO)
 
 
 # -------- DATABASE SETUP --------

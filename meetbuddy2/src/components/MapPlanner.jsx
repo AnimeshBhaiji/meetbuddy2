@@ -86,7 +86,10 @@ const userLocationIcon = L.divIcon({
   popupAnchor: [0, -28],
 });
 
-function FitBounds({ points = [] }) {
+// Re-fits only when `signature` (the set of coordinates) changes. Callers pass a
+// fresh points array on every render — a card hover, a keystroke — and re-fitting
+// on those snapped a map the user had panned back into place.
+function FitBounds({ points = [], signature }) {
   const map = useMap();
   useEffect(() => {
     if (!map || !points || !points.length) return;
@@ -106,7 +109,8 @@ function FitBounds({ points = [] }) {
     } catch {
       // swallow fitBounds issues
     }
-  }, [points, map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- points is read when the signature changes, not on every new array
+  }, [signature, map]);
   return null;
 }
 
@@ -246,12 +250,16 @@ export default function MapPlanner({
     ? [Number(userCoords.lat), Number(userCoords.lng)]
     : (firstValid ? [firstValid.lat, firstValid.lng] : [12.9715987, 77.5945627]);
 
-  // Build a stable key so MapContainer remounts when dataset changes (safer fitBounds)
-  const mapKey = useMemo(() => {
-    const optKey = normalizedOptions.map((o) => `${o.lat}:${o.lng}`).join("|");
-    const selKey = selectedPlaces.map((s) => `${s.lat}:${s.lng}`).join("|");
-    return `${optKey}::${selKey}`;
-  }, [normalizedOptions, selectedPlaces]);
+  // Everything the map should frame. The map is never remounted for new data
+  // (that reloaded every tile and marker on each step, sort and filter) — FitBounds
+  // re-frames it instead. The signature is sorted, so re-sorting options or
+  // reordering stops doesn't re-fit an unchanged set of places.
+  const fitPoints = [
+    ...(userCoords && userCoords.lat != null && userCoords.lng != null ? [userCoords] : []),
+    ...normalizedOptions.filter((o) => o.lat && o.lng),
+    ...selectedPlaces.filter((s) => s.lat && s.lng),
+  ];
+  const fitSignature = fitPoints.map((p) => `${p.lat}:${p.lng}`).sort().join("|");
 
   // Open popup when highlightedPlace changes
   useEffect(() => {
@@ -359,7 +367,6 @@ export default function MapPlanner({
   return (
     <div className={className || "w-full h-[520px] md:h-[640px] rounded-xl overflow-hidden shadow"}>
       <MapContainer
-        key={mapKey}
         center={center}
         zoom={13}
         style={{ height: "100%", width: "100%" }}
@@ -372,11 +379,7 @@ export default function MapPlanner({
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
-        <FitBounds points={[
-          ...(userCoords && userCoords.lat != null && userCoords.lng != null ? [userCoords] : []),
-          ...normalizedOptions.filter(o => o.lat && o.lng),
-          ...selectedPlaces.filter(s => s.lat && s.lng),
-        ]} />
+        <FitBounds points={fitPoints} signature={fitSignature} />
 
         {/* User's current location (GPS) */}
         {userCoords && userCoords.lat != null && userCoords.lng != null && (

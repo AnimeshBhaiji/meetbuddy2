@@ -42,6 +42,7 @@ python create_tables.py   # Creates PostgreSQL tables (no Alembic — run again 
 - `meetbuddy2/backend/.env` must contain:
   - `JWT_SECRET=<random string>` — the backend will not start without it. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`
   - `SERPAPI_KEY=<key>` for place discovery
+  - `NOMINATIM_CONTACT=<email>` — a real contact address for OpenStreetMap's geocoder. Without it the User-Agent carries a placeholder and Nominatim answers **403 to every call**: typed locations get no coordinates, and each refused call still costs a follow-up search ~3.5s
 - PostgreSQL connection is **hardcoded** in `meetbuddy2/backend/database.py`: `postgresql://postgres:123456@localhost:5432/meetbuddy` — update the file directly if credentials differ
 - No migration tool. `create_tables.py` uses `create_all()`, which only creates missing tables — it never alters an existing one, so a column change needs a hand-written script. Existing ones, all re-runnable: `backend/migrate_itinerary_times.py`, `backend/migrate_user_preferences.py`, `backend/migrate_sub_answer_shape.py` (the last repairs data rather than schema)
 - Backend tests need `pytest` and `httpx` (`pip install pytest httpx`); they are not in `requirements.txt`, which is the runtime list

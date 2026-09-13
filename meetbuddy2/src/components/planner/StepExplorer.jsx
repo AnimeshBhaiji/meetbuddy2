@@ -80,6 +80,8 @@ function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBac
               <img
                 src={o.thumbnail}
                 alt={o.title}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               />
               {o.rating && (
@@ -160,7 +162,7 @@ function CarouselCard({ o, idx, pickBadge, onSelect, onHighlight, loading }) {
     >
       {o.thumbnail && (
         <div className="h-20 overflow-hidden relative">
-          <img src={o.thumbnail} alt={o.title} className="w-full h-full object-cover" />
+          <img src={o.thumbnail} alt={o.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
           {pickBadge && idx === 0 && (
             <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-bold text-white bg-gradient-to-r from-brand to-brand-2">
               ⭐ MeetBuddy's pick

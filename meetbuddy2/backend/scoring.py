@@ -29,11 +29,15 @@ def _text(place: Dict[str, Any]) -> str:
     ).lower()
 
 
+def place_key(p: Dict[str, Any]) -> str:
+    return p.get("place_id") or (p.get("title") or "") + "::" + (p.get("address") or "")
+
+
 def dedupe_places(places: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen = set()
     out = []
     for p in places:
-        key = p.get("place_id") or (p.get("title") or "") + "::" + (p.get("address") or "")
+        key = place_key(p)
         if key not in seen:
             seen.add(key)
             out.append(p)
@@ -79,6 +83,18 @@ def filter_step_type(places: List[Dict[str, Any]], step: Optional[str]) -> List[
                     and not any(k in _text(p) for k in STAY_KEYWORDS))
         ]
     return places
+
+
+def usable_places(places: List[Dict[str, Any]], step: Optional[str] = None,
+                  avoid_terms: Optional[List[str]] = None,
+                  exclude_keys=()) -> List[Dict[str, Any]]:
+    """The venues a user could actually be shown: deduped, minus places already
+    picked this plan, wrong for the step, or on the avoid list."""
+    places = dedupe_places(places)
+    if exclude_keys:
+        places = [p for p in places if place_key(p) not in exclude_keys]
+    places = filter_step_type(places, step)
+    return filter_avoided(places, avoid_terms or [])
 
 
 def _base_score(place: Dict[str, Any], labels_used: Dict[str, List[str]]) -> float:
@@ -203,13 +219,13 @@ def rank_places(
     step: Optional[str] = None,
     is_weekend_escape: bool = False,
     diversify_target: int = 0,
+    exclude_keys=(),
 ) -> List[Dict[str, Any]]:
-    """The full pipeline: dedupe -> step filter -> avoid filter -> score -> sort
-    (-> optional weekend sector diversification). Mutates places in-place
-    (tags / distance_meters / score) and returns the ranked list."""
-    places = dedupe_places(places)
-    places = filter_step_type(places, step)
-    places = filter_avoided(places, directives.get("avoid_terms", []))
+    """The full pipeline: usable_places (dedupe, already-picked, step, avoid
+    filters) -> score -> sort (-> optional weekend sector diversification).
+    Mutates places in-place (tags / distance_meters / score) and returns the
+    ranked list."""
+    places = usable_places(places, step, directives.get("avoid_terms"), exclude_keys)
 
     for p in places:
         p["tags"] = tag_place_minimal(p)

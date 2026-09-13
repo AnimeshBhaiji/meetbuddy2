@@ -15,7 +15,7 @@ from directives import (
     short_query_from_selected,
 )
 from geo import geocode_address, haversine_meters, normalize_coords, reverse_geocode_to_text
-from scoring import rank_places
+from scoring import place_key, rank_places, usable_places
 from scraper import search_places
 
 logger = logging.getLogger(__name__)
@@ -91,8 +91,12 @@ def _filter_radius(places: List[Dict[str, Any]], anchor: Optional[Tuple[float, f
 
 def _search_step(primary_q: str, fallback_q: Optional[str],
                  coords: Optional[Tuple[float, float]], radius_m: Optional[float],
-                 search_errors: List[str]) -> List[Dict[str, Any]]:
-    """One cached search; one broad fallback only if results are thin."""
+                 search_errors: List[str], usable=None) -> List[Dict[str, Any]]:
+    """One cached search; one broad fallback only if results are thin.
+
+    `usable` narrows the results to what the user would actually be shown.
+    Thin is judged on that — six raw results with five on the avoid list is
+    one usable result, and it must still trigger the fallback."""
     options: List[Dict[str, Any]] = []
     queries = [primary_q]
     if fallback_q and fallback_q != primary_q:
@@ -104,7 +108,7 @@ def _search_step(primary_q: str, fallback_q: Optional[str],
         except Exception as e:
             logger.warning("place search failed for %r: %s", q, e)
             search_errors.append(str(e))
-        if len(options) >= MIN_USABLE_RESULTS:
+        if len(usable(options) if usable else options) >= MIN_USABLE_RESULTS:
             break
     return options
 
@@ -168,7 +172,9 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
 
     radius_m = directives["radius_m"]
     search_errors: List[str] = []
-    options = _search_step(primary_q, fallback_q, coords_tuple, radius_m, search_errors)
+    avoid_terms = directives.get("avoid_terms")
+    options = _search_step(primary_q, fallback_q, coords_tuple, radius_m, search_errors,
+                           usable=lambda opts: usable_places(opts, avoid_terms=avoid_terms))
 
     ranked = rank_places(
         options, labels_used, prefs_data, directives,
@@ -258,11 +264,17 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
         fallback_q = "restaurants"
 
     search_errors: List[str] = []
-    fetched = _search_step(primary_q, fallback_q, anchor_coords, followup_radius, search_errors)
+    # Never offer a place already in this plan (the cafe step used to list the
+    # restaurant just picked).
+    picked = {place_key(s["place"]) for s in steps if s.get("place")}
+    avoid_terms = directives.get("avoid_terms")
+    fetched = _search_step(
+        primary_q, fallback_q, anchor_coords, followup_radius, search_errors,
+        usable=lambda opts: usable_places(opts, next_step, avoid_terms, picked))
 
     ranked = rank_places(
         fetched, labels_used, prefs, directives,
-        anchor_coords=anchor_coords, step=next_step,
+        anchor_coords=anchor_coords, step=next_step, exclude_keys=picked,
     )
 
     result = {

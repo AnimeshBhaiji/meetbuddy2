@@ -2,6 +2,7 @@
 # cached Nominatim geocoding (forward + reverse).
 import logging
 import os
+import threading
 import time
 from math import atan2, cos, radians, sin, sqrt
 from typing import Optional, Tuple
@@ -18,6 +19,14 @@ load_dotenv()
 NOMINATIM_CONTACT = os.getenv("NOMINATIM_CONTACT", "meetbuddy@example.com")
 NOMINATIM_USER_AGENT = f"MeetBuddyPlanner/1.0 ({NOMINATIM_CONTACT})"
 GEOCODE_TTL = 90 * 24 * 3600  # coordinates of an address don't move
+
+# One pooled session for outbound calls, so repeat requests to the same host
+# reuse the TLS connection instead of opening a new one each time.
+http = requests.Session()
+
+# Searches run on worker threads, so two can reach Nominatim at once. The
+# lock is held through the 1s sleep to keep the whole process at 1 req/s.
+_nominatim_lock = threading.Lock()
 
 
 def haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -58,13 +67,14 @@ def geocode_address(address: str) -> Optional[Tuple[float, float]]:
         return (hit[0], hit[1]) if hit else None
     coords = None
     try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": address, "format": "jsonv2", "limit": 1},
-            headers={"User-Agent": NOMINATIM_USER_AGENT},
-            timeout=8,
-        )
-        time.sleep(1.0)  # Nominatim usage policy — live calls only
+        with _nominatim_lock:
+            resp = http.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": address, "format": "jsonv2", "limit": 1},
+                headers={"User-Agent": NOMINATIM_USER_AGENT},
+                timeout=8,
+            )
+            time.sleep(1.0)  # Nominatim usage policy — live calls only
         if resp.status_code != 200:
             logger.warning("geocode HTTP %s for %r", resp.status_code, address)
             return None  # transient/blocked: don't cache
@@ -90,13 +100,14 @@ def reverse_geocode_to_text(coords) -> Optional[str]:
         return hit or None
     name = None
     try:
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/reverse",
-            params={"format": "jsonv2", "lat": lat, "lon": lon, "addressdetails": 1},
-            headers={"User-Agent": NOMINATIM_USER_AGENT},
-            timeout=8,
-        )
-        time.sleep(1.0)
+        with _nominatim_lock:
+            resp = http.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"format": "jsonv2", "lat": lat, "lon": lon, "addressdetails": 1},
+                headers={"User-Agent": NOMINATIM_USER_AGENT},
+                timeout=8,
+            )
+            time.sleep(1.0)
         if resp.status_code != 200:
             logger.warning("reverse geocode HTTP %s for %s,%s", resp.status_code, lat, lon)
             return None  # transient/blocked: don't cache

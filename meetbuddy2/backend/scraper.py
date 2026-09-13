@@ -4,11 +4,10 @@ import logging
 import os
 from typing import Dict, List, Optional, Tuple
 
-import requests
 from dotenv import load_dotenv
 
 import cache
-from geo import geocode_address, normalize_coords
+from geo import geocode_address, http, normalize_coords
 
 load_dotenv()
 SERPAPI_KEY = os.getenv("SERPAPI_KEY")
@@ -118,7 +117,7 @@ def fetch_places_page(query: str, coords: Optional[Tuple[float, float]] = None,
 
     serpapi_calls += 1
     logger.info("SerpAPI call #%d: %r", serpapi_calls, params["q"])
-    resp = requests.get("https://serpapi.com/search", params=params, timeout=15)
+    resp = http.get("https://serpapi.com/search", params=params, timeout=15)
     if resp.status_code != 200:
         try:
             err = resp.json().get("error") or resp.text

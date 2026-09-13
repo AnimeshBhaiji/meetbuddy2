@@ -1,5 +1,6 @@
 # main.py
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from database import engine, Base, get_db
@@ -306,7 +307,9 @@ async def planner_session_start(request: Request, db: Session = Depends(get_db),
         "location": raw.get("location") or raw.get("place") or None,
     }
 
-    initial = generate_initial_suggestions(payload, num_results=15)
+    # The search is blocking I/O (SerpAPI, Nominatim, cache). Run it off the
+    # event loop, or one slow search stalls every other request.
+    initial = await run_in_threadpool(generate_initial_suggestions, payload, num_results=15)
 
     # If no options were found, return the session anyway with an empty list —
     # the frontend renders a retry/empty state for this case.
@@ -370,7 +373,7 @@ async def planner_session_select(sid: str, request: Request, db: Session = Depen
         session = update_session(sid, "selected_tokens", raw.get("selected_tokens"), db) or session
 
     # Generate followup suggestions based on last selected place
-    follow = generate_followup_suggestions(session, next_step, num_results=15)
+    follow = await run_in_threadpool(generate_followup_suggestions, session, next_step, num_results=15)
     set_last_options(sid, next_step, follow.get("options", []), db)
 
     return {
@@ -398,7 +401,7 @@ async def planner_session_skip(sid: str, request: Request, db: Session = Depends
     if not next_step or next_step == "done":
         return {"session_id": sid, "next_step": "done", "options": []}
 
-    follow = generate_followup_suggestions(session, next_step, num_results=15)
+    follow = await run_in_threadpool(generate_followup_suggestions, session, next_step, num_results=15)
     set_last_options(sid, next_step, follow.get("options", []), db)
 
     return {
@@ -431,7 +434,7 @@ async def planner_options(request: Request, user: User = Depends(get_current_use
         },
         "steps": [],
     }
-    follow = generate_followup_suggestions(synthetic_state, category, num_results=15)
+    follow = await run_in_threadpool(generate_followup_suggestions, synthetic_state, category, num_results=15)
     return {
         "options": follow.get("options", []),
         "anchor_text": follow.get("anchor_text"),

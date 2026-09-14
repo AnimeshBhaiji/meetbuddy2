@@ -7,7 +7,7 @@
 //   Back -> restaurant options, 0 picks left
 // Needs backend :8000 + vite :5173.
 const { chromium } = require("playwright");
-const { createTestUser, deleteTestUser, signIn, DEFAULT_PREFS } = require("./_auth.cjs");
+const { API, createTestUser, deleteTestUser, signIn, DEFAULT_PREFS } = require("./_auth.cjs");
 
 const fail = (m) => { throw new Error(m); };
 
@@ -37,6 +37,20 @@ const pickCount = (page) =>
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+
+  // The server must forget an undone pick too: every place it holds in the
+  // session is excluded from later suggestions.
+  let sessionId = null;
+  page.on("response", async (r) => {
+    if (r.request().method() === "POST" && /\/planner\/session$/.test(r.url())) {
+      try { sessionId = (await r.json()).session_id; } catch { /* not JSON */ }
+    }
+  });
+  // Read from Node, not the page, so the "no re-download" check below stays honest.
+  const serverPicks = async () => {
+    const res = await fetch(`${API}/planner/session/${sessionId}`, { headers: user.headers });
+    return (await res.json()).steps.length;
+  };
 
   let user = null;
   try {
@@ -69,7 +83,9 @@ const pickCount = (page) =>
     await waitForNewOptions(page, activityOptions);
     await page.waitForTimeout(1000);
     if ((await pickCount(page)) !== 2) fail(`expected 2 picks on the map, saw ${await pickCount(page)}`);
-    console.log("picked an activity -> stay options, 2 picks");
+    if (!sessionId) fail("never saw the planner session id");
+    if ((await serverPicks()) !== 2) fail(`server holds ${await serverPicks()} picks, expected 2`);
+    console.log("picked an activity -> stay options, 2 picks (server agrees)");
 
     // ---------- Back #1: reopens activity, from memory ----------
     const sessionFetches = [];
@@ -85,7 +101,9 @@ const pickCount = (page) =>
     if (afterBack1 !== activityOptions)
       fail("Back did not restore the activity options the pick was made from");
     if ((await pickCount(page)) !== 1) fail(`expected 1 pick after Back, saw ${await pickCount(page)}`);
-    console.log("back #1: activity options restored, 1 pick left");
+    if ((await serverPicks()) !== 1)
+      fail(`after Back the server still holds ${await serverPicks()} picks, so the undone place stays excluded`);
+    console.log("back #1: activity options restored, 1 pick left (server agrees)");
 
     // ---------- Back #2: reopens restaurant ----------
     await page.getByRole("button", { name: /^Back$/ }).click();
@@ -93,7 +111,8 @@ const pickCount = (page) =>
     if ((await titles(page)) !== restaurantOptions)
       fail("second Back did not restore the restaurant options");
     if ((await pickCount(page)) !== 0) fail(`expected 0 picks, saw ${await pickCount(page)}`);
-    console.log("back #2: restaurant options restored, 0 picks left");
+    if ((await serverPicks()) !== 0) fail(`after two Backs the server still holds ${await serverPicks()} picks`);
+    console.log("back #2: restaurant options restored, 0 picks left (server agrees)");
 
     if (sessionFetches.length)
       fail(`Back re-downloaded the session ${sessionFetches.length}x though the options were in memory`);

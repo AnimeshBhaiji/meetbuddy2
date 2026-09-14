@@ -506,29 +506,40 @@ export default function usePlannerSession() {
     const stepToRestore = undone.step || initialFlow[0] || "restaurant";
     setCurrentStep(stepToRestore);
 
-    // Every step's options are kept in memory as they arrive; only a reloaded
-    // page, which has lost them, needs the server's copy.
-    const cached = optionsByStep[stepToRestore];
-    if (cached?.length) {
-      setStepOptions(cached);
-      return;
-    }
-
+    // Select stays disabled (sessionLoading) until the server has undone the pick
+    // too, so a new pick can't reach the server first and be undone instead.
+    setSessionLoading(true);
     try {
-      setSessionLoading(true);
-      const res = await api.get(`/planner/session/${sessionId}`);
-      const s = res || {};
-      const last_opts = (s.last_options && s.last_options[stepToRestore]) || (s.last_options && s.last_options.initial) || s.options || [];
-      if (last_opts && last_opts.length) {
-        setStepOptions(last_opts);
+      // Every step's options are kept in memory as they arrive; only a reloaded
+      // page, which has lost them, needs the server's copy.
+      const cached = optionsByStep[stepToRestore];
+      if (cached?.length) {
+        setStepOptions(cached);
       } else {
-        setPlannerError("Couldn't restore previous step options. Please start over.");
-        setPage("home");
-        setSessionId(null);
-        setStepOptions([]);
+        try {
+          const s = (await api.get(`/planner/session/${sessionId}`)) || {};
+          const last_opts = (s.last_options && s.last_options[stepToRestore]) || (s.last_options && s.last_options.initial) || s.options || [];
+          if (last_opts && last_opts.length) {
+            setStepOptions(last_opts);
+          } else {
+            setPlannerError("Couldn't restore previous step options. Please start over.");
+            setPage("home");
+            setSessionId(null);
+            setStepOptions([]);
+            return;
+          }
+        } catch (e) {
+          console.warn("Back: failed to restore server options, using local fallback", e);
+        }
       }
-    } catch (e) {
-      console.warn("Back: failed to restore server options, using local fallback", e);
+
+      // Every place the server still holds is excluded from later suggestions,
+      // so an undone pick has to be forgotten there as well.
+      try {
+        await api.post(`/planner/session/${sessionId}/undo`);
+      } catch (e) {
+        console.warn("Back: server could not undo the pick; it stays excluded from suggestions", e);
+      }
     } finally {
       setSessionLoading(false);
     }

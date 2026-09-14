@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json, logging, os
 from planner import generate_initial_suggestions, generate_followup_suggestions
-from planner_sessions import (create_session, get_session, push_selection,
+from planner_sessions import (create_session, get_session, pop_selection, push_selection,
                               set_last_options, update_session, delete_sessions_for_user)
 from itineraries import router as itineraries_router
 from geo import geocode_address
@@ -420,6 +420,16 @@ async def planner_session_skip(sid: str, request: Request, db: Session = Depends
         "anchor_text": follow.get("anchor_text"),
         "search_error": follow.get("search_error"),
     }
+
+# Undo the latest pick (the planner's Back button). The client restores the
+# step's options itself; the server only has to forget the place, because every
+# place left in steps is excluded from later suggestions.
+@app.post("/planner/session/{sid}/undo")
+def planner_session_undo(sid: str, db: Session = Depends(get_db),
+                         user: User = Depends(get_current_user)):
+    _owned_session(sid, user, db)
+    session = pop_selection(sid, db)
+    return {"session_id": sid, "steps": len(session["steps"])}
 
 # Stateless options search — powers add/swap on saved itineraries where no
 # planner session exists. Reuses the followup pipeline with a synthetic state.

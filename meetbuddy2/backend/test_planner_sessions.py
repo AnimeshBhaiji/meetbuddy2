@@ -185,3 +185,42 @@ def test_deleting_an_account_removes_its_sessions():
     finally:
         _cleanup(db, keeper)
         db.close()
+
+
+def test_pop_selection_removes_only_the_latest():
+    """Back undoes one pick. The server has to forget it too: every place left in
+    steps is excluded from later suggestions."""
+    db = SessionLocal()
+    user = None
+    try:
+        user = _new_user(db)
+        sid = ps.create_session(user.id, {}, db)
+        ps.push_selection(sid, "restaurant", {"title": "A"}, db)
+        ps.push_selection(sid, "activity", {"title": "B"}, db)
+
+        assert [s["place"]["title"] for s in ps.pop_selection(sid, db)["steps"]] == ["A"]
+        assert ps.pop_selection(sid, db)["steps"] == []
+        assert ps.pop_selection(sid, db)["steps"] == []  # nothing left to undo
+    finally:
+        _cleanup(db, user)
+        db.close()
+
+
+def test_undo_route_pops_the_owners_latest_pick():
+    db = SessionLocal()
+    user = None
+    try:
+        user = _new_user(db)
+        sid = ps.create_session(user.id, {}, db)
+        ps.push_selection(sid, "restaurant", {"title": "A"}, db)
+        ps.push_selection(sid, "activity", {"title": "B"}, db)
+
+        resp = client.post(f"/planner/session/{sid}/undo", headers=_auth(user))
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["steps"] == 1
+
+        db.expire_all()  # the route wrote through its own connection
+        assert [s["place"]["title"] for s in ps.get_session(sid, db)["steps"]] == ["A"]
+    finally:
+        _cleanup(db, user)
+        db.close()

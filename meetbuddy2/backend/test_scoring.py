@@ -58,3 +58,11 @@ def test_budget_priority_uses_price():
     d = {"avoid_terms": [], "priorities": ["budget"]}
     ranked = rank([pricey, cheap], directives=d)
     assert ranked[0]["title"] == "Thrifty Thali"
+
+
+def test_mood_signal_in_the_title_moves_a_place_up():
+    """Descriptions are often empty; the title and type still say what a place is."""
+    generic = _place("Lunch Canteen", type="Restaurant")
+    romantic = _place("Candlelight Terrace", type="Romantic restaurant")
+    ranked = rank([generic, romantic], labels_used={"mood": ["Romantic"]})
+    assert ranked[0]["title"] == "Candlelight Terrace"

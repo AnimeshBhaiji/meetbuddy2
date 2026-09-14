@@ -5,7 +5,24 @@ Analyzes restaurants and places based on descriptions, reviews, and metadata
 to match user preferences for mood, atmosphere and seating.
 """
 
+import re
 from typing import Any, Dict
+
+
+def _place_text(place: Dict[str, Any]) -> str:
+    """All the text a place carries, lowercased. SerpAPI's local results
+    rarely include a snippet or reviews (none of 185 cached places had
+    either), so the title and type ("Rooftop Lounge", "Romantic restaurant")
+    carry most of the signal."""
+    parts = [place.get(k) or "" for k in ("title", "type", "description", "snippet")]
+    parts.extend(place.get("reviews") or [])
+    return " ".join(str(p) for p in parts).lower()
+
+
+def _has(text: str, keyword: str) -> bool:
+    """Whole word, plural allowed. Substring checks matched 'ac' inside
+    "space"/"snacks" and 'view' inside "reviews"."""
+    return re.search(rf"\b{re.escape(keyword)}(?:s|es)?\b", text) is not None
 
 
 def analyze_mood_fit(place: Dict[str, Any], user_mood: str, mood_subs: Dict = None) -> Dict:
@@ -13,16 +30,14 @@ def analyze_mood_fit(place: Dict[str, Any], user_mood: str, mood_subs: Dict = No
     Analyze if place matches user's mood preference.
     
     Args:
-        place: Place dict with title, description, reviews
+        place: Place dict with title, type, description (snippet/reviews if any)
         user_mood: Main mood (e.g., "Romantic", "Business-y", "Casual")
         mood_subs: Stage 2 sub-preferences for mood
-    
+
     Returns:
         Dict with mood_match_score and is_good_fit
     """
-    description = place.get('description', '') + ' ' + place.get('snippet', '')
-    reviews_text = ' '.join(place.get('reviews', []))
-    combined_text = (description + ' ' + reviews_text).lower()
+    combined_text = _place_text(place)
     
     # Base mood keywords
     mood_keywords = {
@@ -44,17 +59,18 @@ def analyze_mood_fit(place: Dict[str, Any], user_mood: str, mood_subs: Dict = No
             mood_keywords['Romantic'].extend(['indoor', 'cozy interior', 'enclosed'])
     
     base_keywords = mood_keywords.get(user_mood, [])
-    matches = sum(1 for keyword in base_keywords if keyword in combined_text)
-    
+    matched = [kw for kw in base_keywords if _has(combined_text, kw)]
+    matches = len(matched)
+
     # Boost score if multiple strong indicators
     score = matches
     if matches >= 3:
         score += 1  # Bonus for strong match
-    
+
     return {
         'mood_match_score': score,
         'is_good_fit': matches >= 2,
-        'matched_keywords': [kw for kw in base_keywords if kw in combined_text][:5]
+        'matched_keywords': matched[:5]
     }
 
 
@@ -65,30 +81,28 @@ def detect_atmosphere(place: Dict[str, Any]) -> Dict:
     Returns:
         Dict with boolean flags for different atmosphere types
     """
-    title = place.get('title', '').lower()
-    description = place.get('description', '').lower()
-    snippet = place.get('snippet', '').lower()
-    combined = title + ' ' + description + ' ' + snippet
-    
+    combined = _place_text(place)
+
+    def any_of(keywords):
+        return any(_has(combined, kw) for kw in keywords)
+
     return {
-        'is_rooftop': any(kw in combined for kw in ['rooftop', 'terrace', 'sky', 'top floor']),
-        'is_indoor': 'indoor' in combined or 'air-conditioned' in combined or 'ac' in combined,
-        'is_outdoor': any(kw in combined for kw in ['outdoor', 'garden', 'patio', 'alfresco', 'open air']),
-        'has_view': any(kw in combined for kw in ['view', 'scenic', 'overlook', 'panoramic']),
-        'has_live_music': any(kw in combined for kw in ['live music', 'live band', 'dj', 'performance']),
-        'is_quiet': any(kw in combined for kw in ['quiet', 'peaceful', 'serene', 'calm']),
-        'is_lively': any(kw in combined for kw in ['lively', 'vibrant', 'energetic', 'bustling'])
+        'is_rooftop': any_of(['rooftop', 'terrace', 'sky', 'top floor']),
+        'is_indoor': any_of(['indoor', 'air-conditioned', 'ac']),
+        'is_outdoor': any_of(['outdoor', 'garden', 'patio', 'alfresco', 'open air']),
+        'has_view': any_of(['view', 'scenic', 'overlook', 'panoramic']),
+        'has_live_music': any_of(['live music', 'live band', 'dj', 'performance']),
+        'is_quiet': any_of(['quiet', 'peaceful', 'serene', 'calm']),
+        'is_lively': any_of(['lively', 'vibrant', 'energetic', 'bustling'])
     }
 
 
 def detect_private_seating(place: Dict[str, Any]) -> bool:
     """Detect if place offers private seating/dining areas."""
-    text = (place.get('title', '') + ' ' + place.get('description', '') + ' ' + 
-            place.get('snippet', '')).lower()
-    
-    keywords = ['private dining', 'private room', 'private seating', 'cabins', 
+    text = _place_text(place)
+    keywords = ['private dining', 'private room', 'private seating', 'cabin',
                 'separate area', 'exclusive seating', 'vip room']
-    return any(kw in text for kw in keywords)
+    return any(_has(text, kw) for kw in keywords)
 
 
 def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, Any]) -> Dict:

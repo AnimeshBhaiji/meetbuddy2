@@ -59,7 +59,7 @@ function StepGrid({ options = [], onSelect, loading, onHighlight, onRetry, onBac
           key={o.place_id || `${o.title ?? ""}::${o.address ?? ""}::${idx}`}
           initial={{ opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: Math.min(idx * 0.06, 0.5), duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ delay: Math.min(idx * 0.04, 0.25), duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           whileHover={{ y: -6 }}
           className="relative glass-strong rounded-2xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand/50 hover:glow-sm transition-all duration-300 group"
           onMouseEnter={() => {
@@ -155,7 +155,7 @@ function CarouselCard({ o, idx, pickBadge, onSelect, onHighlight, loading }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(idx * 0.05, 0.4) }}
+      transition={{ delay: Math.min(idx * 0.03, 0.2) }}
       onMouseEnter={() => onHighlight(o)}
       onMouseLeave={() => onHighlight(null)}
       className="snap-start shrink-0 w-64 glass-strong rounded-2xl border border-white/10 hover:border-brand/50 transition-colors overflow-hidden"
@@ -215,12 +215,26 @@ function CarouselCard({ o, idx, pickBadge, onSelect, onHighlight, loading }) {
   );
 }
 
+// Stands in for a CarouselCard while the next step's options load
+function PlaceholderCard() {
+  return (
+    <div aria-hidden="true" className="shrink-0 w-64 glass-strong rounded-2xl border border-white/10 overflow-hidden">
+      <div className="h-20 bg-white/5 shimmer" />
+      <div className="p-3 space-y-2">
+        <div className="h-3.5 w-3/4 rounded bg-white/10 shimmer" />
+        <div className="h-3 w-1/2 rounded bg-white/5 shimmer" />
+        <div className="h-7 mt-3 rounded-lg bg-white/5 shimmer" />
+      </div>
+    </div>
+  );
+}
+
 export default function StepExplorer({ P }) {
   const [showAllGrid, setShowAllGrid] = useState(false);
   const [showControls, setShowControls] = useState(false); // filter/sort + step editor popover
   const {
     currentStep, stepOptions, initialFlow, planMode, directives, anchorText,
-    selectedChain, sessionLoading, plannerError, highlightedPlace, setHighlightedPlace,
+    selectedChain, sessionLoading, loadingStep, plannerError, highlightedPlace, setHighlightedPlace,
     activeFilters, setActiveFilters, sortBy, setSortBy, showAllOptions, setShowAllOptions,
     upcomingSteps, removeUpcomingStep, addUpcomingStep, moveUpcomingStep,
     selectOption, goBackOneStep, skipStep, startSession, resetSession,
@@ -286,22 +300,24 @@ export default function StepExplorer({ P }) {
           </div>
           <div className="flex gap-2 pointer-events-auto">
             {planMode === "full" && (
-              <GlowButton variant="ghost" onClick={() => setShowControls((s) => !s)} aria-label="Filters and steps">
+              <GlowButton variant="ghost" onClick={() => setShowControls((s) => !s)} aria-label="Filters and steps" disabled={sessionLoading}>
                 <SlidersHorizontal className="w-4 h-4" />
               </GlowButton>
             )}
-            <GlowButton variant="ghost" onClick={goBackOneStep}>
+            {/* Picks are saved in the background now, so nothing that changes the plan
+                can run until the current request settles. */}
+            <GlowButton variant="ghost" onClick={goBackOneStep} disabled={sessionLoading}>
               <ArrowLeft className="w-4 h-4" /> Back
             </GlowButton>
             {planMode === "full" && (
-              <GlowButton variant="ghost" onClick={skipStep}>
+              <GlowButton variant="ghost" onClick={skipStep} disabled={sessionLoading}>
                 Skip <ArrowRight className="w-4 h-4" />
               </GlowButton>
             )}
-            <GlowButton variant="ghost" onClick={startNewPlanner} aria-label="Start a new planner">
+            <GlowButton variant="ghost" onClick={startNewPlanner} aria-label="Start a new planner" disabled={sessionLoading}>
               <Sparkles className="w-4 h-4" />
             </GlowButton>
-            <GlowButton variant="danger" onClick={resetSession} aria-label="Cancel planning">
+            <GlowButton variant="danger" onClick={resetSession} aria-label="Cancel planning" disabled={sessionLoading}>
               <X className="w-4 h-4" />
             </GlowButton>
           </div>
@@ -436,7 +452,16 @@ export default function StepExplorer({ P }) {
         {/* bottom option carousel */}
         <div className="absolute bottom-4 left-4 right-4 z-[1000]">
           <div className="mb-2"><ErrorBanner message={plannerError} /></div>
-          {displayedOptions.length > 0 ? (
+          {loadingStep ? (
+            <div role="status" aria-live="polite" data-testid="options-loading">
+              <p className="text-xs text-muted-foreground mb-2 ml-1">
+                Finding your {humanStepName(loadingStep).toLowerCase()}…
+              </p>
+              <div className="flex gap-3 overflow-hidden pb-2">
+                {[0, 1, 2, 3].map((i) => <PlaceholderCard key={i} />)}
+              </div>
+            </div>
+          ) : displayedOptions.length > 0 ? (
             <div className="flex gap-3 overflow-x-auto snap-x pb-2">
               {displayedOptions.map((o, idx) => (
                 <CarouselCard
@@ -477,7 +502,7 @@ export default function StepExplorer({ P }) {
           {showAllGrid ? "Hide detailed cards" : `View all ${displayedOptions.length} options as cards`}
         </button>
         <AnimatePresence>
-          {showAllGrid && (
+          {showAllGrid && !loadingStep && (
             <motion.div
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden pt-5"

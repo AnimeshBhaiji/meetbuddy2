@@ -200,6 +200,9 @@
   background-size: 200% 100%;
   animation: shimmer 2.2s linear infinite;
 }
+@media (prefers-reduced-motion: reduce) {
+  .shimmer { animation: none; }
+}
 
 /* ---------- react-big-calendar dark theme ---------- */
 .rbc-calendar {

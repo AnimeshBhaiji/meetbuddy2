@@ -44,8 +44,8 @@ def dedupe_places(places: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
-def tag_place_minimal(place: Dict[str, Any]) -> List[str]:
-    txt = _text(place)
+def tag_place_minimal(place: Dict[str, Any], txt: Optional[str] = None) -> List[str]:
+    txt = _text(place) if txt is None else txt
     tags = []
     if "park" in txt or "garden" in txt:
         tags.append("outdoor")
@@ -70,19 +70,16 @@ def filter_step_type(places: List[Dict[str, Any]], step: Optional[str]) -> List[
     """Keep venues appropriate for the step. A venue is excluded from the
     activity step only when food signals are present AND no activity signal is
     (so "Street Food Museum" survives, "Pasta Bistro" doesn't)."""
-    if step == "activity":
-        return [
-            p for p in places
-            if not (any(k in _text(p) for k in FOOD_KEYWORDS)
-                    and not any(k in _text(p) for k in ACTIVITY_KEYWORDS))
-        ]
-    if step == "stay":
-        return [
-            p for p in places
-            if not (any(k in _text(p) for k in FOOD_KEYWORDS)
-                    and not any(k in _text(p) for k in STAY_KEYWORDS))
-        ]
-    return places
+    step_keywords = {"activity": ACTIVITY_KEYWORDS, "stay": STAY_KEYWORDS}.get(step)
+    if not step_keywords:
+        return places
+    kept = []
+    for p in places:
+        txt = _text(p)  # once per place, not once per keyword group
+        if any(k in txt for k in FOOD_KEYWORDS) and not any(k in txt for k in step_keywords):
+            continue
+        kept.append(p)
+    return kept
 
 
 def usable_places(places: List[Dict[str, Any]], step: Optional[str] = None,
@@ -97,17 +94,15 @@ def usable_places(places: List[Dict[str, Any]], step: Optional[str] = None,
     return filter_avoided(places, avoid_terms or [])
 
 
-def _base_score(place: Dict[str, Any], labels_used: Dict[str, List[str]]) -> float:
+def _base_score(place: Dict[str, Any], txt: str, wants_music: bool, wants_escape: bool) -> float:
     score = 0.0
     try:
         score += max(0.0, (float(place.get("rating", 0)) - 3.0)) * 1.5
     except Exception:
         pass
-    txt = _text(place)
-    all_labels = [s.lower() for lst in labels_used.values() for s in lst]
-    if any("music" in s for s in all_labels) and ("music" in txt or "live" in txt):
+    if wants_music and ("music" in txt or "live" in txt):
         score += 1.0
-    if any("weekend" in s or "escape" in s for s in all_labels) and ("resort" in txt or "getaway" in txt):
+    if wants_escape and ("resort" in txt or "getaway" in txt):
         score += 1.2
     return score
 
@@ -227,11 +222,17 @@ def rank_places(
     ranked list."""
     places = usable_places(places, step, directives.get("avoid_terms"), exclude_keys)
 
-    for p in places:
-        p["tags"] = tag_place_minimal(p)
-        score = _base_score(p, labels_used)
+    # The user's labels don't change between places: read them once per ranking.
+    all_labels = [s.lower() for lst in labels_used.values() for s in lst]
+    wants_music = any("music" in s for s in all_labels)
+    wants_escape = any("weekend" in s or "escape" in s for s in all_labels)
 
-        if step == "activity" and any(k in _text(p) for k in ACTIVITY_KEYWORDS):
+    for p in places:
+        txt = _text(p)  # once per place; tagging, base score and the activity bonus share it
+        p["tags"] = tag_place_minimal(p, txt)
+        score = _base_score(p, txt, wants_music, wants_escape)
+
+        if step == "activity" and any(k in txt for k in ACTIVITY_KEYWORDS):
             score += 1.5
 
         if anchor_coords and p.get("lat") is not None and p.get("lng") is not None:

@@ -2,7 +2,8 @@
 # ranking in scoring.py, fetching+caching in scraper.py, geo helpers in geo.py.
 #
 # Credit budget: ONE cached SerpAPI search per step, plus ONE broad fallback
-# only when the primary search comes back thin (<5 usable results).
+# only when the primary search comes back thin (<5 usable results), plus ONE
+# second page only when both are still thin and a second page can exist.
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -21,6 +22,7 @@ from scraper import search_places
 logger = logging.getLogger(__name__)
 
 MIN_USABLE_RESULTS = 5  # below this, fire the single broad fallback
+PAGE_SIZE = 20  # SerpAPI google_maps results per page; also the offset of page 2
 
 PLACE_TYPE_NAMES = {
     "restaurant": "restaurants",
@@ -92,24 +94,43 @@ def _filter_radius(places: List[Dict[str, Any]], anchor: Optional[Tuple[float, f
 def _search_step(primary_q: str, fallback_q: Optional[str],
                  coords: Optional[Tuple[float, float]], radius_m: Optional[float],
                  search_errors: List[str], usable=None) -> List[Dict[str, Any]]:
-    """One cached search; one broad fallback only if results are thin.
+    """One cached search; one broad fallback only if results are thin; then one
+    second page only if still thin.
 
     `usable` narrows the results to what the user would actually be shown.
     Thin is judged on that — six raw results with five on the avoid list is
     one usable result, and it must still trigger the fallback."""
     options: List[Dict[str, Any]] = []
+
+    def enough():
+        return len(usable(options) if usable else options) >= MIN_USABLE_RESULTS
+
+    def fetch(q, start=0):
+        """Returns how many raw results the page held (0 on failure)."""
+        try:
+            fetched = [dict(p) for p in search_places(q, coords, radius_m, start=start)]
+        except Exception as e:
+            logger.warning("place search failed for %r (start=%d): %s", q, start, e)
+            search_errors.append(str(e))
+            return 0
+        options.extend(_filter_radius(fetched, coords, radius_m))
+        return len(fetched)
+
     queries = [primary_q]
     if fallback_q and fallback_q != primary_q:
         queries.append(fallback_q)
+    full_first_pages = []
     for q in queries:
-        try:
-            fetched = [dict(p) for p in search_places(q, coords, radius_m)]
-            options.extend(_filter_radius(fetched, coords, radius_m))
-        except Exception as e:
-            logger.warning("place search failed for %r: %s", q, e)
-            search_errors.append(str(e))
-        if len(usable(options) if usable else options) >= MIN_USABLE_RESULTS:
-            break
+        if fetch(q) >= PAGE_SIZE:
+            full_first_pages.append(q)
+        if enough():
+            return options
+
+    # Still thin (typically a strict avoid list). Page 2 of the broadest query
+    # that filled its first page; a short first page means there is no page 2,
+    # so no credit is spent asking for one.
+    if full_first_pages:
+        fetch(full_first_pages[-1], start=PAGE_SIZE)
     return options
 
 

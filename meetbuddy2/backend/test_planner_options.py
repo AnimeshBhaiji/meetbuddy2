@@ -19,7 +19,7 @@ FAKE_PLACES = [
 ]
 
 
-def _fake_search(query, coords, radius_m):
+def _fake_search(query, coords, radius_m, start=0):
     _fake_search.calls.append(query)
     return [dict(p) for p in FAKE_PLACES]
 

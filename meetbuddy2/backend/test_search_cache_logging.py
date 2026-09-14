@@ -22,7 +22,7 @@ def test_search_logs_hits_misses_and_running_rate(monkeypatch, caplog):
     store = {}
     monkeypatch.setattr(scraper.cache, "get", lambda k: store.get(k))
     monkeypatch.setattr(scraper.cache, "set", lambda k, v, ttl: store.__setitem__(k, v))
-    monkeypatch.setattr(scraper, "fetch_places_page", lambda q, c, r: [{"title": "A"}])
+    monkeypatch.setattr(scraper, "fetch_places_page", lambda q, c, r, start=0: [{"title": "A"}])
     monkeypatch.setattr(scraper, "_search_stats", {"hit": 0, "miss": 0})
 
     with caplog.at_level(logging.INFO, logger="scraper"):

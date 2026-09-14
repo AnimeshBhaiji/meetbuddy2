@@ -1,5 +1,6 @@
 # scraper.py — SerpAPI google_maps fetch + parsing, with a persistent
-# cache in front (cache.py / Postgres). One SerpAPI page per search.
+# cache in front (cache.py / Postgres). One SerpAPI page per request; `start`
+# asks for a later page (20 results each).
 import logging
 import os
 from typing import Dict, List, Optional, Tuple
@@ -43,10 +44,13 @@ def _radius_bucket(radius_m: Optional[float]) -> int:
     return next((b for b in RADIUS_BUCKETS if r <= b), RADIUS_BUCKETS[-1])
 
 
-def _cache_key(query: str, coords: Optional[Tuple[float, float]], radius_m: Optional[float]) -> str:
+def _cache_key(query: str, coords: Optional[Tuple[float, float]], radius_m: Optional[float],
+               start: int = 0) -> str:
     q = " ".join((query or "").lower().split())
     cell = f"{coords[0]:.2f}:{coords[1]:.2f}" if coords else "none"
-    return f"search:{q}:{cell}:{_radius_bucket(radius_m)}"
+    # Page 1 keeps its original key, so results cached before paging stay valid.
+    page = f":p{start}" if start else ""
+    return f"search:{q}:{cell}:{_radius_bucket(radius_m)}{page}"
 
 
 def _parse_place(item: Dict) -> Dict:
@@ -107,8 +111,9 @@ def _parse_place(item: Dict) -> Dict:
 
 
 def fetch_places_page(query: str, coords: Optional[Tuple[float, float]] = None,
-                      radius_m: Optional[float] = None) -> List[Dict]:
-    """One billed SerpAPI google_maps search (~20 results). No caching here."""
+                      radius_m: Optional[float] = None, start: int = 0) -> List[Dict]:
+    """One billed SerpAPI google_maps search (~20 results). No caching here.
+    `start` is SerpAPI's result offset: 0 is page 1, 20 is page 2."""
     global serpapi_calls
     _ensure_key()
 
@@ -126,9 +131,11 @@ def fetch_places_page(query: str, coords: Optional[Tuple[float, float]] = None,
         params["ll"] = f"@{lat:.7f},{lng:.7f},15z"
         params["center"] = f"{lat:.7f},{lng:.7f}"
         params["radius"] = str(min(int(radius_m or 5000), 50000))
+    if start:
+        params["start"] = str(start)
 
     serpapi_calls += 1
-    logger.info("SerpAPI call #%d: %r", serpapi_calls, params["q"])
+    logger.info("SerpAPI call #%d: %r (start=%d)", serpapi_calls, params["q"], start)
     resp = http.get("https://serpapi.com/search", params=params, timeout=15)
     if resp.status_code != 200:
         try:
@@ -169,16 +176,17 @@ def fetch_places_page(query: str, coords: Optional[Tuple[float, float]] = None,
 
 
 def search_places(query: str, coords: Optional[Tuple[float, float]] = None,
-                  radius_m: Optional[float] = None) -> List[Dict]:
-    """Cached search: shared across users in the same ~1km cell for 7 days."""
+                  radius_m: Optional[float] = None, start: int = 0) -> List[Dict]:
+    """Cached search: shared across users in the same ~1km cell for 7 days.
+    Each page is cached on its own."""
     coords = normalize_coords(coords)
-    key = _cache_key(query, coords, radius_m)
+    key = _cache_key(query, coords, radius_m, start)
     hit = cache.get(key)
     if hit is not None:
         _log_cache("hit", key)
         return hit
     _log_cache("miss", key)
-    places = fetch_places_page(query, coords, radius_m)
+    places = fetch_places_page(query, coords, radius_m, start)
     # empty pages cached briefly too, so a no-result area doesn't re-bill a
     # credit on every request
     cache.set(key, places, SEARCH_TTL if places else 24 * 3600)

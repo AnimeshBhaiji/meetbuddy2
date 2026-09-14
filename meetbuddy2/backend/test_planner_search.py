@@ -17,7 +17,7 @@ def _near(pid, title):
 def test_fallback_runs_when_avoid_list_empties_the_primary_search(monkeypatch):
     calls = []
 
-    def fake_search(query, coords, radius_m):
+    def fake_search(query, coords, radius_m, start=0):
         calls.append(query)
         if " in " in query:  # the broad fallback: "restaurants in <area>"
             return [_near(f"ok{i}", f"Garden Bistro {i}") for i in range(5)]
@@ -37,7 +37,7 @@ def test_fallback_runs_when_avoid_list_empties_the_primary_search(monkeypatch):
 
 def test_followup_never_suggests_a_place_already_picked(monkeypatch):
     monkeypatch.setattr(planner, "search_places",
-                        lambda q, c, r: [_near(f"p{i}", f"Cafe {i}") for i in range(8)])
+                        lambda q, c, r, start=0: [_near(f"p{i}", f"Cafe {i}") for i in range(8)])
     state = {"payload": {"preferences": {}, "coords": ORIGIN},
              "steps": [{"step": "restaurant", "place": _near("p1", "Cafe 1")}]}
 
@@ -46,3 +46,43 @@ def test_followup_never_suggests_a_place_already_picked(monkeypatch):
     ids = [o["place_id"] for o in result["options"]]
     assert "p1" not in ids
     assert len(ids) == 7
+
+
+def _club(i):
+    return _near(f"club{i}", f"Neon Club {i}")
+
+
+def test_second_page_of_the_broad_search_when_both_first_pages_stay_thin(monkeypatch):
+    calls = []
+
+    def fake_search(query, coords, radius_m, start=0):
+        calls.append((query, start))
+        if " in " in query and start == 20:  # page 2 of the broad fallback
+            return [_near(f"ok{i}", f"Garden Bistro {i}") for i in range(6)]
+        if start:
+            return []
+        return [_club(i) for i in range(20)]  # full first pages, every place avoided
+
+    monkeypatch.setattr(planner, "search_places", fake_search)
+    prefs = {"planningStyle": "Surprise me", "planningStyle_sub": {"sm_block": "club"}}
+    result = planner.generate_initial_suggestions(
+        {"preferences": prefs, "coords": ORIGIN, "location": "Indiranagar"})
+
+    paged = [c for c in calls if c[1]]
+    assert paged == [("restaurants in Indiranagar", 20)], calls
+    assert len(result["options"]) == 6
+
+
+def test_no_second_page_when_the_first_page_was_short(monkeypatch):
+    calls = []
+
+    def fake_search(query, coords, radius_m, start=0):
+        calls.append((query, start))
+        return [_club(i) for i in range(3)]  # a short page: there is nothing more to fetch
+
+    monkeypatch.setattr(planner, "search_places", fake_search)
+    prefs = {"planningStyle": "Surprise me", "planningStyle_sub": {"sm_block": "club"}}
+    planner.generate_initial_suggestions(
+        {"preferences": prefs, "coords": ORIGIN, "location": "Indiranagar"})
+
+    assert all(start == 0 for _, start in calls), f"billed a second page that cannot exist: {calls}"

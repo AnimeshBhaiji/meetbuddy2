@@ -115,6 +115,18 @@ def push_selection(sid: str, step: str, place: Dict[str, Any], db: Session):
     return _to_dict(row)
 
 
+def pop_selection(sid: str, db: Session):
+    """Undo the latest pick (the planner's Back). last_options stays: Back on a
+    reloaded page restores the step's options from it."""
+    row = _live(sid, db)
+    if not row:
+        return None
+    row.steps = (row.steps or [])[:-1]  # reassign, as in push_selection
+    db.commit()
+    db.refresh(row)
+    return _to_dict(row)
+
+
 def set_last_options(sid: str, step: str, options, db: Session):
     row = _live(sid, db)
     if not row:

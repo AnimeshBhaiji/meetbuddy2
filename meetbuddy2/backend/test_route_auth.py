@@ -45,6 +45,7 @@ PROTECTED = [
     ("get", "/planner/session/abc", None),
     ("post", "/planner/session/abc/select", {"step": "restaurant", "place": {}}),
     ("post", "/planner/session/abc/skip", {"next_step": "activity"}),
+    ("post", "/planner/session/abc/undo", None),
 ]
 
 
@@ -148,14 +149,19 @@ def test_planner_session_of_another_user_is_not_reachable():
     alice = bob = None
     try:
         alice, bob = _new_account(db), _new_account(db)
-        from planner_sessions import create_session
+        from planner_sessions import create_session, push_selection
         sid = create_session(alice.id, {"preferences": {}, "coords": None, "location": None}, db)
+        push_selection(sid, "restaurant", {"title": "Alice's pick"}, db)
 
         assert client.get(f"/planner/session/{sid}", headers=_auth(bob)).status_code == 404
         assert client.post(f"/planner/session/{sid}/skip", json={"next_step": "activity"},
                            headers=_auth(bob)).status_code == 404
-        # the owner still reaches it
-        assert client.get(f"/planner/session/{sid}", headers=_auth(alice)).status_code == 200
+        # nor can another account undo the owner's picks
+        assert client.post(f"/planner/session/{sid}/undo", headers=_auth(bob)).status_code == 404
+        # the owner still reaches it, with the pick intact
+        own = client.get(f"/planner/session/{sid}", headers=_auth(alice))
+        assert own.status_code == 200
+        assert len(own.json()["steps"]) == 1
     finally:
         # sessions first: planner_sessions.user_id has no ON DELETE CASCADE
         for u in (alice, bob):

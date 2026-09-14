@@ -119,6 +119,7 @@ export default function usePlannerSession() {
   const [directives, setDirectives] = useState(null); // shortlist size, filters, ...
   const [optionsByStep, setOptionsByStep] = useState({}); // step -> options[] (powers swaps)
   const [overlayText, setOverlayText] = useState("Loading next step...");
+  const [loadingStep, setLoadingStep] = useState(null); // step whose options are loading (placeholder cards)
   const [showAllOptions, setShowAllOptions] = useState(false); // shortlist escape hatch
 
   // Full-control mode: option filters, sorting, and step management
@@ -361,8 +362,11 @@ export default function usePlannerSession() {
       return;
     }
 
-    setOverlayText(`Skipping to ${humanStepName(nextStep).toLowerCase()}...`);
-    setShowOverlay(true);
+    // Placeholder cards, not a full-screen overlay, while the next step loads.
+    const previousOptions = stepOptions;
+    setLoadingStep(nextStep);
+    setStepOptions([]);
+    setSessionLoading(true);
     try {
       const res = await api.post(
         `/planner/session/${sessionId}/skip`,
@@ -383,9 +387,11 @@ export default function usePlannerSession() {
       setAnchorText(res.anchor_text || anchorText);
     } catch (err) {
       console.error("Skip failed", err);
+      setStepOptions(previousOptions);
       setPlannerError("Couldn't skip this step. Please try again.");
     } finally {
-      setShowOverlay(false);
+      setLoadingStep(null);
+      setSessionLoading(false);
     }
   };
 
@@ -422,37 +428,34 @@ export default function usePlannerSession() {
       setPlannerError("Session missing. Start again.");
       return;
     }
-    setOverlayText("Preparing next options...");
-    setShowOverlay(true);
+    const step = currentStep || "restaurant";
+    const nextIndex = initialFlow.indexOf(step) + 1;
+    const payload = {
+      step,
+      place: opt,
+      next_step: nextIndex < initialFlow.length ? initialFlow[nextIndex] : "done",
+      selected_tokens: [],
+    };
+
+    // No full-screen overlay: the pick joins the plan straight away and
+    // placeholder cards stand in for the next step's options while they load.
+    // Both are undone if the request fails.
+    const previousOptions = stepOptions;
+    setSelectedChain((s) => [...s, { step, place: opt }]);
     setSessionLoading(true);
+    if (payload.next_step !== "done") {
+      setLoadingStep(payload.next_step);
+      setStepOptions([]);
+    }
 
     try {
-      const payload = {
-        step: currentStep || "restaurant",
-        place: opt,
-        next_step: undefined,
-        selected_tokens: [],
-      };
-      // Determine next step based on the flow order
-      const currentStepIndex = initialFlow.indexOf(currentStep || "restaurant");
-      const nextStepIndex = currentStepIndex + 1;
-      if (nextStepIndex < initialFlow.length) {
-        payload.next_step = initialFlow[nextStepIndex];
-      } else {
-        payload.next_step = "done";
-      }
-
       const res = await api.post(`/planner/session/${sessionId}/select`, payload, { timeout: 60000 });
-
-      // push selection locally
-      setSelectedChain((s) => [...s, { step: payload.step, place: opt }]);
 
       // if server returned next options, switch to them
       const nextStep = res.next_step;
       if (!nextStep || nextStep === "done") {
         setCurrentStep(null);
         setStepOptions([]);
-        setShowOverlay(false);
         setPage("summary");
       } else {
         setCurrentStep(nextStep);
@@ -460,12 +463,11 @@ export default function usePlannerSession() {
         setShowAllOptions(false);
         setActiveFilters([]);
         setSortBy("match");
+        setStepOptions(nextOpts);
         if (nextOpts.length > 0) {
-          setStepOptions(nextOpts);
           setOptionsByStep((m) => ({ ...m, [nextStep]: nextOpts }));
         } else {
           console.warn("No options returned for next step from server:", res);
-          setStepOptions([]);
           setPlannerError(
             res.search_error
               ? `Venue search failed: ${res.search_error}`
@@ -473,13 +475,14 @@ export default function usePlannerSession() {
           );
         }
         setAnchorText(res.anchor_text || "");
-        setShowOverlay(false);
       }
     } catch (err) {
       console.error("Selection failed", err);
-      setShowOverlay(false);
-      setPlannerError("Selection failed. See console.");
+      setSelectedChain((s) => s.slice(0, -1));
+      setStepOptions(previousOptions);
+      setPlannerError("Selection failed. Please try again.");
     } finally {
+      setLoadingStep(null);
       setSessionLoading(false);
     }
   };
@@ -567,6 +570,7 @@ export default function usePlannerSession() {
     setInitialFlow([]);
     setShowOverlay(false);
     setOverlayText("Loading next step...");
+    setLoadingStep(null);
     setHighlightedPlace(null);
     setPlannerError(null);
     setPlanMode("semi");
@@ -581,7 +585,7 @@ export default function usePlannerSession() {
     userPrefs, user, placeText, setPlaceText, coords, locLoading,
     page, setPage, sessionId, setSessionId, currentStep, stepOptions,
     anchorText, selectedChain, setSelectedChain, sessionLoading,
-    flowText, initialFlow, showOverlay, overlayText,
+    flowText, initialFlow, showOverlay, overlayText, loadingStep,
     highlightedPlace, setHighlightedPlace, plannerError, setPlannerError,
     planMode, directives, optionsByStep, setOptionsByStep,
     showAllOptions, setShowAllOptions,

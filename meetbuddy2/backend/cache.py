@@ -2,6 +2,7 @@
 # Redis swap: keep callers on get()/set() only.
 import json
 import logging
+import time
 from typing import Any, Optional
 
 from sqlalchemy import text
@@ -9,6 +10,11 @@ from sqlalchemy import text
 from database import engine
 
 logger = logging.getLogger(__name__)
+
+# Expired rows are already invisible to get(); deleting them is housekeeping,
+# so it runs at most once per interval per process instead of on every write.
+SWEEP_INTERVAL = 3600  # seconds
+_last_sweep = float("-inf")  # the first write of a process sweeps
 
 
 def get(key: str) -> Optional[Any]:
@@ -27,10 +33,14 @@ def get(key: str) -> Optional[Any]:
 
 def set(key: str, value: Any, ttl_seconds: int) -> None:
     """Store a JSON-serializable value; failures are logged, never raised."""
+    global _last_sweep
     try:
         with engine.begin() as conn:
-            # opportunistic cleanup of expired rows
-            conn.execute(text("DELETE FROM api_cache WHERE expires_at < now()"))
+            now = time.monotonic()
+            # ponytail: unsynchronised; two threads can both sweep once. Harmless (a DELETE of nothing).
+            if now - _last_sweep >= SWEEP_INTERVAL:
+                conn.execute(text("DELETE FROM api_cache WHERE expires_at < now()"))
+                _last_sweep = now
             conn.execute(
                 text(
                     "INSERT INTO api_cache (key, value, expires_at) "

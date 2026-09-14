@@ -50,22 +50,41 @@ const carouselTitles = (page) =>
     // ---------- hover must not re-fit a panned map ----------
     const box = await page.locator(".leaflet-container").boundingBox();
     const cx = box.x + box.width / 2, cy = box.y + box.height * 0.45;
+    // The pointer is still where "Generate itinerary" was, which is now over a
+    // card, so that card's popup is open mid-map. A drag that starts on a popup
+    // doesn't pan the map, so move off the cards and let it close first.
+    await page.mouse.move(cx, box.y + 5);
+    await page.waitForFunction(() => !document.querySelector(".leaflet-popup"), null, { timeout: 5000 });
+    const beforePan = await paneTransform(page);
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx + 220, cy + 120, { steps: 12 });
     await page.mouse.up();
     await page.waitForTimeout(800);
     const panned = await paneTransform(page);
+    if (panned === beforePan)
+      fail(`the drag did not pan the map (still ${panned}), so the hover checks would prove nothing`);
 
+    // hovering a card opens that place's popup on the map, without moving it
     const card = page.locator(".snap-start").first();
+    const cardTitle = (await card.locator("p.font-semibold").first().textContent()).trim();
     await card.hover();
     await page.waitForTimeout(900);
+    const popupText = (await page.locator(".leaflet-popup-content").allTextContents()).join(" ");
+    if (!popupText.includes(cardTitle))
+      fail(`hovering "${cardTitle}" did not open its popup on the map (popups: "${popupText}")`);
+    if ((await paneTransform(page)) !== panned)
+      fail(`hovering a card moved the map: ${panned} -> ${await paneTransform(page)}`);
+    console.log(`hover: "${cardTitle}" popup opened, map did not move`);
+
     await page.mouse.move(cx, box.y + 5); // leave the card
     await page.waitForTimeout(900);
     const afterHover = await paneTransform(page);
     if (afterHover !== panned)
       fail(`hovering a card moved the map: ${panned} -> ${afterHover}`);
-    console.log("hover: panned map stays where you left it");
+    if (await page.locator(".leaflet-popup").count())
+      fail("the popup stayed open after the pointer left the card");
+    console.log("hover: popup closed on leave, panned map stays where you left it");
 
     // ---------- re-sorting keeps the same map ----------
     const before = await carouselTitles(page);
@@ -103,13 +122,15 @@ const carouselTitles = (page) =>
     await page.waitForTimeout(1500);
     if (!(await sameMap(page))) fail("moving to the next step remounted the whole map");
     if ((await paneTransform(page)) === beforeSelect)
-      fail("the map did not re-fit to the next step's options");
+      fail(`the map did not re-fit to the next step's options (pane stayed at ${beforeSelect}; ` +
+           `open popups: ${await page.locator(".leaflet-popup").count()})`);
     console.log("next step: same map, re-fitted to the new options");
 
     if (errors.length) fail(`page errors: ${errors.join(" | ")}`);
     console.log("MAP STABILITY: PASS");
   } catch (e) {
     console.log("MAP STABILITY: FAIL —", e.message);
+    if (errors.length) console.log("page errors:", errors.join(" | "));
     process.exitCode = 1;
   } finally {
     await browser.close();

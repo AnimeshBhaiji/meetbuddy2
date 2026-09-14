@@ -1,5 +1,5 @@
 // src/components/MapPlanner.jsx
-import React, { useEffect, useMemo, useRef, forwardRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -114,46 +114,6 @@ function FitBounds({ points = [], signature }) {
   return null;
 }
 
-// Marker component with ref forwarding to access Leaflet instance
-const MarkerWithRef = forwardRef(({ position, icon, children, ...props }, ref) => {
-  const markerRef = useRef(null);
-
-  useEffect(() => {
-    if (!markerRef.current) return;
-
-    // Get the underlying Leaflet marker instance
-    const leafletMarker = markerRef.current.leafletElement;
-
-    if (!leafletMarker) return;
-
-    // Expose methods via ref
-    if (ref) {
-      ref.current = {
-        openPopup: () => {
-          if (leafletMarker && leafletMarker.isPopupOpen && !leafletMarker.isPopupOpen()) {
-            leafletMarker.openPopup();
-          } else if (leafletMarker) {
-            leafletMarker.openPopup();
-          }
-        },
-        closePopup: () => {
-          if (leafletMarker && leafletMarker.closePopup) {
-            leafletMarker.closePopup();
-          }
-        },
-        leafletElement: leafletMarker
-      };
-    }
-  }, [ref]);
-
-  return (
-    <Marker ref={markerRef} position={position} icon={icon} {...props}>
-      {children}
-    </Marker>
-  );
-});
-MarkerWithRef.displayName = "MarkerWithRef";
-
 /**
  * MapPlanner props:
  * - options: array of places (current step)
@@ -175,8 +135,7 @@ export default function MapPlanner({
   onAddToItinerary = null,  // New prop for adding to itinerary
   className = "",
 }) {
-  const mapRef = useRef(null);
-  const markerRefs = useRef({});
+  const markerRefs = useRef({}); // "opt-<index>" -> Leaflet marker
 
   // Normalize options to ensure consistent field names and numeric coords
   const normalizedOptions = useMemo(() => {
@@ -261,106 +220,22 @@ export default function MapPlanner({
   ];
   const fitSignature = fitPoints.map((p) => `${p.lat}:${p.lng}`).sort().join("|");
 
-  // Open popup when highlightedPlace changes
+  // Hovering an option card opens that place's popup. Option popups don't
+  // auto-pan, so this never moves a map the user has panned. (It never worked
+  // before: react-leaflet v5 ignores `whenCreated` and has no `.leafletElement`.)
   useEffect(() => {
-    if (!mapRef.current) return;
-
-    // Close all popups if no place is highlighted
+    const markers = markerRefs.current;
     if (!highlightedPlace) {
-      Object.values(markerRefs.current).forEach((marker) => {
-        if (marker && marker.closePopup) {
-          try {
-            marker.closePopup();
-          } catch {
-            // Ignore errors if popup is not open
-          }
-        }
-      });
+      Object.values(markers).forEach((m) => m.closePopup());
       return;
     }
-
-    // Small delay to prevent rapid popup opens on hover
     const timeoutId = setTimeout(() => {
-      if (!highlightedPlace || !mapRef.current) return;
-
-      // Normalize highlighted place for matching
-      const hlLat = highlightedPlace.lat ?? highlightedPlace.latitude ?? highlightedPlace.raw?.lat;
-      const hlLng = highlightedPlace.lng ?? highlightedPlace.longitude ?? highlightedPlace.raw?.lng;
-      const hlTitle = (highlightedPlace.title || highlightedPlace.name || "").toLowerCase().trim();
-
-      // Find the marker for the highlighted place
-      let matchedIdx = -1;
-      for (let idx = 0; idx < normalizedOptions.length; idx++) {
-        const o = normalizedOptions[idx];
-        if (o.lat != null && o.lng != null) {
-          // Match by coordinates (with small tolerance) or title
-          const latMatch = hlLat != null && Math.abs(o.lat - Number(hlLat)) < 0.0001;
-          const lngMatch = hlLng != null && Math.abs(o.lng - Number(hlLng)) < 0.0001;
-          const titleMatch = hlTitle && (o.title || "").toLowerCase().trim() === hlTitle;
-
-          if ((latMatch && lngMatch) || titleMatch) {
-            matchedIdx = idx;
-            break;
-          }
-        }
-      }
-
-      // If we found a match, open the popup
-      if (matchedIdx >= 0) {
-        const markerKey = `opt-${matchedIdx}`;
-        const marker = markerRefs.current[markerKey];
-        const option = normalizedOptions[matchedIdx];
-
-        if (option) {
-          // Only pan if marker is not already visible in viewport (to avoid unnecessary movement)
-          const currentCenter = mapRef.current.getCenter();
-          const currentZoom = mapRef.current.getZoom();
-          const markerLatLng = L.latLng(option.lat, option.lng);
-          const distance = currentCenter.distanceTo(markerLatLng);
-
-          // Only pan if marker is more than 500m away from center, and preserve zoom level
-          if (distance > 500) {
-            mapRef.current.setView([option.lat, option.lng], currentZoom, {
-              animate: true,
-              duration: 0.5
-            });
-          }
-
-          // Try to open popup via ref
-          if (marker && marker.openPopup) {
-            try {
-              // Use a small delay to ensure marker is ready
-              setTimeout(() => {
-                if (marker && marker.openPopup) {
-                  marker.openPopup();
-                } else if (marker && marker.leafletElement) {
-                  // Fallback: try direct leaflet element access
-                  marker.leafletElement.openPopup();
-                }
-              }, 150);
-            } catch (e) {
-              console.warn("Failed to open popup via ref:", e);
-            }
-          } else {
-            // Fallback: find marker through map layers
-            try {
-              const targetLatLng = L.latLng(option.lat, option.lng);
-              mapRef.current.eachLayer((layer) => {
-                if (layer instanceof L.Marker) {
-                  const layerLatLng = layer.getLatLng();
-                  if (layerLatLng.distanceTo(targetLatLng) < 10) { // within 10 meters
-                    layer.openPopup();
-                  }
-                }
-              });
-            } catch (e) {
-              console.warn("Failed to open popup via map layers:", e);
-            }
-          }
-        }
-      }
-    }, 100); // 100ms delay for hover
-
+      // Cards and markers are built from the same option objects.
+      const idx = normalizedOptions.findIndex((o) =>
+        o.raw === highlightedPlace ||
+        (highlightedPlace.place_id && o.raw?.place_id === highlightedPlace.place_id));
+      markers[`opt-${idx}`]?.openPopup();
+    }, 100); // skip cards the pointer only sweeps across
     return () => clearTimeout(timeoutId);
   }, [highlightedPlace, normalizedOptions]);
 
@@ -370,9 +245,6 @@ export default function MapPlanner({
         center={center}
         zoom={13}
         style={{ height: "100%", width: "100%" }}
-        whenCreated={(m) => {
-          mapRef.current = m;
-        }}
       >
         <TileLayer
           attribution='&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
@@ -415,19 +287,19 @@ export default function MapPlanner({
           if (o.lat == null || o.lng == null) return null;
           const markerKey = `opt-${idx}`;
           return (
-            <MarkerWithRef
+            <Marker
               key={markerKey}
               position={[o.lat, o.lng]}
               icon={defaultIcon}
-              ref={(ref) => {
-                if (ref) {
-                  markerRefs.current[markerKey] = ref;
+              ref={(marker) => {
+                if (marker) {
+                  markerRefs.current[markerKey] = marker;
                 } else {
                   delete markerRefs.current[markerKey];
                 }
               }}
             >
-              <Popup>
+              <Popup autoPan={false}>
                 <div style={{ minWidth: 220 }}>
                   <div style={{ fontWeight: 700 }}>{o.title}</div>
                   <div style={{ fontSize: 12, color: "#a3a9c2", marginTop: 4 }}>{o.address}</div>
@@ -481,7 +353,7 @@ export default function MapPlanner({
                   </div>
                 </div>
               </Popup>
-            </MarkerWithRef>
+            </Marker>
           );
         })}
 

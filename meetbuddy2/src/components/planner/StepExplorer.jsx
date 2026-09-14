@@ -252,7 +252,6 @@ export default function StepExplorer({ P }) {
           className="absolute inset-0"
           options={displayedOptions}
           selectedChain={selectedChain}
-          onSelect={selectOption}
           highlightedPlace={highlightedPlace}
         />
 

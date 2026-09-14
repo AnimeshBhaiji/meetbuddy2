@@ -2,10 +2,10 @@
 """
 Intelligent place analysis module for MeetBuddy planner.
 Analyzes restaurants and places based on descriptions, reviews, and metadata
-to match user preferences for mood, atmosphere, parking, and other amenities.
+to match user preferences for mood, atmosphere and seating.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict
 
 
 def analyze_mood_fit(place: Dict[str, Any], user_mood: str, mood_subs: Dict = None) -> Dict:
@@ -81,52 +81,6 @@ def detect_atmosphere(place: Dict[str, Any]) -> Dict:
     }
 
 
-def detect_parking(place: Dict[str, Any], parking_required: bool = False) -> Dict:
-    """
-    Detect parking availability from reviews and description.
-    
-    Args:
-        place: Place dict
-        parking_required: If True from user preferences, prioritize parking detection
-    
-    Returns:
-        Dict with status ('available', 'unavailable', 'unknown') and has_valet flag
-    """
-    reviews_text = ' '.join(place.get('reviews', [])).lower()
-    description = place.get('description', '').lower()
-    snippet = place.get('snippet', '').lower()
-    combined = reviews_text + ' ' + description + ' ' + snippet
-    
-    # Positive parking indicators
-    positive_keywords = [
-        'parking available', 'ample parking', 'parking lot', 
-        'free parking', 'parking space', 'easy parking',
-        'plenty of parking', 'good parking', 'parking facility'
-    ]
-    has_parking = any(kw in combined for kw in positive_keywords)
-    
-    # Valet parking
-    valet_keywords = ['valet', 'valet parking', 'car service', 'valet service']
-    has_valet = any(kw in combined for kw in valet_keywords)
-    
-    # Negative parking indicators
-    negative_keywords = [
-        'no parking', 'difficult to park', 'parking issue',
-        'hard to find parking', 'limited parking', 'parking problem',
-        'street parking only', 'parking nightmare'
-    ]
-    no_parking = any(kw in combined for kw in negative_keywords)
-    
-    if no_parking and not has_valet:
-        return {'status': 'unavailable', 'has_valet': False, 'confidence': 'high'}
-    elif has_valet:
-        return {'status': 'available', 'has_valet': True, 'confidence': 'high'}
-    elif has_parking:
-        return {'status': 'available', 'has_valet': False, 'confidence': 'medium'}
-    else:
-        return {'status': 'unknown', 'has_valet': False, 'confidence': 'low'}
-
-
 def detect_private_seating(place: Dict[str, Any]) -> bool:
     """Detect if place offers private seating/dining areas."""
     text = (place.get('title', '') + ' ' + place.get('description', '') + ' ' + 
@@ -191,107 +145,5 @@ def analyze_stage2_preferences(place: Dict[str, Any], stage2_prefs: Dict[str, An
                 if atm['has_live_music']:
                     results['compatibility_score'] += 2
                     results['matches'].append('Live music')
-    
-    # Adventure level sub-preferences
-    adventure_sub = _sub('adventureLevel_sub')
-    if adventure_sub:
-        sc_transport = adventure_sub.get('sc_transport') or ''
-        if 'Parking' in sc_transport:
-            parking = detect_parking(place, parking_required=True)
-            if parking['status'] == 'available':
-                results['compatibility_score'] += 1
-                if parking['has_valet']:
-                    results['compatibility_score'] += 1
-                    results['matches'].append('Valet parking available')
-                else:
-                    results['matches'].append('Parking available')
-            elif parking['status'] == 'unavailable':
-                results['compatibility_score'] -= 1
-                results['mismatches'].append('Limited parking')
-    
+
     return results
-
-
-def calculate_distance_category(distance_meters: float) -> str:
-    """
-    Categorize distance from user location.
-    
-    Returns:
-        'very_close' (<2km), 'close' (2-5km), 'moderate' (5-15km), 
-        'far' (15-30km), 'very_far' (>30km)
-    """
-    if distance_meters < 2000:
-        return 'very_close'
-    elif distance_meters < 5000:
-        return 'close'
-    elif distance_meters < 15000:
-        return 'moderate'
-    elif distance_meters < 30000:
-        return 'far'
-    else:
-        return 'very_far'
-
-
-def filter_by_distance_preference(
-    places: List[Dict[str, Any]], 
-    adventure_level: str,
-    area_preference: str = None,
-    distance_preference: str = None
-) -> List[Dict[str, Any]]:
-    """
-    Filter places based on adventure level and distance preferences.
-    
-    Args:
-        places: List of places with distance_meters
-        adventure_level: Main adventure preference
-        area_preference: Stage 2 area preference (Central, Suburbs, etc.)
-        distance_preference: Stage 2 distance preference (20-30km, etc.)
-    """
-    filtered = []
-    
-    for place in places:
-        dist = place.get('distance_meters', 0)
-        category = calculate_distance_category(dist)
-        
-        include = False
-        
-        # Weekend escape - prefer far places
-        if adventure_level == 'Weekend escape':
-            if distance_preference:
-                if '20-30km' in distance_preference and 15000 <= dist <= 30000:
-                    include = True
-                elif '30-50km' in distance_preference and 30000 <= dist <= 50000:
-                    include = True
-                elif '50km+' in distance_preference and dist >= 50000:
-                    include = True
-            else:
-                # Default: Relaxed to 5-60km range (was 20-50km which killed results)
-                include = 5000 <= dist <= 60000
-        
-        # Short drive to hidden gem - moderate distance
-        elif adventure_level == 'Short drive to hidden gem':
-            # Relaxed to 3-40km (was 10-30km)
-            include = 3000 <= dist <= 40000
-        
-        # Stick to the city - respect area preference
-        elif adventure_level == 'Stick to the city':
-            if area_preference:
-                if 'Central' in area_preference or 'Downtown' in area_preference:
-                    include = dist <= 10000  # Within 10km
-                elif 'Suburbs' in area_preference:
-                    include = 10000 <= dist <= 20000
-                elif 'Either' in area_preference:
-                    include = dist <= 20000
-            else:
-                # Default: within city limits (20km)
-                include = dist <= 20000
-        
-        else:
-            # No specific adventure level, include all
-            include = True
-        
-        if include:
-            place['distance_category'] = category
-            filtered.append(place)
-    
-    return filtered

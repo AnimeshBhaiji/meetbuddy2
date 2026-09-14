@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { ParkingIndicator, AtmosphereTags, DistanceBadge, MoodMatchBadge } from "./PlaceEnhancements";
+import { DistanceBadge } from "./PlaceEnhancements";
 
 // Fix default Leaflet icon images (works with CRA/Vite)
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -118,8 +118,6 @@ function FitBounds({ points = [], signature }) {
  * MapPlanner props:
  * - options: array of places (current step)
  * - selectedChain: array [{step, place}]
- * - onSelect(place)
- * - onPreview(place)
  * - highlightedPlace: place object to highlight on map (opens popup)
  * - userCoords: {lat, lng} for user's current location (GPS)
  * - locationText: string typed area/location (for highlighting when no coords)
@@ -127,12 +125,9 @@ function FitBounds({ points = [], signature }) {
 export default function MapPlanner({
   options = [],
   selectedChain = [],
-  onSelect: _onSelect = () => { },
-  onPreview: _onPreview = () => { },
   highlightedPlace = null,
   userCoords = null,
   locationText = "",
-  onAddToItinerary = null,  // New prop for adding to itinerary
   className = "",
 }) {
   const markerRefs = useRef({}); // "opt-<index>" -> Leaflet marker
@@ -172,9 +167,6 @@ export default function MapPlanner({
         lng,
         rating: opt.rating ?? opt.Rating ?? opt.raw?.rating ?? null,
         link: opt.link || opt.GoogleMaps || opt.website || opt.raw?.link || "",
-        parking: opt.parking || opt.raw?.parking || null,
-        atmosphere: opt.atmosphere || opt.raw?.atmosphere || null,
-        mood_analysis: opt.mood_analysis || opt.raw?.mood_analysis || null,
         distance_meters: opt.distance_meters || opt.raw?.distance_meters || null,
         raw: opt.raw || opt,
         __sourceIndex: idx,
@@ -310,36 +302,7 @@ export default function MapPlanner({
                     <DistanceBadge distanceMeters={o.distance_meters} />
                   )}
 
-                  {/* Parking Indicator */}
-                  {o.parking && (
-                    <ParkingIndicator parking={o.parking} />
-                  )}
-
-                  {/* Atmosphere Tags */}
-                  {o.atmosphere && (
-                    <AtmosphereTags atmosphere={o.atmosphere} />
-                  )}
-
-                  {/* Mood Match Badge */}
-                  {o.mood_analysis?.is_good_fit && (
-                    <div style={{ marginTop: 8, padding: '4px 8px', background: '#ec4899', color: 'white', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>
-                      ✨ Perfect Match
-                    </div>
-                  )}
-
                   <div style={{ marginTop: 8, display: "flex", gap: 8, flexDirection: 'column' }}>
-                    {onAddToItinerary && (
-                      <button
-                        onClick={(ev) => {
-                          ev.preventDefault();
-                          ev.stopPropagation();
-                          onAddToItinerary({ ...o, raw: o.raw });
-                        }}
-                        style={{ width: '100%', padding: "8px 10px", background: "#3b82f6", color: "white", borderRadius: 6, border: 0, fontWeight: 700, cursor: 'pointer', boxShadow: '0 2px 4px rgba(59,130,246,0.3)' }}
-                      >
-                        ➕ Add to Itinerary
-                      </button>
-                    )}
                     {o.link && (
                       <a
                         href={o.link}

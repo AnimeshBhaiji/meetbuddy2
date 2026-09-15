@@ -14,12 +14,31 @@ export const PREF_META = [
 
 export const STEP_EMOJI = { restaurant: "🍽️", activity: "🎯", stay: "🏨", cafe: "☕", custom: "📍" };
 
-// Full-control filter chips: best-effort matchers over the venue data we have
+// Full-control filter chips. Places carry Google's own attributes (offerings,
+// highlights) and type labels; words in the title are only a fallback for places
+// cached before attributes were kept, and they misfire ("Olive" contains "live").
+const attributeValues = (o) =>
+  Object.values(o.attributes || {}).flat().map((v) => String(v).toLowerCase());
+const typeLabels = (o) =>
+  [o.type, ...(o.types || [])].filter(Boolean).map((t) => String(t).toLowerCase());
+const hasAttributes = (o) => Object.keys(o.attributes || {}).length > 0;
+const titleAndType = (o) => `${o.title || ""} ${o.type || ""}`;
+
+const DIET_ATTRIBUTES = ["vegetarian options", "vegetarian options only", "vegan options", "halal food", "healthy options"];
+// Google also has "Non Vegetarian Restaurant", which must not count as dietary-friendly.
+const isVegetarianType = (t) => /\b(vegetarian|vegan)\b/.test(t) && !/\bnon[\s-]?veg/.test(t);
+
 export const FILTER_MATCHERS = {
   "price": (o) => !o.price || String(o.price).length <= 2,
-  "private seating": (o) => /private|lounge|rooftop|fine din/i.test(`${o.title || ""} ${o.type || ""}`),
-  "dietary options": (o) => /veg|vegan|salad|health/i.test(`${o.title || ""} ${o.type || ""}`),
-  "live music": (o) => /live|music|bar|club|lounge|brew/i.test(`${o.title || ""} ${o.type || ""}`),
+  "private seating": (o) => (hasAttributes(o)
+    ? attributeValues(o).includes("private dining room")
+    : /private|lounge|rooftop|fine din/i.test(titleAndType(o))),
+  "dietary options": (o) => typeLabels(o).some(isVegetarianType) || (hasAttributes(o)
+    ? attributeValues(o).some((a) => DIET_ATTRIBUTES.includes(a))
+    : /veg|vegan|salad|health/i.test(titleAndType(o))),
+  "live music": (o) => typeLabels(o).includes("live music venue") || (hasAttributes(o)
+    ? attributeValues(o).some((a) => a === "live music" || a === "live performances")
+    : /live|music|bar|club|lounge|brew/i.test(titleAndType(o))),
 };
 
 // Service-flavored questionnaire answers become visible reminders on the

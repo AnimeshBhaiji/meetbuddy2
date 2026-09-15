@@ -42,7 +42,18 @@ FOLLOW_UP_ATTRIBUTES = {
     "private seating": {"private dining room"},
     "formal (": {"upmarket", "quiet"},
     "quiet & intimate": {"quiet", "cozy", "romantic"},
-    "live music": {"live music"},
+    "live music": {"live music", "live performances", "live music venue"},
+    # Dietary answer (free text) and the "Dietary options" chip: Google's offerings
+    # plus type labels such as "Vegetarian restaurant".
+    "vegan": {"vegan options", "vegan restaurant"},
+    "vegetarian": {"vegetarian options", "vegetarian options only", "vegan options",
+                   "vegetarian restaurant", "vegan restaurant"},
+    "pure veg": {"vegetarian options only", "vegetarian restaurant", "vegan restaurant"},
+    "jain": {"vegetarian options only", "vegetarian restaurant"},
+    "halal": {"halal food"},
+    "healthy": {"healthy options", "organic dishes", "health food restaurant"},
+    "dietary options": {"vegetarian options", "vegetarian options only", "vegan options", "halal food",
+                        "healthy options", "vegetarian restaurant", "vegan restaurant"},
 }
 MOOD_ATTRIBUTE_STRONG = 1.5      # about one star of rating
 MOOD_ATTRIBUTE_SUPPORTING = 0.5  # per supporting attribute, at most two
@@ -149,8 +160,10 @@ def _follow_up_answers(prefs_data: Dict[str, Any]) -> List[str]:
 
 def _attribute_score(place: Dict[str, Any], labels_used: Dict[str, List[str]],
                      prefs_data: Dict[str, Any]) -> float:
-    """How well Google's own attributes for the place fit the user's answers."""
+    """How well Google's own attributes and type labels for the place fit the
+    user's answers."""
     have = {str(v).lower() for values in place["attributes"].values() for v in values}
+    have |= {str(t).lower() for t in place.get("types") or []}
     score = 0.0
     for mood in labels_used.get("mood", []):
         strong, supporting = MOOD_ATTRIBUTES.get(mood, (set(), set()))

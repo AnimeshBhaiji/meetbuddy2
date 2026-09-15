@@ -62,3 +62,18 @@ def test_a_few_perfect_reviews_do_not_beat_thousands_of_good_ones():
     hyped = _place("New Spot", rating=5.0, reviews=3)
     proven = _place("Institution", rating=4.6, reviews=3000)
     assert _rank([hyped, proven], {})[0] == "Institution"
+
+
+def test_dietary_answer_prefers_places_that_serve_it():
+    steakhouse = _place("Steak Co", rating=4.5, offerings=["Alcohol"])
+    vegetarian = _place("Green Leaf", rating=4.3, offerings=["Vegetarian options", "Vegan options"])
+    prefs = {"memorableFactor_sub": {"af_diet": "Vegetarian"}}
+    assert _rank([steakhouse, vegetarian], prefs)[0] == "Green Leaf"
+
+
+def test_dietary_options_chip_counts_a_vegetarian_restaurant_type():
+    steakhouse = _place("Steak Co", rating=4.5, offerings=["Alcohol"])
+    bhavan = _place("Pure Veg Bhavan", rating=4.3, offerings=["Quick bite"])
+    bhavan["types"] = ["Vegetarian restaurant"]
+    prefs = {"planningStyle_sub": {"fc_filters": ["Dietary options"]}}
+    assert _rank([steakhouse, bhavan], prefs)[0] == "Pure Veg Bhavan"

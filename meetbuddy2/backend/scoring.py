@@ -1,6 +1,7 @@
 # scoring.py — the full local ranking pipeline. Everything here runs on data
 # already inside a SerpAPI result (title, description, snippet, reviews),
 # so personalization costs zero API credits.
+import re
 from math import atan2
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,6 +21,27 @@ ACTIVITY_KEYWORDS = (
     "sports", "game", "games", "cinema", "theater", "theatre", "stadium", "arena", "club",
     "billiards", "snooker", "mini golf", "golf", "ice skating", "roller skating",
     "skating", "rock climbing", "bungee", "zipline", "theme park",
+)
+
+# What Google says a place is (its `type` and `types`, e.g. "Cafe", "Museum",
+# "Hotel"), matched as whole words. Titles and addresses are no evidence: a cafe
+# on Park Road is not a park, and "Sri Krishna Hotel" is usually a restaurant.
+# The *_KEYWORDS text checks above remain only for places Google gave no type.
+FOOD_TYPES = (
+    "restaurant", "cafe", "café", "coffee", "bar", "pub", "brewpub", "brewery", "bakery",
+    "patisserie", "bistro", "diner", "deli", "dhaba", "eatery", "food court", "tea house",
+    "snack", "dessert", "juice", "sandwich", "pizza", "ice cream", "bubble tea", "takeaway", "canteen",
+)
+ACTIVITY_TYPES = (
+    "attraction", "park", "museum", "gallery", "zoo", "aquarium", "amusement", "recreation",
+    "escape room", "bowling", "arcade", "cinema", "movie theater", "theatre", "theater", "stadium",
+    "sports", "adventure", "hiking", "camping", "garden", "lake", "beach", "monument", "landmark",
+    "temple", "church", "club", "live music venue", "event venue", "trampoline", "karting",
+    "paintball", "laser tag", "golf", "skating", "playground", "planetarium", "observation deck",
+)
+STAY_TYPES = (
+    "hotel", "resort", "lodge", "homestay", "home stay", "guest house", "bed & breakfast",
+    "holiday home", "hostel", "serviced apartment", "inn",
 )
 
 # Google's own attributes for a place (scraper ATTRIBUTE_GROUPS), per mood:
@@ -95,17 +117,40 @@ def filter_avoided(places: List[Dict[str, Any]], avoid_terms: List[str]) -> List
     ]
 
 
+def _type_words(place: Dict[str, Any]) -> Optional[str]:
+    """Google's type labels for a place, lowercased; None when it has none."""
+    labels = [place.get("type") or ""] + [str(t) for t in place.get("types") or []]
+    return " | ".join(label for label in labels if label).lower() or None
+
+
+def _matches(labels: str, words) -> bool:
+    return any(re.search(rf"\b{re.escape(w)}s?\b", labels) for w in words)
+
+
+def _is_activity(place: Dict[str, Any], txt: str) -> bool:
+    labels = _type_words(place)
+    if labels is None:  # no type from Google (e.g. organic results): read the text
+        return any(k in txt for k in ACTIVITY_KEYWORDS)
+    return _matches(labels, ACTIVITY_TYPES)
+
+
 def filter_step_type(places: List[Dict[str, Any]], step: Optional[str]) -> List[Dict[str, Any]]:
     """Keep venues appropriate for the step. A venue is excluded from the
-    activity step only when food signals are present AND no activity signal is
-    (so "Street Food Museum" survives, "Pasta Bistro" doesn't)."""
-    step_keywords = {"activity": ACTIVITY_KEYWORDS, "stay": STAY_KEYWORDS}.get(step)
-    if not step_keywords:
+    activity (or stay) step only when it is food AND not also an activity (or
+    stay), judged from Google's type labels — so a "Museum" whose name mentions
+    food survives and a "Cafe" on Park Road doesn't."""
+    if step not in ("activity", "stay"):
         return places
+    step_types, step_keywords = (ACTIVITY_TYPES, ACTIVITY_KEYWORDS) if step == "activity" else (STAY_TYPES, STAY_KEYWORDS)
     kept = []
     for p in places:
-        txt = _text(p)  # once per place, not once per keyword group
-        if any(k in txt for k in FOOD_KEYWORDS) and not any(k in txt for k in step_keywords):
+        labels = _type_words(p)
+        if labels is not None:
+            is_food, fits_step = _matches(labels, FOOD_TYPES), _matches(labels, step_types)
+        else:  # no type from Google: fall back to the text
+            txt = _text(p)
+            is_food, fits_step = any(k in txt for k in FOOD_KEYWORDS), any(k in txt for k in step_keywords)
+        if is_food and not fits_step:
             continue
         kept.append(p)
     return kept
@@ -295,7 +340,7 @@ def rank_places(
         p["tags"] = tag_place_minimal(p, txt)
         score = _base_score(p, txt, wants_music, wants_escape)
 
-        if step == "activity" and any(k in txt for k in ACTIVITY_KEYWORDS):
+        if step == "activity" and _is_activity(p, txt):
             score += 1.5
 
         if anchor_coords and p.get("lat") is not None and p.get("lng") is not None:

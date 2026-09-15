@@ -171,7 +171,11 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
             tokens.append({"category": cat, "label": v, "phrase": v})
         if len(tokens) >= 3:
             break
-    short_q = short_query_from_selected(tokens)
+    # Only the mood describes a venue. Planning style ("Full control", "Surprise
+    # me") is about how the user plans and adventure level is already the radius;
+    # sent to SerpAPI they added noise and split the cache per planning style.
+    mood_tokens = [t for t in tokens if t["category"] == "mood"]
+    short_q = short_query_from_selected(mood_tokens) if mood_tokens else ""
 
     place_types = _prioritize_types(select_place_types(labels_used))
     top_type = place_types[0] if place_types else "restaurant"
@@ -185,8 +189,10 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     else:
         lead_q = f"{short_q} {top_name}".strip()
     if loc_text_for_query:
-        primary_q = f"{lead_q} near {loc_text_for_query}"
         fallback_q = f"{top_name} in {loc_text_for_query}"
+        # With no descriptive words the lead query is the broad one: send it once,
+        # not as "restaurants near X" and then again as "restaurants in X".
+        primary_q = f"{lead_q} near {loc_text_for_query}" if lead_q != top_name else fallback_q
     else:
         primary_q = lead_q
         fallback_q = top_name

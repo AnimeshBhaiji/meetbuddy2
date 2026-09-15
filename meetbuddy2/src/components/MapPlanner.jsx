@@ -238,9 +238,21 @@ export default function MapPlanner({
         zoom={13}
         style={{ height: "100%", width: "100%" }}
       >
+        {/* Esri's dark gray canvas needs no API key (CARTO's dark tiles began
+            returning an "API KEY REQUIRED" watermark). Esri has real tiles up to zoom
+            16 and a "Map data not yet available" placeholder beyond, so closer zooms
+            scale up the zoom-16 tiles; zoom stops at 18, as it did with CARTO.
+            The reference layer adds the place labels. */}
         <TileLayer
-          attribution='&copy; OpenStreetMap contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          attribution='Tiles &copy; <a href="https://www.esri.com">Esri</a> &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          maxNativeZoom={16}
+          maxZoom={18}
+        />
+        <TileLayer
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+          maxNativeZoom={16}
+          maxZoom={18}
         />
 
         <FitBounds points={fitPoints} signature={fitSignature} />

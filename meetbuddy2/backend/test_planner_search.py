@@ -19,7 +19,7 @@ def test_fallback_runs_when_avoid_list_empties_the_primary_search(monkeypatch):
 
     def fake_search(query, coords, radius_m, start=0):
         calls.append(query)
-        if " in " in query:  # the broad fallback: "restaurants in <area>"
+        if " in " in query:  # the broad fallback: "places to eat in <area>"
             return [_near(f"ok{i}", f"Garden Bistro {i}") for i in range(5)]
         # primary: six raw results, but five are on the avoid list
         return [_near(f"club{i}", f"Neon Club {i}") for i in range(5)] + [_near("keep", "Quiet Diner")]
@@ -70,7 +70,7 @@ def test_second_page_of_the_broad_search_when_both_first_pages_stay_thin(monkeyp
         {"preferences": prefs, "coords": ORIGIN, "location": "Indiranagar"})
 
     paged = [c for c in calls if c[1]]
-    assert paged == [("restaurants in Indiranagar", 20)], calls
+    assert paged == [("places to eat in Indiranagar", 20)], calls
     assert len(result["options"]) == 6
 
 
@@ -111,7 +111,7 @@ def test_planning_style_and_adventure_level_stay_out_of_the_search(monkeypatch):
     adventure level is already the search radius."""
     q = _first_query(monkeypatch, {"mood": "Romantic", "planningStyle": "Full control",
                                    "adventureLevel": "Stick to the city"})
-    assert q == "romantic restaurants near indiranagar", q
+    assert q == "romantic places to eat near indiranagar", q
 
 
 def test_same_mood_shares_one_search_across_planning_styles(monkeypatch):
@@ -125,4 +125,28 @@ def test_no_descriptive_words_means_a_single_broad_search(monkeypatch):
     calls = _record_queries(monkeypatch, results=2)
     planner.generate_initial_suggestions(
         {"preferences": {"planningStyle": "Surprise me"}, "coords": ORIGIN, "location": "Indiranagar"})
-    assert calls == ["restaurants in Indiranagar"], calls
+    assert calls == ["places to eat in Indiranagar"], calls
+
+
+def test_food_search_wording(monkeypatch):
+    # a flavor that already names food is sent as is; anything else gets "places to eat"
+    assert _first_query(monkeypatch, {"mood": "Romantic", "mood_sub": {"ro_setting": "Candlelit / intimate"}})         == "candlelight dinner near indiranagar"
+    assert _first_query(monkeypatch, {"mood": "Business-y", "mood_sub": {"by_formality": "Formal (meeting-style)"}})         == "business friendly places to eat near indiranagar"
+
+
+def test_food_searches_never_say_restaurant(monkeypatch):
+    """Google Maps drops its place attributes (atmosphere, crowd, offerings)
+    whenever the search contains "restaurant": measured 0/20 results tagged for
+    "candlelight dinner restaurants near X", 19/20 for "candlelight dinner near X"."""
+    calls = _record_queries(monkeypatch, results=2)  # thin pages, so fallbacks fire too
+    for prefs in (
+        {"mood": "Romantic", "mood_sub": {"ro_setting": "Rooftop / alfresco"}},
+        {"mood": "Romantic", "mood_sub": {"ro_setting": "Scenic / view"}},
+        {"mood": "Romantic", "mood_sub": {"ro_setting": "Candlelit / intimate"}},
+        {"mood": "Business-y", "mood_sub": {"by_formality": "Formal (meeting-style)"}},
+        {"planningStyle": "Surprise me"},
+    ):
+        planner.generate_initial_suggestions({"preferences": prefs, "coords": ORIGIN, "location": "Indiranagar"})
+        planner.generate_followup_suggestions({"payload": {"preferences": prefs, "coords": ORIGIN}, "steps": []},
+                                              "restaurant")
+    assert calls and not [q for q in calls if "restaurant" in q.lower()], calls

@@ -53,6 +53,23 @@ def _cache_key(query: str, coords: Optional[Tuple[float, float]], radius_m: Opti
     return f"search:{q}:{cell}:{_radius_bucket(radius_m)}{page}"
 
 
+# Google's own description of a place (SerpAPI `extensions`), e.g.
+# {"atmosphere": ["Cozy", "Romantic"]}. Only groups that describe the venue are
+# kept; payments, parking, accessibility and the like are dropped.
+ATTRIBUTE_GROUPS = ("atmosphere", "crowd", "highlights", "offerings", "service_options",
+                    "popular_for", "dining_options")
+
+
+def _attributes(item: Dict) -> Dict[str, List[str]]:
+    groups = {}
+    for ext in item.get("extensions") or []:
+        if isinstance(ext, dict):
+            for group, values in ext.items():
+                if group in ATTRIBUTE_GROUPS and isinstance(values, list):
+                    groups[group] = [str(v) for v in values]
+    return groups
+
+
 def _parse_place(item: Dict) -> Dict:
     place_id = item.get("place_id") or item.get("id") or item.get("cid") or ""
 
@@ -107,6 +124,10 @@ def _parse_place(item: Dict) -> Dict:
         "description": item.get("description") or item.get("snippet") or "",
         "snippet": item.get("snippet") or "",
         "reviews": reviews,
+        # Local results carry the number of reviews here, not review texts.
+        "reviews_count": item["reviews"] if type(item.get("reviews")) is int else None,
+        "types": [str(t) for t in item.get("types") or [] if t],
+        "attributes": _attributes(item),
     }
 
 

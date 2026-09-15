@@ -22,6 +22,35 @@ ACTIVITY_KEYWORDS = (
     "skating", "rock climbing", "bungee", "zipline", "theme park",
 )
 
+# Google's own attributes for a place (scraper ATTRIBUTE_GROUPS), per mood:
+# (strong — the atmosphere Google says the place has, supporting — fits the mood).
+MOOD_ATTRIBUTES = {
+    "Romantic": ({"romantic"},
+                 {"cozy", "upmarket", "quiet", "private dining room", "rooftop seating", "great wine list"}),
+    "Chill & Relaxed": ({"cozy", "quiet"},
+                        {"casual", "outdoor seating", "great coffee", "good for working on laptop"}),
+    "Business-y": ({"quiet", "upmarket"}, {"good for working on laptop", "private dining room"}),
+    "Fun & Energetic": ({"trendy"}, {"groups", "cocktails", "happy-hour drinks", "late-night food", "live music"}),
+}
+# Follow-up answers (lowercase fragment of the answer) -> attributes that satisfy them.
+FOLLOW_UP_ATTRIBUTES = {
+    "candlelit": {"romantic", "cozy", "quiet"},
+    "rooftop": {"rooftop seating", "outdoor seating"},
+    "alfresco": {"outdoor seating", "rooftop seating"},
+    "cozy caf": {"cozy"},
+    "private area": {"private dining room"},
+    "private seating": {"private dining room"},
+    "formal (": {"upmarket", "quiet"},
+    "quiet & intimate": {"quiet", "cozy", "romantic"},
+    "live music": {"live music"},
+}
+MOOD_ATTRIBUTE_STRONG = 1.5      # about one star of rating
+MOOD_ATTRIBUTE_SUPPORTING = 0.5  # per supporting attribute, at most two
+FOLLOW_UP_ATTRIBUTE = 1.0        # per follow-up answer the place satisfies
+
+RATING_PRIOR = 4.0          # what a place with few reviews is assumed to be rated
+RATING_PRIOR_REVIEWS = 50   # reviews before a place's own rating dominates
+
 
 def _text(place: Dict[str, Any]) -> str:
     return " ".join(
@@ -94,12 +123,49 @@ def usable_places(places: List[Dict[str, Any]], step: Optional[str] = None,
     return filter_avoided(places, avoid_terms or [])
 
 
-def _base_score(place: Dict[str, Any], txt: str, wants_music: bool, wants_escape: bool) -> float:
-    score = 0.0
+def _effective_rating(place: Dict[str, Any]) -> float:
+    """Rating pulled toward RATING_PRIOR until a place has enough reviews, so
+    5.0 from 3 reviews doesn't outrank 4.6 from 3,000. Results cached before
+    review counts were kept use their rating as is."""
     try:
-        score += max(0.0, (float(place.get("rating", 0)) - 3.0)) * 1.5
-    except Exception:
-        pass
+        rating = float(place.get("rating") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    count = place.get("reviews_count")
+    if not rating or type(count) is not int:
+        return rating
+    return (rating * count + RATING_PRIOR * RATING_PRIOR_REVIEWS) / (count + RATING_PRIOR_REVIEWS)
+
+
+def _follow_up_answers(prefs_data: Dict[str, Any]) -> List[str]:
+    answers = []
+    for category in ("mood", "planningStyle", "memorableFactor"):
+        sub = prefs_data.get(f"{category}_sub")
+        if isinstance(sub, dict):
+            for value in sub.values():
+                answers.extend(value if isinstance(value, list) else [value])
+    return [str(a).lower() for a in answers if a]
+
+
+def _attribute_score(place: Dict[str, Any], labels_used: Dict[str, List[str]],
+                     prefs_data: Dict[str, Any]) -> float:
+    """How well Google's own attributes for the place fit the user's answers."""
+    have = {str(v).lower() for values in place["attributes"].values() for v in values}
+    score = 0.0
+    for mood in labels_used.get("mood", []):
+        strong, supporting = MOOD_ATTRIBUTES.get(mood, (set(), set()))
+        if have & strong:
+            score += MOOD_ATTRIBUTE_STRONG
+        score += MOOD_ATTRIBUTE_SUPPORTING * min(len(have & supporting), 2)
+    for answer in _follow_up_answers(prefs_data):
+        wanted = set().union(*(attrs for fragment, attrs in FOLLOW_UP_ATTRIBUTES.items() if fragment in answer))
+        if have & wanted:
+            score += FOLLOW_UP_ATTRIBUTE
+    return score
+
+
+def _base_score(place: Dict[str, Any], txt: str, wants_music: bool, wants_escape: bool) -> float:
+    score = max(0.0, _effective_rating(place) - 3.0) * 1.5
     if wants_music and ("music" in txt or "live" in txt):
         score += 1.0
     if wants_escape and ("resort" in txt or "getaway" in txt):
@@ -131,12 +197,9 @@ def _apply_priority_weights(place: Dict[str, Any], base_score: float, priorities
         return base_score
     joined = " ".join(priorities)
     if "food quality" in joined:
-        try:
-            rating = float(place.get("rating") or 0)
-            if rating:
-                base_score += (rating - 4.0) * 1.5
-        except Exception:
-            pass
+        rating = _effective_rating(place)
+        if rating:
+            base_score += (rating - 4.0) * 1.5
     if "distance" in joined:
         dist = place.get("distance_meters")
         if dist is not None:
@@ -244,7 +307,12 @@ def rank_places(
                 pass
 
         score = _apply_priority_weights(p, score, directives.get("priorities", []))
-        score += _analyzer_score(p, prefs_data, labels_used, directives)
+        # Google's own description of the place when the search returned one;
+        # keyword guessing only for results cached before attributes were kept.
+        if p.get("attributes"):
+            score += _attribute_score(p, labels_used, prefs_data)
+        else:
+            score += _analyzer_score(p, prefs_data, labels_used, directives)
         p["score"] = round(score, 3)
 
     ranked = sorted(places, key=lambda x: (

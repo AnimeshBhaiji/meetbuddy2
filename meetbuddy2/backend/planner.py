@@ -24,14 +24,30 @@ logger = logging.getLogger(__name__)
 MIN_USABLE_RESULTS = 5  # below this, fire the single broad fallback
 PAGE_SIZE = 20  # SerpAPI google_maps results per page; also the offset of page 2
 
+# Food searches never say "restaurant". Google Maps drops its place attributes
+# (atmosphere, crowd, offerings, highlights) from results whenever the search
+# contains the word — measured near Indiranagar: 0/20 results tagged for
+# "candlelight dinner restaurants", 19/20 for "candlelight dinner", and 0/20 for
+# "restaurants" against 19/20 for "places to eat". Ranking relies on those tags.
+FOOD_SEARCH_NOUN = "places to eat"
+FOOD_WORDS = ("dinner", "dining", "food", "cafe", "café", "brunch", "lunch", "breakfast", FOOD_SEARCH_NOUN)
+
 PLACE_TYPE_NAMES = {
-    "restaurant": "restaurants",
+    "restaurant": FOOD_SEARCH_NOUN,
     "cafe": "cafes",
     "park": "parks",
     "tourist_attraction": "attractions",
     "hotel": "hotels",
     "activity": "things to do",
 }
+
+
+def _food_query(words: str) -> str:
+    """A food search without "restaurant": the words alone when they already name
+    food ("candlelight dinner"), otherwise followed by "places to eat"."""
+    if not words:
+        return FOOD_SEARCH_NOUN
+    return words if any(w in words.lower() for w in FOOD_WORDS) else f"{words} {FOOD_SEARCH_NOUN}"
 
 STEP_TYPES = {
     "restaurant": ["restaurant", "cafe", "bar"],
@@ -183,15 +199,17 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
 
     # ONE preference-flavored query (+ conditional broad fallback)
     flavor = _step_flavor(directives, top_type)
-    if flavor:
-        # don't produce "rooftop restaurants restaurants"
+    if top_type == "restaurant":
+        lead_q = _food_query(flavor or short_q)
+    elif flavor:
+        # don't produce "cozy cafes cafes"
         lead_q = flavor if top_name.lower() in flavor.lower() else f"{flavor} {top_name}"
     else:
         lead_q = f"{short_q} {top_name}".strip()
     if loc_text_for_query:
         fallback_q = f"{top_name} in {loc_text_for_query}"
         # With no descriptive words the lead query is the broad one: send it once,
-        # not as "restaurants near X" and then again as "restaurants in X".
+        # not as "places to eat near X" and then again as "places to eat in X".
         primary_q = f"{lead_q} near {loc_text_for_query}" if lead_q != top_name else fallback_q
     else:
         primary_q = lead_q
@@ -284,11 +302,8 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
         fallback_q = "cafes and bakeries"
     else:
         flavor = " ".join((directives.get("restaurant_terms") or [])[:2])
-        if flavor:
-            primary_q = flavor if "restaurant" in flavor.lower() else f"{flavor} restaurants"
-        else:
-            primary_q = "restaurants"
-        fallback_q = "restaurants"
+        primary_q = _food_query(flavor)
+        fallback_q = FOOD_SEARCH_NOUN
 
     search_errors: List[str] = []
     # Never offer a place already in this plan (the cafe step used to list the

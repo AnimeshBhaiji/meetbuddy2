@@ -154,6 +154,7 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     prefs_data = payload.get("preferences", {}) or {}
     location_hint = payload.get("location")
     coords_tuple = normalize_coords(payload.get("coords"))
+    coords_are_exact = coords_tuple is not None  # sent by the client (GPS), not geocoded
 
     # Textual location but no coords -> geocode it (cached)
     if location_hint and not coords_tuple and not _is_coord_string(location_hint):
@@ -245,6 +246,10 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
         "place_types": place_types,
         "options": ranked[: max(num_results, 20)],
         "location_hint": loc_text_for_display or "",
+        # Where the search started, for the map: exact when the client sent
+        # coordinates, approximate when they came from geocoding the typed place.
+        "origin": ({"lat": coords_tuple[0], "lng": coords_tuple[1], "exact": coords_are_exact,
+                    "label": loc_text_for_display or ""} if coords_tuple else None),
         "recommended_flow": recommended_flow,
         "plan_mode": directives["plan_mode"],
         "directives": directives,

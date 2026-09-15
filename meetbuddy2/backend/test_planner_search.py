@@ -150,3 +150,22 @@ def test_food_searches_never_say_restaurant(monkeypatch):
         planner.generate_followup_suggestions({"payload": {"preferences": prefs, "coords": ORIGIN}, "steps": []},
                                               "restaurant")
     assert calls and not [q for q in calls if "restaurant" in q.lower()], calls
+
+
+def test_initial_results_say_where_the_search_started_and_how_precisely(monkeypatch):
+    """The map shows the user's location: a marker for GPS coordinates, an
+    approximate-area circle when only a typed place was given (and geocoded)."""
+    _record_queries(monkeypatch)
+    gps = planner.generate_initial_suggestions(
+        {"preferences": {"mood": "Romantic"}, "coords": ORIGIN, "location": "Indiranagar"})
+    assert gps["origin"] == {"lat": ORIGIN["lat"], "lng": ORIGIN["lng"], "exact": True, "label": "Indiranagar"}
+
+    monkeypatch.setattr(planner, "geocode_address", lambda text: (12.9784, 77.6408))
+    typed = planner.generate_initial_suggestions(
+        {"preferences": {"mood": "Romantic"}, "location": "Indiranagar"})
+    assert typed["origin"] == {"lat": 12.9784, "lng": 77.6408, "exact": False, "label": "Indiranagar"}
+
+    monkeypatch.setattr(planner, "geocode_address", lambda text: None)
+    unknown = planner.generate_initial_suggestions(
+        {"preferences": {"mood": "Romantic"}, "location": "Nowhere-in-particular"})
+    assert unknown["origin"] is None

@@ -215,6 +215,15 @@ function CarouselCard({ o, idx, pickBadge, onSelect, onHighlight, loading }) {
   );
 }
 
+// What the step page asks the user to do, per step.
+const STEP_PROMPT = {
+  restaurant: "Choose a place to eat",
+  cafe: "Choose a café",
+  activity: "Choose something to do",
+  stay: "Choose where to stay",
+  custom: "Choose a stop",
+};
+
 // Stands in for a CarouselCard while the next step's options load
 function PlaceholderCard() {
   return (
@@ -233,7 +242,7 @@ export default function StepExplorer({ P }) {
   const [showAllGrid, setShowAllGrid] = useState(false);
   const [showControls, setShowControls] = useState(false); // filter/sort + step editor popover
   const {
-    currentStep, stepOptions, initialFlow, planMode, directives, anchorText,
+    currentStep, stepOptions, initialFlow, planMode, directives, anchorText, origin,
     selectedChain, sessionLoading, loadingStep, plannerError, highlightedPlace, setHighlightedPlace,
     activeFilters, setActiveFilters, sortBy, setSortBy, showAllOptions, setShowAllOptions,
     upcomingSteps, removeUpcomingStep, addUpcomingStep, moveUpcomingStep,
@@ -254,9 +263,9 @@ export default function StepExplorer({ P }) {
   let displayedOptions = shortlist && !showAllOptions ? stepOptions.slice(0, shortlist) : stepOptions;
   if (planMode === "full") displayedOptions = applyFiltersAndSort(displayedOptions, activeFilters, sortBy);
   const filterChips = planMode === "full" ? directives?.filters || [] : [];
-  const currentIdx = initialFlow.indexOf(currentStep);
-
-
+  // While the next step loads, the header already describes it.
+  const headerStep = loadingStep || currentStep;
+  const headerIdx = initialFlow.indexOf(headerStep);
 
   return (
     <div className="max-w-none">
@@ -267,34 +276,54 @@ export default function StepExplorer({ P }) {
           options={displayedOptions}
           selectedChain={selectedChain}
           highlightedPlace={highlightedPlace}
+          userLocation={origin}
         />
 
         {/* floating top bar */}
         <div className="absolute top-4 left-4 right-4 z-[1000] flex items-start justify-between gap-3 pointer-events-none">
-          <div className="glass-strong rounded-2xl px-4 py-3 border border-white/10 pointer-events-auto max-w-[70%]">
-            <div className="flex items-center gap-2 flex-wrap">
-              {initialFlow.map((step, i) => (
-                <span
-                  key={step}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                    i === currentIdx
-                      ? "bg-gradient-to-r from-brand/35 to-brand-2/30 text-white border border-brand/50"
-                      : i < currentIdx
-                      ? "glass text-brand-3 border border-brand/25"
-                      : "glass text-muted-foreground"
-                  }`}
-                >
-                  {i < currentIdx ? <Check className="w-3 h-3" /> : <span>{STEP_EMOJI[step] ?? "📍"}</span>}
-                  {humanStepName(step)}
-                </span>
-              ))}
-              <span className="glass px-2.5 py-1 rounded-full text-[10px] font-medium text-brand-3 border border-brand/25">
-                {planMode === "full" ? "🎛️ Full control" : "🎨 Guided"}
-              </span>
-            </div>
+          {/* Which stop is being chosen, as a route of numbered stops that matches the
+              numbered picks on the map, and where the search is centred. */}
+          <div
+            data-testid="step-header"
+            className="glass-strong rounded-2xl px-4 py-3 border border-white/10 pointer-events-auto max-w-[70%]"
+          >
+            {headerIdx >= 0 && (
+              <p className="text-xs text-muted-foreground">
+                Stop {headerIdx + 1} of {initialFlow.length}
+              </p>
+            )}
+            <h2 className="font-display text-lg font-semibold text-white leading-snug">
+              {STEP_PROMPT[headerStep] || `Choose a ${humanStepName(headerStep).toLowerCase()}`}
+            </h2>
+            {initialFlow.length > 1 && (
+              <ol aria-label="Plan progress" className="mt-2 flex items-center">
+                {initialFlow.map((step, i) => (
+                  <li key={step} aria-current={i === headerIdx ? "step" : undefined} className="flex items-center">
+                    {i > 0 && (
+                      <span aria-hidden="true" className={`h-0.5 w-5 ${i <= headerIdx ? "bg-[#ff6b6b]/70" : "bg-white/15"}`} />
+                    )}
+                    <span
+                      title={humanStepName(step)}
+                      className={`grid place-items-center w-6 h-6 rounded-full text-[11px] font-semibold ${
+                        i < headerIdx
+                          ? "bg-[#ff6b6b] text-white"
+                          : i === headerIdx
+                          ? "bg-gradient-to-r from-brand to-brand-2 text-white ring-2 ring-brand/40"
+                          : "border border-white/25 text-muted-foreground"
+                      }`}
+                    >
+                      {i + 1}
+                      <span className="sr-only">
+                        {` ${humanStepName(step)}${i < headerIdx ? ", picked" : ""}`}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
             {anchorText && (
-              <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-brand-3" /> {anchorText}
+              <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-[#f43f5e]" /> Near {anchorText}
               </p>
             )}
           </div>

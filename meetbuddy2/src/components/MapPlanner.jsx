@@ -53,37 +53,17 @@ const defaultIcon = L.divIcon({
   popupAnchor: [0, -14],
 });
 
+// The user's location. One colour for both forms so they read as "you": a dot
+// when the location is exact (GPS), a translucent circle when it was only
+// geocoded from a typed place and so is approximate.
+const USER_LOCATION_COLOR = "#f43f5e";
+const APPROXIMATE_LOCATION_RADIUS_M = 600;
 const userLocationIcon = L.divIcon({
-  html: `
-    <div style="
-      position: relative;
-      width:28px;
-      height:28px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    ">
-      <div style="
-        width:24px;
-        height:24px;
-        border-radius:50%;
-        background:#ec4899;
-        border:3px solid white;
-        box-shadow:0 0 0 3px rgba(236,72,153,0.45);
-      "></div>
-      <div style="
-        position:absolute;
-        width:8px;
-        height:8px;
-        border-radius:50%;
-        background:white;
-      "></div>
-    </div>
-  `,
+  html: `<div class="user-location-dot" style="width:18px;height:18px;border-radius:50%;background:${USER_LOCATION_COLOR};border:3px solid white;box-shadow:0 0 0 6px rgba(244,63,94,0.28);"></div>`,
   className: "",
-  iconSize: [28, 28],
-  iconAnchor: [14, 28],
-  popupAnchor: [0, -28],
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+  popupAnchor: [0, -10],
 });
 
 // Re-fits only when `signature` (the set of coordinates) changes. Callers pass a
@@ -119,15 +99,13 @@ function FitBounds({ points = [], signature }) {
  * - options: array of places (current step)
  * - selectedChain: array [{step, place}]
  * - highlightedPlace: place object to highlight on map (opens popup)
- * - userCoords: {lat, lng} for user's current location (GPS)
- * - locationText: string typed area/location (for highlighting when no coords)
+ * - userLocation: {lat, lng, exact, label} where the search started; exact = GPS
  */
 export default function MapPlanner({
   options = [],
   selectedChain = [],
   highlightedPlace = null,
-  userCoords = null,
-  locationText = "",
+  userLocation = null,
   className = "",
 }) {
   const markerRefs = useRef({}); // "opt-<index>" -> Leaflet marker
@@ -195,10 +173,11 @@ export default function MapPlanner({
     });
   }, [selectedChain]);
 
-  // Determine center — prefer explicit userCoords, else first valid option, else selected place, else Bangalore fallback
+  // Determine center — prefer the user's location, else first valid option, else selected place, else Bangalore fallback
   const firstValid = normalizedOptions.find((o) => o.lat != null && o.lng != null) || selectedPlaces.find((o) => o.lat != null && o.lng != null);
-  const center = userCoords && userCoords.lat != null && userCoords.lng != null
-    ? [Number(userCoords.lat), Number(userCoords.lng)]
+  const hasUserLocation = userLocation && userLocation.lat != null && userLocation.lng != null;
+  const center = hasUserLocation
+    ? [Number(userLocation.lat), Number(userLocation.lng)]
     : (firstValid ? [firstValid.lat, firstValid.lng] : [12.9715987, 77.5945627]);
 
   // Everything the map should frame. The map is never remounted for new data
@@ -206,7 +185,7 @@ export default function MapPlanner({
   // re-frames it instead. The signature is sorted, so re-sorting options or
   // reordering stops doesn't re-fit an unchanged set of places.
   const fitPoints = [
-    ...(userCoords && userCoords.lat != null && userCoords.lng != null ? [userCoords] : []),
+    ...(hasUserLocation ? [userLocation] : []),
     ...normalizedOptions.filter((o) => o.lat && o.lng),
     ...selectedPlaces.filter((s) => s.lat && s.lng),
   ];
@@ -245,31 +224,24 @@ export default function MapPlanner({
 
         <FitBounds points={fitPoints} signature={fitSignature} />
 
-        {/* User's current location (GPS) */}
-        {userCoords && userCoords.lat != null && userCoords.lng != null && (
-          <Marker
-            position={[Number(userCoords.lat), Number(userCoords.lng)]}
-            icon={userLocationIcon}
-          >
+        {/* The user's location: a dot when exact (GPS), a circle when approximate */}
+        {hasUserLocation && userLocation.exact && (
+          <Marker position={[Number(userLocation.lat), Number(userLocation.lng)]} icon={userLocationIcon}>
             <Popup>
               <div style={{ fontWeight: 600 }}>You are here</div>
-              {locationText && (
-                <div style={{ fontSize: 12, marginTop: 4 }}>{locationText}</div>
-              )}
+              {userLocation.label && <div style={{ fontSize: 12, marginTop: 4 }}>{userLocation.label}</div>}
             </Popup>
           </Marker>
         )}
-
-        {/* Highlight approximate typed area if we have no explicit coords */}
-        {!userCoords && locationText && firstValid && (
+        {hasUserLocation && !userLocation.exact && (
           <Circle
-            center={center}
-            radius={1500}
-            pathOptions={{ color: "#3b82f6", weight: 1, fillColor: "#60a5fa", fillOpacity: 0.15 }}
+            center={[Number(userLocation.lat), Number(userLocation.lng)]}
+            radius={APPROXIMATE_LOCATION_RADIUS_M}
+            pathOptions={{ color: USER_LOCATION_COLOR, weight: 2, fillColor: USER_LOCATION_COLOR, fillOpacity: 0.14 }}
           >
             <Popup>
-              <div style={{ fontWeight: 600 }}>{locationText}</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Approximate area</div>
+              <div style={{ fontWeight: 600 }}>Approximate location</div>
+              {userLocation.label && <div style={{ fontSize: 12, marginTop: 4 }}>{userLocation.label}</div>}
             </Popup>
           </Circle>
         )}

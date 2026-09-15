@@ -119,6 +119,7 @@ export default function usePlannerSession() {
   const [currentStep, setCurrentStep] = useState(null); // e.g. restaurant/activity/stay
   const [stepOptions, setStepOptions] = useState([]); // all options for the current step (array)
   const [anchorText, setAnchorText] = useState("");
+  const [origin, setOrigin] = useState(null); // where the search started: {lat, lng, exact, label}
   const [selectedChain, setSelectedChain] = useState([]); // [{step, place}]
   const [sessionLoading, setSessionLoading] = useState(false); // for start/select operations
   const [flowText, setFlowText] = useState(""); // display flow (Restaurant → Activity → Stay)
@@ -293,6 +294,7 @@ export default function usePlannerSession() {
       setDirectives(res.initial?.directives || null);
       setShowAllOptions(false);
       setAnchorText(res.initial?.location_hint || payload.location || "");
+      setOrigin(res.initial?.origin || null);
       setSelectedChain([]);
 
       if (mode === "surprise" && initialOptions.length > 0) {
@@ -583,6 +585,7 @@ export default function usePlannerSession() {
     setCurrentStep(null);
     setStepOptions([]);
     setAnchorText("");
+    setOrigin(null);
     setSelectedChain([]);
     setSessionLoading(false);
     setFlowText("");
@@ -603,7 +606,7 @@ export default function usePlannerSession() {
   return {
     userPrefs, user, placeText, setPlaceText, coords, locLoading,
     page, setPage, sessionId, setSessionId, currentStep, stepOptions,
-    anchorText, selectedChain, setSelectedChain, sessionLoading,
+    anchorText, origin, selectedChain, setSelectedChain, sessionLoading,
     flowText, initialFlow, showOverlay, overlayText, loadingStep,
     highlightedPlace, setHighlightedPlace, plannerError, setPlannerError,
     planMode, directives, optionsByStep, setOptionsByStep,

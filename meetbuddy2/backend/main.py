@@ -340,6 +340,8 @@ async def planner_session_start(request: Request, db: Session = Depends(get_db),
             "short_query": initial.get("short_query"),
             "place_types": initial.get("place_types"),
             "location_hint": initial.get("location_hint"),
+            # search origin for the map: {lat, lng, exact, label} or null
+            "origin": initial.get("origin"),
             # include backend-computed flow so frontend does not guess steps
             "recommended_flow": initial.get("recommended_flow"),
             # questionnaire-derived planning behavior

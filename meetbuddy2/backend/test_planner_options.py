@@ -36,14 +36,14 @@ def test_options_without_session_anchor_to_coords(monkeypatch):
     assert any("cafe" in q.lower() for q in _fake_search.calls)
 
 
-def test_options_unknown_category_falls_back_to_restaurants(monkeypatch):
+def test_options_unknown_category_falls_back_to_places_to_eat(monkeypatch):
     _fake_search.calls = []
     monkeypatch.setattr(planner, "search_places", _fake_search)
     state = {"payload": {"preferences": {}, "coords": {"lat": 12.9716, "lng": 77.5946}},
              "steps": []}
     result = planner.generate_followup_suggestions(state, "shisha_lounge", num_results=10)
     assert result["options"], "expected ranked options"
-    assert any("restaurant" in q.lower() for q in _fake_search.calls)
+    assert any("places to eat" in q.lower() for q in _fake_search.calls)
 
 
 class FakeRequest:

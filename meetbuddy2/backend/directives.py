@@ -327,9 +327,10 @@ def _build_search_directives(prefs_data: Dict[str, Any]) -> Dict[str, Any]:
     if "candlelit" in ro_setting or "intimate" in ro_setting:
         d["restaurant_terms"].append("candlelight dinner")
     elif "scenic" in ro_setting or "view" in ro_setting:
-        d["restaurant_terms"].append("restaurants with a view")
+        # "dining", not "restaurants": see planner.FOOD_SEARCH_NOUN
+        d["restaurant_terms"].append("dining with a view")
     elif "rooftop" in ro_setting or "alfresco" in ro_setting:
-        d["restaurant_terms"].append("rooftop restaurants")
+        d["restaurant_terms"].append("rooftop dining")
 
     # ---- add-on magic ----
     if "live music" in addon:

@@ -325,6 +325,13 @@ async def planner_session_start(request: Request, db: Session = Depends(get_db),
     if not initial.get("options"):
         print(f"WARNING: no options from generate_initial_suggestions for user {user_id}")
 
+    # A typed location has no coordinates until the initial search geocodes it.
+    # Keep them on the session, so later searches that fall back to the origin
+    # (a skipped first step) still know where the user is.
+    origin = initial.get("origin")
+    if not payload["coords"] and origin:
+        payload["coords"] = {"lat": origin["lat"], "lng": origin["lng"]}
+
     # include selected_tokens into session state for downstream
     session_id = create_session(user_id, payload, db,
                                 initial_state={"selected_tokens": initial.get("selected_tokens", [])})
@@ -368,8 +375,11 @@ async def planner_session_select(sid: str, request: Request, db: Session = Depen
     if not selected_place:
         raise HTTPException(status_code=400, detail="Missing selected place")
 
-    # store selection
-    push_selection(sid, step, selected_place, db)
+    # Store the pick and search from the updated session. Searching from the copy
+    # read above centred the next step on the previous pick; with no previous
+    # pick and a typed location there were no coordinates at all, and the first
+    # follow-up searched worldwide.
+    session = push_selection(sid, step, selected_place, db) or session
 
     # decide next_step - client can specify next_step or we infer a simple flow
     next_step = raw.get("next_step")
@@ -382,6 +392,10 @@ async def planner_session_select(sid: str, request: Request, db: Session = Depen
     if raw.get("selected_tokens"):
         # get_session returns a snapshot, not the stored row — persist explicitly
         session = update_session(sid, "selected_tokens", raw.get("selected_tokens"), db) or session
+
+    # The final pick needs no next options: don't spend a search on them.
+    if next_step == "done":
+        return {"session_id": sid, "selected": selected_place, "next_step": "done", "options": []}
 
     # Generate followup suggestions based on last selected place
     follow = await run_in_threadpool(generate_followup_suggestions, session, next_step, num_results=15)

@@ -273,7 +273,8 @@ def generate_followup_suggestions(session_state: Dict[str, Any], next_step: str,
     anchor_coords = None
     if last and last.get("place"):
         pl = last["place"]
-        anchor_text = pl.get("address") or pl.get("title") or pl.get("name")
+        # The name, not the street address: the step header reads "Near <anchor>".
+        anchor_text = pl.get("title") or pl.get("name") or pl.get("address")
         anchor_coords = normalize_coords({"lat": pl.get("lat"), "lng": pl.get("lng")})
     if not anchor_text:
         anchor_text = payload.get("location") or (

@@ -280,12 +280,13 @@ export default function StepExplorer({ P }) {
         />
 
         {/* floating top bar */}
-        <div className="absolute top-4 left-4 right-4 z-[1000] flex items-start justify-between gap-3 pointer-events-none">
+        {/* Side by side from sm up; stacked on a phone, where they don't fit in one row. */}
+        <div className="absolute top-4 left-4 right-4 z-[1000] flex flex-col sm:flex-row items-start sm:justify-between gap-2 sm:gap-3 pointer-events-none">
           {/* Which stop is being chosen, as a route of numbered stops that matches the
               numbered picks on the map, and where the search is centred. */}
           <div
             data-testid="step-header"
-            className="glass-strong rounded-2xl px-4 py-3 border border-white/10 pointer-events-auto max-w-[70%]"
+            className="glass-strong rounded-2xl px-4 py-3 border border-white/10 pointer-events-auto max-w-full sm:max-w-[70%] min-w-0"
           >
             {headerIdx >= 0 && (
               <p className="text-xs text-muted-foreground">
@@ -322,12 +323,13 @@ export default function StepExplorer({ P }) {
               </ol>
             )}
             {anchorText && (
-              <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-[#f43f5e]" /> Near {anchorText}
+              <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1 min-w-0" title={`Near ${anchorText}`}>
+                <MapPin className="w-3 h-3 shrink-0 text-[#f43f5e]" />
+                <span className="truncate">Near {anchorText}</span>
               </p>
             )}
           </div>
-          <div className="flex gap-2 pointer-events-auto">
+          <div data-testid="step-controls" className="flex gap-2 pointer-events-auto">
             {planMode === "full" && (
               <GlowButton variant="ghost" onClick={() => setShowControls((s) => !s)} aria-label="Filters and steps" disabled={sessionLoading}>
                 <SlidersHorizontal className="w-4 h-4" />
@@ -335,12 +337,13 @@ export default function StepExplorer({ P }) {
             )}
             {/* Picks are saved in the background now, so nothing that changes the plan
                 can run until the current request settles. */}
-            <GlowButton variant="ghost" onClick={goBackOneStep} disabled={sessionLoading}>
-              <ArrowLeft className="w-4 h-4" /> Back
+            {/* Icon-only on a phone so the whole row fits. */}
+            <GlowButton variant="ghost" onClick={goBackOneStep} disabled={sessionLoading} aria-label="Back">
+              <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back</span>
             </GlowButton>
             {planMode === "full" && (
-              <GlowButton variant="ghost" onClick={skipStep} disabled={sessionLoading}>
-                Skip <ArrowRight className="w-4 h-4" />
+              <GlowButton variant="ghost" onClick={skipStep} disabled={sessionLoading} aria-label="Skip">
+                <span className="hidden sm:inline">Skip</span> <ArrowRight className="w-4 h-4" />
               </GlowButton>
             )}
             <GlowButton variant="ghost" onClick={startNewPlanner} aria-label="Start a new planner" disabled={sessionLoading}>

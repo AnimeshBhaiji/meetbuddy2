@@ -57,6 +57,10 @@ export default function Planner() {
 
   useEffect(() => {
     if (P.page !== "summary") setReopened(null);
+    // Each planner page starts at the top. The home page is long on a phone, so
+    // the step page used to open still scrolled down, its header hidden under
+    // the fixed navigation bar.
+    window.scrollTo(0, 0);
   }, [P.page]);
 
   return (

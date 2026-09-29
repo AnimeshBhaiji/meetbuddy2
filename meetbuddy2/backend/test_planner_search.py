@@ -169,3 +169,13 @@ def test_initial_results_say_where_the_search_started_and_how_precisely(monkeypa
     unknown = planner.generate_initial_suggestions(
         {"preferences": {"mood": "Romantic"}, "location": "Nowhere-in-particular"})
     assert unknown["origin"] is None
+
+
+def test_next_step_is_labelled_with_the_picked_places_name(monkeypatch):
+    """The step header says "Near <anchor>"; a full street address filled half the screen."""
+    _record_queries(monkeypatch)
+    pick = {"title": "Chianti, Indiranagar", "lat": ORIGIN["lat"], "lng": ORIGIN["lng"],
+            "address": "960, 12th Main Rd, near Gold Gym, HAL 2nd Stage, Doopanahalli, Indiranagar, Bengaluru, Karnataka 560008"}
+    state = {"payload": {"preferences": {}, "coords": ORIGIN, "location": "Indiranagar"},
+             "steps": [{"step": "restaurant", "place": pick}]}
+    assert planner.generate_followup_suggestions(state, "activity")["anchor_text"] == "Chianti, Indiranagar"

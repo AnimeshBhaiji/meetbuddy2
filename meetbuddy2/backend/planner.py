@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from directives import (
     _build_search_directives,
     _prioritize_types,
-    determine_flow_from_preferences,
+    planned_flow,
     normalize_to_labels,
     select_place_types,
     short_query_from_selected,
@@ -168,11 +168,10 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     labels_used = _labels_used(prefs_data)
     directives = _build_search_directives(prefs_data)
 
-    # Stage-2 "No stay" opt-out + weekend-escape detection
+    # Weekend-escape detection (the "no stay" opt-out lives in planned_flow)
     adv_sub_labels = normalize_to_labels(
         "adventureLevel", prefs_data.get("adventureLevel_sub") or prefs_data.get("adventureLevelSub")
     )
-    explicit_no_stay = any("no" in s.lower() for s in adv_sub_labels if isinstance(s, str))
     is_weekend_escape = any(
         "weekend escape" in s.lower()
         for s in (labels_used["adventureLevel"] or []) + (adv_sub_labels or [])
@@ -234,9 +233,7 @@ def generate_initial_suggestions(payload: Dict[str, Any], num_results: int = 15)
     if display_location:
         display_q = f"{display_q} near {display_location}"
 
-    recommended_flow = determine_flow_from_preferences(labels_used)
-    if explicit_no_stay and "stay" in recommended_flow:
-        recommended_flow = [s for s in recommended_flow if s != "stay"]
+    recommended_flow = planned_flow(prefs_data)
 
     result = {
         "display_query": display_q,

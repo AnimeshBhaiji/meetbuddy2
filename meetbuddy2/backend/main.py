@@ -14,6 +14,7 @@ from planner_sessions import (create_session, get_session, pop_selection, push_s
                               set_last_options, update_session, delete_sessions_for_user)
 from itineraries import router as itineraries_router
 from geo import geocode_address
+from directives import planned_flow
 from auth import create_access_token, get_current_user
 
 # -------- LOGGING --------
@@ -285,6 +286,13 @@ def read_user_prefs(user: User = Depends(get_current_user)):
     if not user.preferences:
         raise HTTPException(status_code=404, detail="No saved preferences")
     return {"user_id": user.id, "prefs": user.preferences}
+
+
+# The steps a plan will follow, from the account's saved answers. The planner
+# home shows this before a plan starts; POST /planner/session runs the same list.
+@app.get("/planner/flow")
+def planner_flow(user: User = Depends(get_current_user)):
+    return {"flow": planned_flow(user.preferences or {})}
 
 
 # Start a planner session (create initial suggestions)

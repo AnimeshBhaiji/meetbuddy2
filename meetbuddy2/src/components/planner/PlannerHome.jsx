@@ -1,10 +1,12 @@
 // src/components/planner/PlannerHome.jsx
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { MapPin, LocateFixed, Rocket, Sparkles } from "lucide-react";
 import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
-import { PREF_META } from "@/hooks/usePlannerSession";
+import { PREF_META, humanStepName } from "@/hooks/usePlannerSession";
+import { api } from "@/lib/api";
 import { ErrorBanner } from "./StepExplorer";
 
 const displayPref = (val) => {
@@ -16,7 +18,7 @@ export default function PlannerHome({ P }) {
   const navigate = useNavigate();
   const {
     userPrefs, placeText, setPlaceText, coords, locLoading, useMyLocation,
-    handlePlaceTextBlur, flowText, plannerError, startSession, sessionLoading,
+    handlePlaceTextBlur, plannerError, startSession, sessionLoading,
     resetSession,
   } = P;
 
@@ -27,6 +29,17 @@ export default function PlannerHome({ P }) {
     resetSession();
     navigate("/questionnaire-stage1");
   };
+
+  // The steps this account's answers produce, from the same function the
+  // planner runs. This used to show a fixed "Restaurant → Activity → Stay".
+  const [plannedFlow, setPlannedFlow] = useState(null); // null = loading, [] = unavailable
+  useEffect(() => {
+    let live = true;
+    api.get("/planner/flow")
+      .then((res) => { if (live) setPlannedFlow(Array.isArray(res.flow) ? res.flow : []); })
+      .catch(() => { if (live) setPlannedFlow([]); });
+    return () => { live = false; };
+  }, []);
   return (
     <div className="max-w-4xl mx-auto px-6 py-6">
       <motion.div
@@ -108,7 +121,17 @@ export default function PlannerHome({ P }) {
               <div>
                 <label className="block text-xl font-semibold text-white mb-4">Your planned flow</label>
                 <div className="glass rounded-xl p-4 font-medium text-center border border-brand/25">
-                  <span className="text-brand-3 font-semibold">{flowText || "Restaurant → Activity → Stay"}</span>
+                  <span
+                    data-testid="planned-flow"
+                    data-state={plannedFlow === null ? "loading" : "ready"}
+                    className={plannedFlow?.length ? "text-brand-3 font-semibold" : "text-muted-foreground"}
+                  >
+                    {plannedFlow === null
+                      ? "Working out your stops…"
+                      : plannedFlow.length
+                      ? plannedFlow.map(humanStepName).join(" → ")
+                      : "Your stops are set when the plan starts"}
+                  </span>
                 </div>
               </div>
             </div>

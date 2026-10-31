@@ -175,6 +175,21 @@ def determine_flow_from_preferences(labels_used: Dict[str, List[str]]) -> List[s
     return ordered_flow
 
 
+
+def planned_flow(prefs_data: Dict[str, Any]) -> List[str]:
+    """The steps a plan will follow for these saved answers. The planner home
+    shows this before a plan starts, and the planner runs the same list.
+
+    Only "Accommodation needed? No" (we_accom) removes the stay. This used to
+    drop it for any adventure follow-up answer containing "no", so answering
+    "No" to Transport support removed the stay step too."""
+    labels = {cat: normalize_to_labels(cat, prefs_data.get(cat))
+              for cat in ("mood", "planningStyle", "adventureLevel", "addOnMagic", "memorableFactor")}
+    flow = determine_flow_from_preferences(labels)
+    if _sub_text(_sub_answers(prefs_data, "adventureLevel"), "we_accom").lower() == "no":
+        flow = [step for step in flow if step != "stay"]
+    return flow
+
 def short_query_from_selected(selected_tokens: List[Dict[str, str]]) -> str:
     if not selected_tokens:
         return "restaurant"

@@ -46,6 +46,7 @@ PROTECTED = [
     ("post", "/planner/session/abc/select", {"step": "restaurant", "place": {}}),
     ("post", "/planner/session/abc/skip", {"next_step": "activity"}),
     ("post", "/planner/session/abc/undo", None),
+    ("get", "/planner/flow", None),
 ]
 
 

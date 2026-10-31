@@ -262,18 +262,6 @@ export default function usePlannerSession() {
         flow = deriveFlowFromPlaceTypes(place_types);
       }
 
-      // Frontend safety guard: if stage2 explicitly says "No" / "no stay",
-      // ensure the stay step is removed even if backend included it.
-      const advSubs = userPrefs && userPrefs.adventureLevel_sub;
-      const hasNoStay = Array.isArray(advSubs)
-        && advSubs.some((val) => {
-          const s = String(val).toLowerCase().trim();
-          return s === "no" || s.includes("no stay");
-        });
-      if (hasNoStay && Array.isArray(flow)) {
-        flow = flow.filter((step) => step !== "stay");
-      }
-
       setInitialFlow(flow);
       setFlowText(flow.map((f) => humanStepName(f)).join(" → "));
       setCurrentStep(flow[0] || "restaurant");

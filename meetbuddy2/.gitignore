@@ -33,3 +33,6 @@ backend/.env
 # Planner runtime data
 backend/planner_sessions_data/
 backend/user_last_prefs.json
+
+# Hallmark design notes and build log
+.hallmark/

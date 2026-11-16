@@ -1,16 +1,19 @@
 // src/components/planner/PlannerHome.jsx
+// Planner home: your saved answers, where you are, and the route the plan
+// will follow from there. The route is the screen's centre: it shows what
+// pressing Generate itinerary will do before you press it.
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { MapPin, LocateFixed, Rocket, Sparkles } from "lucide-react";
-import GlassCard from "@/components/ui/GlassCard";
-import GlowButton from "@/components/ui/GlowButton";
+import { MapPin, LocateFixed, Sparkles, Utensils, Ticket, BedDouble, Coffee } from "lucide-react";
 import { PREF_META, humanStepName } from "@/hooks/usePlannerSession";
 import { api } from "@/lib/api";
 import { ErrorBanner } from "./StepExplorer";
+import "./PlannerHome.css";
+
+const STEP_ICON = { restaurant: Utensils, activity: Ticket, stay: BedDouble, cafe: Coffee };
 
 const displayPref = (val) => {
-  if (!val) return "—";
+  if (!val || (Array.isArray(val) && val.length === 0)) return null;
   return Array.isArray(val) ? val.join(", ") : String(val);
 };
 
@@ -40,125 +43,138 @@ export default function PlannerHome({ P }) {
       .catch(() => { if (live) setPlannedFlow([]); });
     return () => { live = false; };
   }, []);
+
+  const startLabel = coords
+    ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
+    : placeText
+    ? placeText
+    : "No location set";
+  const canStart = !sessionLoading && (coords || placeText || (userPrefs && userPrefs.location));
+
   return (
-    <div className="max-w-4xl mx-auto px-6 py-6">
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="text-center mb-12"
-      >
-        <h1 className="text-4xl md:text-6xl font-bold text-white mb-4">
-          Plan your perfect <span className="text-gradient">meetup</span>
-        </h1>
-        <p className="text-muted-foreground text-lg">
-          Personalized recommendations based on your preferences
-        </p>
-      </motion.div>
+    <div className="ph">
+      <header className="ph__head">
+        <div>
+          <h1 className="ph__title">Plan your perfect meetup</h1>
+          <p className="ph__lead">Personalized recommendations based on your preferences</p>
+        </div>
+        <button type="button" className="ph-btn ph-btn--quiet" onClick={startNewPlanner}>
+          <Sparkles aria-hidden="true" /> Start a new planner
+        </button>
+      </header>
 
-      <div className="flex justify-end mb-4">
-        <GlowButton variant="ghost" size="sm" onClick={startNewPlanner}>
-          <Sparkles className="w-4 h-4" /> Start a new planner
-        </GlowButton>
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <GlassCard variant="gradient" className="p-8 mb-8">
-          <div className="grid md:grid-cols-2 gap-10 mb-8">
-            {/* Preferences display */}
-            <div>
-              <h2 className="text-xl font-semibold text-white mb-5">Your preferences</h2>
-              <div className="space-y-3">
-                {PREF_META.map(({ key, label, emoji }) => (
-                  <div
-                    key={key}
-                    className="flex items-center gap-3.5 glass rounded-xl p-3.5"
-                  >
-                    <span className="text-xl">{emoji}</span>
-                    <div className="min-w-0">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
-                      <p className="font-medium text-white truncate">{displayPref(userPrefs?.[key])}</p>
-                    </div>
-                  </div>
-                ))}
+      <div className="ph__grid">
+        <div className="ph__main">
+          {/* Location */}
+          <section aria-labelledby="ph-location">
+            <h2 id="ph-location" className="ph__label">Select location</h2>
+            <div className="ph__field">
+              <div className="ph__input-wrap">
+                <MapPin className="ph__input-icon" aria-hidden="true" />
+                <input
+                  value={placeText}
+                  onChange={(e) => setPlaceText(e.target.value)}
+                  onBlur={handlePlaceTextBlur}
+                  placeholder="Enter city or area…"
+                  aria-labelledby="ph-location"
+                  autoComplete="address-level2"
+                  className="ph__input"
+                />
               </div>
+              <button
+                type="button"
+                className="ph-btn ph-btn--quiet"
+                onClick={useMyLocation}
+                disabled={locLoading}
+                aria-busy={locLoading || undefined}
+                aria-label="Use GPS location"
+              >
+                <LocateFixed className={locLoading ? "ph__locating" : undefined} aria-hidden="true" />
+                <span>GPS</span>
+              </button>
             </div>
+          </section>
 
-            {/* Location & flow */}
-            <div className="flex flex-col gap-7">
-              <div>
-                <label className="block text-xl font-semibold text-white mb-4">Select location</label>
-                <div className="flex gap-2 mb-3">
-                  <div className="relative flex-1">
-                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted-foreground pointer-events-none" />
-                    <input
-                      value={placeText}
-                      onChange={(e) => setPlaceText(e.target.value)}
-                      onBlur={handlePlaceTextBlur}
-                      placeholder="Enter city or area..."
-                      className="w-full rounded-xl bg-white/5 border border-white/10 pl-11 pr-4 py-3 text-foreground placeholder:text-muted-foreground/60 outline-none transition-all duration-200 focus:border-brand/60 focus:ring-2 focus:ring-brand/30 focus:bg-white/[0.07]"
-                    />
-                  </div>
-                  <GlowButton onClick={useMyLocation} disabled={locLoading} aria-label="Use GPS location">
-                    <LocateFixed className={`w-4.5 h-4.5 ${locLoading ? "animate-spin" : ""}`} />
-                    GPS
-                  </GlowButton>
+          {/* The route: from where you are, through each stop the plan will choose */}
+          <section aria-labelledby="ph-flow">
+            <h2 id="ph-flow" className="ph__label">Your planned flow</h2>
+            <figure className="ph-route" aria-label="Route of your plan">
+              <div className="ph-route__line">
+                <div className="ph-route__node ph-route__node--origin">
+                  <span className="ph-route__dot"><MapPin aria-hidden="true" /></span>
+                  <span className="ph-route__name">Start</span>
+                  <span className="ph-route__note">{startLabel}</span>
                 </div>
-                <div className="text-sm text-muted-foreground flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-brand-3" />
-                  {coords
-                    ? `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
-                    : placeText
-                    ? placeText
-                    : "No location set"}
-                </div>
+                <span className="ph-route__link" aria-hidden="true">→</span>
+                <ol
+                  className="ph-route__stops"
+                  // the tracks share the row evenly: one before the first stop, one between each pair
+                  style={{ flexGrow: Math.max((plannedFlow?.length || 1) - 1, 0) }}
+                  data-testid="planned-flow"
+                  data-state={plannedFlow === null ? "loading" : "ready"}
+                >
+                  {plannedFlow === null ? (
+                    <li className="ph-route__status" role="status">Working out your stops…</li>
+                  ) : plannedFlow.length === 0 ? (
+                    <li className="ph-route__status">Your stops are set when the plan starts</li>
+                  ) : (
+                    plannedFlow.map((step, i) => {
+                      const Icon = STEP_ICON[step] || MapPin;
+                      return (
+                        <li key={step} className="ph-route__stop">
+                          {i > 0 && <span className="ph-route__link" aria-hidden="true">→</span>}
+                          <span className="ph-route__node">
+                            <span className="ph-route__dot"><Icon aria-hidden="true" /></span>
+                            <span className="ph-route__name">{humanStepName(step)}</span>
+                          </span>
+                        </li>
+                      );
+                    })
+                  )}
+                </ol>
               </div>
+            </figure>
+          </section>
 
-              <div>
-                <label className="block text-xl font-semibold text-white mb-4">Your planned flow</label>
-                <div className="glass rounded-xl p-4 font-medium text-center border border-brand/25">
-                  <span
-                    data-testid="planned-flow"
-                    data-state={plannedFlow === null ? "loading" : "ready"}
-                    className={plannedFlow?.length ? "text-brand-3 font-semibold" : "text-muted-foreground"}
-                  >
-                    {plannedFlow === null
-                      ? "Working out your stops…"
-                      : plannedFlow.length
-                      ? plannedFlow.map(humanStepName).join(" → ")
-                      : "Your stops are set when the plan starts"}
-                  </span>
-                </div>
-              </div>
-            </div>
+          <div>
+            <div className="ph__error"><ErrorBanner message={plannerError} /></div>
+            <button
+              type="button"
+              className="ph-btn ph-btn--primary ph-btn--wide"
+              onClick={startSession}
+              disabled={!canStart}
+              aria-busy={sessionLoading || undefined}
+            >
+              {sessionLoading ? (
+                <>
+                  <span className="ph__spinner" aria-hidden="true" />
+                  Starting…
+                </>
+              ) : (
+                "Generate itinerary"
+              )}
+            </button>
           </div>
+        </div>
 
-          <ErrorBanner message={plannerError} />
-
-          {/* Action buttons */}
-          <GlowButton
-            onClick={startSession}
-            disabled={sessionLoading || (!coords && !placeText && !(userPrefs && userPrefs.location))}
-            size="lg"
-            className="w-full"
-          >
-            {sessionLoading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Starting...
-              </>
-            ) : (
-              <>
-                <Rocket className="w-5 h-5" /> Generate itinerary
-              </>
-            )}
-          </GlowButton>
-        </GlassCard>
-      </motion.div>
+        {/* Saved answers */}
+        <aside className="ph__answers" aria-labelledby="ph-prefs">
+          <div className="ph__answers-head">
+            <h2 id="ph-prefs" className="ph__label">Your preferences</h2>
+          </div>
+          <dl className="ph__dl">
+            {PREF_META.map(({ key, label }) => {
+              const value = displayPref(userPrefs?.[key]);
+              return (
+                <div key={key} className="ph__row">
+                  <dt>{label}</dt>
+                  <dd className={value ? undefined : "is-empty"}>{value || "Not answered"}</dd>
+                </div>
+              );
+            })}
+          </dl>
+        </aside>
+      </div>
     </div>
   );
 }

@@ -6,17 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { CalendarDays, MapPin, Trash2, ArrowRight, Rocket } from "lucide-react";
 import GlassCard from "@/components/ui/GlassCard";
 import GlowButton from "@/components/ui/GlowButton";
-import { parseISO } from "@/lib/schedule";
-
-// "Wed, Aug 5 · 3:00 PM" — or just the date for all-day / unscheduled plans
-const formatWhen = (it) => {
-  const start = parseISO(it.start_at);
-  if (!start) return null;
-  const day = start.toLocaleDateString(undefined,
-    { weekday: "short", month: "short", day: "numeric" });
-  if (it.all_day) return `${day} · all day`;
-  return `${day} · ${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
-};
+import { formatWhen } from "@/lib/schedule";
 
 export default function MyItineraries() {
   const navigate = useNavigate();

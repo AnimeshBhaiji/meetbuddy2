@@ -73,3 +73,13 @@ export const slotToPrefill = (start, end, action = "click") => {
     endTime: toTimeInput(dragged ? e : addMinutes(s, DEFAULT_DURATION_MIN)),
   };
 };
+
+// "Wed, Aug 5 · 3:00 PM" — or just the date for all-day / unscheduled plans
+export const formatWhen = (it) => {
+  const start = parseISO(it.start_at);
+  if (!start) return null;
+  const day = start.toLocaleDateString(undefined,
+    { weekday: "short", month: "short", day: "numeric" });
+  if (it.all_day) return `${day} · all day`;
+  return `${day} · ${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+};

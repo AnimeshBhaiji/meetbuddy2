@@ -1,75 +1,320 @@
-import React, { useContext, useState } from "react";
-import { AuthContext } from "../context/AuthContext";
+// src/pages/HomePage.jsx
+// Signed-in home: your next plan drawn as a route over a night map, its
+// ticket, the week ahead, your saved itineraries and a quick start.
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
+import { MapPin, Utensils, Ticket, BedDouble, Coffee, Pause, Play, ArrowRight } from "lucide-react";
+import { AuthContext } from "../context/AuthContext";
 import Footer from "@/components/Footer";
-import { motion } from "framer-motion";
-import {
-  Calendar,
-  MapPin,
-  Star,
-  TrendingUp,
-  Zap,
-  Clock,
-  ArrowRight,
-  Users,
-  Wand2,
-  SlidersHorizontal,
-} from "lucide-react";
-import GlassCard from "@/components/ui/GlassCard";
 import AccessDeniedModal from "@/components/AccessDeniedModal";
+import { api } from "@/lib/api";
+import { parseISO, formatWhen } from "@/lib/schedule";
+import { humanStepName } from "@/hooks/usePlannerSession";
+import "./HomePage.css";
 
-const container = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.15 } },
+const EASE = [0.16, 1, 0.3, 1];
+const STEP_ICON = { restaurant: Utensils, activity: Ticket, stay: BedDouble, cafe: Coffee };
+const DAY_MS = 86400000;
+
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const sameDay = (a, b) => startOfDay(a).getTime() === startOfDay(b).getTime();
+
+const cachedCoords = () => {
+  try {
+    const c = JSON.parse(localStorage.getItem("userPreferences") || "null")?.coords;
+    return c && c.lat != null && c.lng != null ? { lat: Number(c.lat), lng: Number(c.lng) } : null;
+  } catch {
+    return null;
+  }
 };
 
-const child = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { type: "spring", damping: 12, stiffness: 200 } },
-};
+// Where the route sits in the hero's 1000 x 400 drawing: the right-hand part,
+// clear of the greeting, the ticket and the navigation bar above.
+const BOX = { x0: 580, x1: 940, y0: 130, y1: 350 };
+// A pleasant default bend for stops without coordinates.
+const DEFAULT_PTS = [[590, 340], [700, 260], [820, 220], [930, 140]];
 
-const sectionFadeIn = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
-};
+// Real coordinates projected into BOX (one scale for both axes, so the map
+// keeps its shape) when at least two are known; otherwise the default bend.
+function routePoints(coords, count) {
+  const known = coords.filter(Boolean);
+  if (known.length < 2) return DEFAULT_PTS.slice(0, Math.max(count, 2));
+  const lats = known.map((c) => c.lat), lngs = known.map((c) => c.lng);
+  const [minLat, maxLat, minLng, maxLng] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
+  const w = BOX.x1 - BOX.x0, h = BOX.y1 - BOX.y0;
+  const scale = Math.min(w / (maxLng - minLng || 1e-6), h / (maxLat - minLat || 1e-6));
+  const offX = BOX.x0 + (w - (maxLng - minLng) * scale) / 2;
+  const offY = BOX.y1 - (h - (maxLat - minLat) * scale) / 2;
+  return known.map((c) => [offX + (c.lng - minLng) * scale, offY - (c.lat - minLat) * scale]);
+}
 
-const RECENT_ACTIVITY = [
-  { title: "Coffee at The Grind", date: "2 days ago", location: "Downtown", icon: Clock },
-  { title: "Team Lunch", date: "Last Friday", location: "Bistro 42", icon: Users },
-  { title: "Project Kickoff", date: "Oct 24", location: "Office HQ", icon: Zap },
-];
+// A smooth curve through the points (Catmull-Rom as cubic Béziers).
+function smoothPath(pts) {
+  if (pts.length < 2) return "";
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
 
-const TRENDING_SPOTS = [
-  {
-    name: "Skyline Rooftop",
-    type: "Lounge",
-    rating: 4.8,
-    image:
-      "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?q=80&w=1000&auto=format&fit=crop",
-  },
-  {
-    name: "The Urban Garden",
-    type: "Cafe",
-    rating: 4.6,
-    image:
-      "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=1000&auto=format&fit=crop",
-  },
-  {
-    name: "Neon Arcade",
-    type: "Entertainment",
-    rating: 4.9,
-    image:
-      "https://images.unsplash.com/photo-1511882150382-421056ac8d89?q=80&w=1000&auto=format&fit=crop",
-  },
-];
+function daysToGo(start) {
+  const n = Math.round((startOfDay(start) - startOfDay(new Date())) / DAY_MS);
+  if (n <= 0) return { big: "Today", small: "" };
+  if (n === 1) return { big: "1", small: "day to go" };
+  return { big: String(n), small: "days to go" };
+}
+
+function headline(next) {
+  if (!next) return null;
+  const start = parseISO(next.start_at);
+  const n = Math.round((startOfDay(start) - startOfDay(new Date())) / DAY_MS);
+  if (n <= 0) return "Tonight's sorted.";
+  if (n === 1) return "Tomorrow's sorted.";
+  if (n < 7) return `${start.toLocaleDateString(undefined, { weekday: "long" })}'s sorted.`;
+  return "Your next plan is set.";
+}
+
+/* ---------- pieces ---------- */
+
+function Words({ text, delay = 0, reduce }) {
+  return text.split(" ").map((w, i) => (
+    <motion.span
+      key={`${w}-${i}`}
+      className="hp-word"
+      initial={reduce ? false : { opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: EASE, delay: delay + i * 0.07 }}
+    >
+      {w}{" "}
+    </motion.span>
+  ));
+}
+
+// On a phone the map is a band of its own under the ticket, framed on the route.
+const PHONE = "(max-width: 48rem)";
+function usePhone() {
+  const [phone, setPhone] = useState(() => window.matchMedia(PHONE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE);
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return phone;
+}
+
+function RouteMap({ points, reduce, label }) {
+  const d = smoothPath(points);
+  const phone = usePhone();
+  return (
+    <svg className="hp-map" viewBox={phone ? "540 100 440 280" : "0 0 1000 400"} preserveAspectRatio="xMidYMid slice" role="img" aria-label={label}>
+      <g className="hp-streets" aria-hidden="true">
+        <path d="M0 120 L1000 92" /><path d="M0 268 L1000 300" /><path d="M0 352 L1000 330" />
+        <path d="M640 0 L690 400" /><path d="M820 0 L790 400" /><path d="M470 0 L520 400" />
+        <path d="M560 0 C 600 120, 760 160, 1000 190" />
+      </g>
+      {d && (
+        <motion.path
+          className="hp-route"
+          d={d}
+          initial={reduce ? false : { pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.8, ease: [0.65, 0, 0.35, 1], delay: 0.3 }}
+        />
+      )}
+      {points.map(([x, y], i) => (
+        <motion.g
+          key={i}
+          initial={reduce ? false : { opacity: 0, scale: 0.4 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: EASE, delay: 0.3 + (1.8 * i) / Math.max(points.length - 1, 1) }}
+          style={{ transformOrigin: `${x}px ${y}px` }}
+        >
+          <circle className={`hp-pulse${i === 0 ? " is-origin" : ""}`} cx={x} cy={y} r="9" />
+          <circle className={`hp-pin${i === 0 ? " is-origin" : ""}`} cx={x} cy={y} r="7" />
+        </motion.g>
+      ))}
+    </svg>
+  );
+}
+
+function TicketCard({ plan, detail, onOpen, reduce }) {
+  const start = parseISO(plan.start_at);
+  const togo = daysToGo(start);
+  const steps = (detail?.stops || []).map((s) => s.step);
+  return (
+    <motion.button
+      type="button"
+      className="hp-ticket"
+      onClick={onOpen}
+      initial={reduce ? false : { opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: EASE, delay: 0.5 }}
+      aria-label={`Open ${plan.title}`}
+    >
+      <span className="hp-ticket__main">
+        <span className="hp-ticket__when">Next up, {formatWhen(plan)}</span>
+        <span className="hp-ticket__title">{plan.title}</span>
+        <span className="hp-chips">
+          {steps.length > 0
+            ? steps.map((s, i) => {
+                const Icon = STEP_ICON[s] || MapPin;
+                return <span key={i} className="hp-chip"><Icon aria-hidden="true" />{humanStepName(s).split(" / ")[0]}</span>;
+              })
+            : <span className="hp-chip">{plan.stop_count} stop{plan.stop_count === 1 ? "" : "s"}</span>}
+        </span>
+      </span>
+      <span className="hp-ticket__stub">
+        <motion.span
+          className="hp-ticket__count"
+          initial={reduce ? false : { rotateX: 90, opacity: 0 }}
+          animate={{ rotateX: 0, opacity: 1 }}
+          transition={{ duration: 0.6, ease: EASE, delay: 1.0 }}
+        >
+          {togo.big}
+        </motion.span>
+        {togo.small && <span className="hp-ticket__small">{togo.small}</span>}
+      </span>
+    </motion.button>
+  );
+}
+
+function WeekStrip({ items, onOpen, reduce }) {
+  const today = startOfDay(new Date());
+  const days = Array.from({ length: 7 }, (_, i) => new Date(today.getTime() + i * DAY_MS));
+  return (
+    <ol className="hp-week">
+      {days.map((day, i) => {
+        const plans = items.filter((it) => it.start_at && sameDay(parseISO(it.start_at), day));
+        const first = plans[0];
+        const inner = (
+          <>
+            <span className="hp-day__name">{i === 0 ? "Today" : day.toLocaleDateString(undefined, { weekday: "short" })}</span>
+            <span className="hp-day__num">{day.getDate()}</span>
+            {first && <span className="hp-day__plan">{plans.length > 1 ? `${plans.length} plans` : first.title}</span>}
+            {first && (
+              <motion.span
+                className="hp-day__bar"
+                initial={reduce ? false : { scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.7, ease: EASE, delay: 0.8 + i * 0.05 }}
+                aria-hidden="true"
+              />
+            )}
+          </>
+        );
+        return (
+          <motion.li
+            key={i}
+            initial={reduce ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: EASE, delay: 0.2 + i * 0.05 }}
+          >
+            {first ? (
+              <button type="button" className="hp-day has-plan" onClick={() => onOpen(first.id)}>{inner}</button>
+            ) : (
+              <div className="hp-day">{inner}</div>
+            )}
+          </motion.li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function SavedCarousel({ items, onOpen, reduce }) {
+  const [paused, setPaused] = useState(false);
+  // A drifting row needs enough cards to loop; fewer sit still.
+  const drifting = !reduce && items.length >= 4;
+  const row = drifting ? [...items, ...items] : items;
+  return (
+    <div className="hp-saved">
+      {drifting && (
+        <button
+          type="button"
+          className="hp-pause"
+          onClick={() => setPaused((p) => !p)}
+          aria-label={paused ? "Play the saved plans row" : "Pause the saved plans row"}
+        >
+          {paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
+        </button>
+      )}
+      <div className={`hp-rail${drifting ? " is-drifting" : ""}${paused ? " is-paused" : ""}`}>
+        <ul className="hp-track" style={drifting ? { "--hp-loop": `${items.length * 4}s` } : undefined}>
+          {row.map((it, i) => (
+            <li key={`${it.id}-${i}`} aria-hidden={i >= items.length || undefined}>
+              <button type="button" className="hp-plan" onClick={() => onOpen(it.id)} tabIndex={i >= items.length ? -1 : 0}>
+                <span className="hp-plan__title">{it.title}</span>
+                <span className="hp-plan__meta">
+                  {it.stop_count} stop{it.stop_count === 1 ? "" : "s"}
+                  {it.start_at ? `, ${formatWhen(it)}` : ", not scheduled"}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- page ---------- */
 
 const HomePage = () => {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate();
+  const reduce = useReducedMotion();
   const [showAccessModal, setShowAccessModal] = useState(false);
 
-  const welcomeText = "Welcome back,";
-  const nameText = (user?.first_name || "User") + "!";
+  const [items, setItems] = useState(null); // null = loading
+  const [loadError, setLoadError] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [flow, setFlow] = useState([]);
+
+  const load = () => {
+    setLoadError(false);
+    setItems(null);
+    api.get("/itineraries")
+      .then((rows) => setItems(Array.isArray(rows) ? rows : []))
+      .catch(() => { setItems([]); setLoadError(true); });
+  };
+  useEffect(load, []);
+
+  const next = useMemo(() => {
+    if (!items) return null;
+    const today = startOfDay(new Date());
+    return items
+      .filter((it) => it.start_at && parseISO(it.start_at) >= today)
+      .sort((a, b) => parseISO(a.start_at) - parseISO(b.start_at))[0] || null;
+  }, [items]);
+
+  // The ticket and the route need the next plan's stops; a new user's hero
+  // draws the planned flow instead.
+  useEffect(() => {
+    let live = true;
+    if (next) {
+      api.get(`/itineraries/${next.id}`).then((d) => live && setDetail(d)).catch(() => {});
+    } else if (items && items.length === 0) {
+      api.get("/planner/flow").then((r) => live && setFlow(Array.isArray(r.flow) ? r.flow : [])).catch(() => {});
+    }
+    return () => { live = false; };
+  }, [next, items]);
+
+  const origin = cachedCoords();
+  const points = useMemo(() => {
+    if (next) {
+      const stops = detail?.stops || [];
+      const coords = [origin, ...stops.map((s) =>
+        s.place?.lat != null && s.place?.lng != null ? { lat: Number(s.place.lat), lng: Number(s.place.lng) } : null)];
+      return routePoints(coords.every(Boolean) ? coords : [], Math.max(stops.length, next.stop_count || 0) + 1);
+    }
+    return routePoints([], (flow.length || 3) + 1);
+  }, [next, detail, flow, origin?.lat, origin?.lng]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openPlanner = () => {
     const hasPrefs =
@@ -80,245 +325,76 @@ const HomePage = () => {
     }
     navigate("/planner");
   };
+  const openPlan = (id) => navigate("/planner", { state: { itineraryId: id } });
+
+  const firstName = user?.first_name || "there";
+  const loading = items === null;
+  const isNew = !loading && !loadError && items.length === 0;
+  const line2 = loading ? "" : next ? headline(next) : isNew ? "Your first meetup starts here." : "Pick a plan, or start a new one.";
+  const routeLabel = next
+    ? `Route of ${next.title}`
+    : `Your planned flow: start, ${(flow.length ? flow : ["restaurant", "activity", "stay"]).map(humanStepName).join(", ")}`;
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-x-clip">
+    <div className="hp">
       <AccessDeniedModal isOpen={showAccessModal} onClose={() => setShowAccessModal(false)} />
 
-      <div className="flex-1 flex flex-col items-center px-6 md:px-12 pt-32 pb-20">
-        <div className="w-full max-w-6xl">
-          {/* ---------- Greeting ---------- */}
-          <motion.div variants={container} initial="hidden" animate="visible" className="mb-14">
-            <div className="flex flex-wrap overflow-hidden">
-              {welcomeText.split(" ").map((word, index) => (
-                <motion.span
-                  variants={child}
-                  key={index}
-                  className="text-5xl md:text-7xl font-bold font-display text-white mr-3"
-                >
-                  {word}
-                </motion.span>
-              ))}
-            </div>
-            <div className="flex flex-wrap overflow-hidden mt-2">
-              <motion.span
-                variants={child}
-                className="text-5xl md:text-7xl font-bold font-display text-gradient"
-              >
-                {nameText}
-              </motion.span>
-            </div>
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.9, duration: 0.8 }}
-              className="text-muted-foreground text-xl mt-5 max-w-xl"
+      <section className="hp-hero" aria-labelledby="hp-greeting">
+        <RouteMap points={points} reduce={reduce} label={routeLabel} />
+        <div className="hp-hero__inner">
+          <h1 id="hp-greeting" className="hp-greeting">
+            <Words text={`Hey ${firstName},`} reduce={reduce} />
+            {line2 && <><br /><span className="hp-greeting__line2"><Words text={line2} delay={0.2} reduce={reduce} /></span></>}
+          </h1>
+
+          {next && <TicketCard plan={next} detail={detail} onOpen={() => openPlan(next.id)} reduce={reduce} />}
+
+          {isNew && (
+            <motion.div
+              className="hp-first"
+              initial={reduce ? false : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: EASE, delay: 0.6 }}
             >
-              Your next great adventure is one click away. Ready to explore?
-            </motion.p>
-          </motion.div>
-
-          {/* ---------- Bento quick actions ---------- */}
-          <motion.div
-            initial={{ opacity: 0, y: 36 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-24"
-          >
-            {/* Plan card — hero action, spans 2 cols */}
-            <GlassCard
-              hover
-              variant="gradient"
-              onClick={openPlanner}
-              className="md:col-span-2 group relative cursor-pointer p-9 overflow-hidden"
-            >
-              <div className="absolute -right-12 -top-12 w-56 h-56 bg-brand/15 rounded-full blur-3xl group-hover:bg-brand/25 transition-all duration-500 pointer-events-none" />
-              <div className="relative z-10 flex flex-col h-full">
-                <div className="w-16 h-16 bg-gradient-to-br from-brand to-brand-2 rounded-2xl flex items-center justify-center mb-6 glow-sm group-hover:glow-md group-hover:scale-110 transition-all duration-500">
-                  <Wand2 className="w-8 h-8 text-white" />
-                </div>
-                <h2 className="text-3xl font-bold text-white mb-3">Start planning</h2>
-                <p className="text-muted-foreground text-base mb-6 leading-relaxed max-w-md flex-grow">
-                  Spin up a new meetup in minutes — dinner, activity and stay, all matched to
-                  your group's vibe.
-                </p>
-                <span className="inline-flex items-center gap-2 text-brand-3 font-bold tracking-wide group-hover:gap-4 transition-all duration-300">
-                  PLAN NOW <ArrowRight className="w-5 h-5" />
-                </span>
-              </div>
-            </GlassCard>
-
-            {/* Calendar card */}
-            <GlassCard
-              hover
-              variant="strong"
-              onClick={() => navigate("/calendar")}
-              className="group relative cursor-pointer p-8 overflow-hidden"
-            >
-              <div className="absolute -right-10 -top-10 w-44 h-44 bg-brand-2/12 rounded-full blur-3xl group-hover:bg-brand-2/20 transition-all duration-500 pointer-events-none" />
-              <div className="relative z-10 flex flex-col h-full">
-                <div className="w-14 h-14 bg-gradient-to-br from-brand-2/30 to-brand/20 border border-white/10 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-500">
-                  <Calendar className="w-7 h-7 text-brand-3" />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-3">Calendar</h2>
-                <p className="text-muted-foreground text-sm mb-6 leading-relaxed flex-grow">
-                  Upcoming meetups, conflicts, and your whole social schedule in one view.
-                </p>
-                <span className="inline-flex items-center gap-2 text-brand-3 font-bold text-sm tracking-wide group-hover:gap-4 transition-all duration-300">
-                  OPEN <ArrowRight className="w-4 h-4" />
-                </span>
-              </div>
-            </GlassCard>
-
-            {/* Preferences card — full width bottom row on md */}
-            <GlassCard
-              hover
-              variant="strong"
-              onClick={() => navigate("/questionnaire-stage1")}
-              className="md:col-span-3 group relative cursor-pointer p-8 overflow-hidden"
-            >
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center gap-6">
-                <div className="w-14 h-14 shrink-0 bg-gradient-to-br from-brand-3/25 to-brand/20 border border-white/10 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
-                  <SlidersHorizontal className="w-7 h-7 text-brand-3" />
-                </div>
-                <div className="flex-grow">
-                  <h2 className="text-2xl font-bold text-white mb-1.5">Tune your preferences</h2>
-                  <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl">
-                    Vibe shifted? Retake the two-minute questionnaire and every recommendation
-                    updates with you.
-                  </p>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-2 text-brand-3 font-bold text-sm tracking-wide group-hover:gap-4 transition-all duration-300">
-                  CUSTOMIZE <ArrowRight className="w-4 h-4" />
-                </span>
-              </div>
-            </GlassCard>
-          </motion.div>
-
-          {/* ---------- Recent Activity ---------- */}
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={sectionFadeIn}
-            className="mb-20"
-          >
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-2.5">
-                <Clock className="w-6 h-6 text-brand-3" /> Your recent activity
-              </h3>
-              <button className="text-sm text-muted-foreground hover:text-white transition-colors cursor-pointer">
-                View all
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {RECENT_ACTIVITY.map((activity) => (
-                <GlassCard
-                  hover
-                  key={activity.title}
-                  className="p-6 cursor-pointer group"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="p-3 bg-gradient-to-br from-brand/25 to-brand-2/20 border border-white/10 rounded-xl text-brand-3 group-hover:scale-110 transition-transform">
-                      <activity.icon className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs font-medium text-muted-foreground bg-white/5 border border-white/10 px-2.5 py-1 rounded-lg">
-                      {activity.date}
-                    </span>
-                  </div>
-                  <h4 className="text-lg font-bold text-white mb-1">{activity.title}</h4>
-                  <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" /> {activity.location}
-                  </p>
-                </GlassCard>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* ---------- Trending Spots ---------- */}
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={sectionFadeIn}
-            className="mb-20"
-          >
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-2xl font-bold text-white flex items-center gap-2.5">
-                <TrendingUp className="w-6 h-6 text-brand-2" /> Trending spots
-              </h3>
-              <button className="text-sm text-muted-foreground hover:text-white transition-colors cursor-pointer">
-                Discover more
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {TRENDING_SPOTS.map((spot) => (
-                <motion.div
-                  key={spot.name}
-                  whileHover={{ y: -6 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 24 }}
-                  className="group relative h-64 rounded-2xl overflow-hidden cursor-pointer border border-white/10 hover:border-brand/40 transition-colors duration-300"
-                >
-                  <img
-                    src={spot.image}
-                    alt={spot.name}
-                    loading="lazy"
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/95 via-background/40 to-transparent" />
-                  <div className="absolute bottom-0 left-0 p-6 w-full">
-                    <div className="flex justify-between items-end">
-                      <div>
-                        <span className="text-xs font-bold text-brand-3 uppercase tracking-wider mb-1 block">
-                          {spot.type}
-                        </span>
-                        <h4 className="text-xl font-bold text-white mb-1">{spot.name}</h4>
-                        <div className="flex items-center gap-1 text-yellow-400 text-sm">
-                          <Star className="w-4 h-4 fill-yellow-400" /> {spot.rating}
-                        </div>
-                      </div>
-                      <div className="w-10 h-10 glass rounded-full flex items-center justify-center text-white group-hover:bg-gradient-to-br group-hover:from-brand group-hover:to-brand-2 group-hover:border-transparent transition-all">
-                        <ArrowRight className="w-5 h-5 -rotate-45 group-hover:rotate-0 transition-transform" />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* ---------- Pro Tip ---------- */}
-          <motion.div
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-100px" }}
-            variants={sectionFadeIn}
-          >
-            <GlassCard variant="gradient" className="p-8 md:p-12 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-brand-2/12 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-              <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-brand to-brand-2 rounded-2xl flex items-center justify-center flex-shrink-0 glow-md">
-                  <Zap className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-center md:text-left">
-                  <h4 className="text-2xl font-bold text-white mb-2">Pro tip: collaborate live!</h4>
-                  <p className="text-muted-foreground max-w-2xl">
-                    Invite friends to vote on locations in real time. Start a plan and hit
-                    "Invite" to get the whole squad involved instantly.
-                  </p>
-                </div>
-                <motion.button
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={openPlanner}
-                  className="px-6 py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl font-medium transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  Try it now
-                </motion.button>
-              </div>
-            </GlassCard>
-          </motion.div>
+              <p>Tell us the vibe and we'll line up {flow.length ? flow.map((s) => humanStepName(s).split(" / ")[0].toLowerCase()).join(", then ") : "the places"} near you.</p>
+              <button type="button" className="hp-btn" onClick={openPlanner}>Plan your first meetup <ArrowRight aria-hidden="true" /></button>
+            </motion.div>
+          )}
         </div>
+      </section>
+
+      <div className="hp-body">
+        {loading && <div className="hp-skeleton" role="status" aria-label="Loading your plans" />}
+
+        {loadError && (
+          <div className="hp-error" role="alert">
+            <p>Your plans didn't load. Check your connection and try again.</p>
+            <button type="button" className="hp-btn hp-btn--quiet" onClick={load}>Try again</button>
+          </div>
+        )}
+
+        {!loading && !loadError && items.length > 0 && (
+          <>
+            <section aria-labelledby="hp-week">
+              <h2 id="hp-week" className="hp-h2">Your week</h2>
+              <WeekStrip items={items} onOpen={openPlan} reduce={reduce} />
+            </section>
+            <section aria-labelledby="hp-saved">
+              <h2 id="hp-saved" className="hp-h2">Saved itineraries</h2>
+              <SavedCarousel items={items} onOpen={openPlan} reduce={reduce} />
+            </section>
+          </>
+        )}
+
+        <motion.div
+          className="hp-bar"
+          initial={reduce ? false : { opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: EASE, delay: 0.7 }}
+        >
+          <span className="hp-bar__text">Where to next?</span>
+          <button type="button" className="hp-btn" onClick={openPlanner}>Plan it</button>
+        </motion.div>
       </div>
 
       <Footer />
